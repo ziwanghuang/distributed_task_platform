@@ -3,7 +3,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: gitee.com/flycash/permission-platform/api/proto/gen
+      value: gitee.com/flycash/distributed_task_platform/api/proto/gen
 plugins:
   # 默认用最新版本
   - remote: buf.build/protocolbuffers/go
