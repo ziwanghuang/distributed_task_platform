@@ -1,0 +1,35 @@
+log:
+  debug: true
+
+redis:
+  addr: "localhost:6379"
+
+mq:
+  kafka:
+    network: "tcp"
+    addr: "localhost:9092"
+
+etcd:
+  addrs:
+    - "127.0.0.1:2379"
+  connectTimeout: "1s"
+  secure: false
+
+cache:
+  local:
+    capacity: 1000000
+  requestTimeout: 3000000000
+  valueExpiration: 600000000000
+
+server:
+  webhook:
+    port: 8001
+    rebalancePercent: 0.5
+  governor:
+    host: "0.0.0.0"
+    port: 9003
+  websocket:
+    host: "0.0.0.0"
+    port: 9002
+
+
