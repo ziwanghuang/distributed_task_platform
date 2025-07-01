@@ -19,4 +19,7 @@ type Service interface {
 
 	// Renew 续约任务
 	Renew(ctx context.Context, task domain.Task) error
+
+	// UpdateNextTime 更新任务的下次执行时间
+	UpdateNextTime(ctx context.Context, task domain.Task) error
 }

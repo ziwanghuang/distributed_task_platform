@@ -12,6 +12,7 @@ var (
 	// 任务执行相关错误
 	ErrExecutionNotFound      = errors.New("execution not found")
 	ErrExecutionAlreadyExists = errors.New("execution already exists")
+	ErrExecutionRetryable     = errors.New("execution retryable")
 
 	// 调度相关错误
 	ErrNoSchedulableTask = errors.New("no schedulable task found")

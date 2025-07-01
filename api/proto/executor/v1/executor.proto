@@ -4,11 +4,19 @@ package executor.v1;
 
 option go_package = "executor/v1;executorv1";
 
+enum ExecutionStatus {
+  UNKNOWN = 0; // 未知状态
+  RUNNING = 1; // 正在执行
+  FAILED_RETRYABLE = 2; // 可重试失败
+  FAILED = 3; // 不可重试失败
+  SUCCESS = 4; // 执行成功
+}
+
 message ExecutionState {
   int64 id = 1;
   string task_name = 2;
   // 中断时刻执行节点的执行进度
-  int32 status = 3; // RUNNING，RETRYABLE-FAILED，FAILED，SUCCESS
+  ExecutionStatus status = 3; // RUNNING，FAILED_RETRYABLE，FAILED，SUCCESS
   // 0-100 的数字。代表进度
   // RUNNING 状态才有意义
   int32 running_progress = 4;

@@ -22,12 +22,67 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ExecutionStatus int32
+
+const (
+	ExecutionStatus_UNKNOWN          ExecutionStatus = 0 // 未知状态
+	ExecutionStatus_RUNNING          ExecutionStatus = 1 // 正在执行
+	ExecutionStatus_FAILED_RETRYABLE ExecutionStatus = 2 // 可重试失败
+	ExecutionStatus_FAILED           ExecutionStatus = 3 // 不可重试失败
+	ExecutionStatus_SUCCESS          ExecutionStatus = 4 // 执行成功
+)
+
+// Enum value maps for ExecutionStatus.
+var (
+	ExecutionStatus_name = map[int32]string{
+		0: "UNKNOWN",
+		1: "RUNNING",
+		2: "FAILED_RETRYABLE",
+		3: "FAILED",
+		4: "SUCCESS",
+	}
+	ExecutionStatus_value = map[string]int32{
+		"UNKNOWN":          0,
+		"RUNNING":          1,
+		"FAILED_RETRYABLE": 2,
+		"FAILED":           3,
+		"SUCCESS":          4,
+	}
+)
+
+func (x ExecutionStatus) Enum() *ExecutionStatus {
+	p := new(ExecutionStatus)
+	*p = x
+	return p
+}
+
+func (x ExecutionStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExecutionStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_executor_v1_executor_proto_enumTypes[0].Descriptor()
+}
+
+func (ExecutionStatus) Type() protoreflect.EnumType {
+	return &file_executor_v1_executor_proto_enumTypes[0]
+}
+
+func (x ExecutionStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExecutionStatus.Descriptor instead.
+func (ExecutionStatus) EnumDescriptor() ([]byte, []int) {
+	return file_executor_v1_executor_proto_rawDescGZIP(), []int{0}
+}
+
 type ExecutionState struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Id       int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	TaskName string                 `protobuf:"bytes,2,opt,name=task_name,json=taskName,proto3" json:"task_name,omitempty"`
 	// 中断时刻执行节点的执行进度
-	Status int32 `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"` // RUNNING，RETRYABLE-FAILED，FAILED，SUCCESS
+	Status ExecutionStatus `protobuf:"varint,3,opt,name=status,proto3,enum=executor.v1.ExecutionStatus" json:"status,omitempty"` // RUNNING，FAILED_RETRYABLE，FAILED，SUCCESS
 	// 0-100 的数字。代表进度
 	// RUNNING 状态才有意义
 	RunningProgress int32 `protobuf:"varint,4,opt,name=running_progress,json=runningProgress,proto3" json:"running_progress,omitempty"`
@@ -79,11 +134,11 @@ func (x *ExecutionState) GetTaskName() string {
 	return ""
 }
 
-func (x *ExecutionState) GetStatus() int32 {
+func (x *ExecutionState) GetStatus() ExecutionStatus {
 	if x != nil {
 		return x.Status
 	}
-	return 0
+	return ExecutionStatus_UNKNOWN
 }
 
 func (x *ExecutionState) GetRunningProgress() int32 {
@@ -403,11 +458,11 @@ var File_executor_v1_executor_proto protoreflect.FileDescriptor
 
 const file_executor_v1_executor_proto_rawDesc = "" +
 	"\n" +
-	"\x1aexecutor/v1/executor.proto\x12\vexecutor.v1\"\x80\x01\n" +
+	"\x1aexecutor/v1/executor.proto\x12\vexecutor.v1\"\x9e\x01\n" +
 	"\x0eExecutionState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
-	"\ttask_name\x18\x02 \x01(\tR\btaskName\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\x05R\x06status\x12)\n" +
+	"\ttask_name\x18\x02 \x01(\tR\btaskName\x124\n" +
+	"\x06status\x18\x03 \x01(\x0e2\x1c.executor.v1.ExecutionStatusR\x06status\x12)\n" +
 	"\x10running_progress\x18\x04 \x01(\x05R\x0frunningProgress\"\xbb\x01\n" +
 	"\x0eExecuteRequest\x12\x10\n" +
 	"\x03eid\x18\x01 \x01(\x03R\x03eid\x12\x1b\n" +
@@ -430,7 +485,14 @@ const file_executor_v1_executor_proto_rawDesc = "" +
 	"\fQueryRequest\x12\x10\n" +
 	"\x03eid\x18\x01 \x01(\x03R\x03eid\"U\n" +
 	"\rQueryResponse\x12D\n" +
-	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState2\xe3\x01\n" +
+	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState*Z\n" +
+	"\x0fExecutionStatus\x12\v\n" +
+	"\aUNKNOWN\x10\x00\x12\v\n" +
+	"\aRUNNING\x10\x01\x12\x14\n" +
+	"\x10FAILED_RETRYABLE\x10\x02\x12\n" +
+	"\n" +
+	"\x06FAILED\x10\x03\x12\v\n" +
+	"\aSUCCESS\x10\x042\xe3\x01\n" +
 	"\x0fExecutorService\x12D\n" +
 	"\aExecute\x12\x1b.executor.v1.ExecuteRequest\x1a\x1c.executor.v1.ExecuteResponse\x12J\n" +
 	"\tInterrupt\x12\x1d.executor.v1.InterruptRequest\x1a\x1e.executor.v1.InterruptResponse\x12>\n" +
@@ -450,37 +512,40 @@ func file_executor_v1_executor_proto_rawDescGZIP() []byte {
 }
 
 var (
-	file_executor_v1_executor_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
-	file_executor_v1_executor_proto_goTypes  = []any{
-		(*ExecutionState)(nil),    // 0: executor.v1.ExecutionState
-		(*ExecuteRequest)(nil),    // 1: executor.v1.ExecuteRequest
-		(*ExecuteResponse)(nil),   // 2: executor.v1.ExecuteResponse
-		(*InterruptRequest)(nil),  // 3: executor.v1.InterruptRequest
-		(*InterruptResponse)(nil), // 4: executor.v1.InterruptResponse
-		(*QueryRequest)(nil),      // 5: executor.v1.QueryRequest
-		(*QueryResponse)(nil),     // 6: executor.v1.QueryResponse
-		nil,                       // 7: executor.v1.ExecuteRequest.ParamsEntry
-		nil,                       // 8: executor.v1.InterruptResponse.RescheduledParamsEntry
+	file_executor_v1_executor_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+	file_executor_v1_executor_proto_msgTypes  = make([]protoimpl.MessageInfo, 9)
+	file_executor_v1_executor_proto_goTypes   = []any{
+		(ExecutionStatus)(0),      // 0: executor.v1.ExecutionStatus
+		(*ExecutionState)(nil),    // 1: executor.v1.ExecutionState
+		(*ExecuteRequest)(nil),    // 2: executor.v1.ExecuteRequest
+		(*ExecuteResponse)(nil),   // 3: executor.v1.ExecuteResponse
+		(*InterruptRequest)(nil),  // 4: executor.v1.InterruptRequest
+		(*InterruptResponse)(nil), // 5: executor.v1.InterruptResponse
+		(*QueryRequest)(nil),      // 6: executor.v1.QueryRequest
+		(*QueryResponse)(nil),     // 7: executor.v1.QueryResponse
+		nil,                       // 8: executor.v1.ExecuteRequest.ParamsEntry
+		nil,                       // 9: executor.v1.InterruptResponse.RescheduledParamsEntry
 	}
 )
 
 var file_executor_v1_executor_proto_depIdxs = []int32{
-	7, // 0: executor.v1.ExecuteRequest.params:type_name -> executor.v1.ExecuteRequest.ParamsEntry
-	0, // 1: executor.v1.ExecuteResponse.execution_state:type_name -> executor.v1.ExecutionState
-	8, // 2: executor.v1.InterruptResponse.rescheduled_params:type_name -> executor.v1.InterruptResponse.RescheduledParamsEntry
-	0, // 3: executor.v1.InterruptResponse.execution_state:type_name -> executor.v1.ExecutionState
-	0, // 4: executor.v1.QueryResponse.execution_state:type_name -> executor.v1.ExecutionState
-	1, // 5: executor.v1.ExecutorService.Execute:input_type -> executor.v1.ExecuteRequest
-	3, // 6: executor.v1.ExecutorService.Interrupt:input_type -> executor.v1.InterruptRequest
-	5, // 7: executor.v1.ExecutorService.Query:input_type -> executor.v1.QueryRequest
-	2, // 8: executor.v1.ExecutorService.Execute:output_type -> executor.v1.ExecuteResponse
-	4, // 9: executor.v1.ExecutorService.Interrupt:output_type -> executor.v1.InterruptResponse
-	6, // 10: executor.v1.ExecutorService.Query:output_type -> executor.v1.QueryResponse
-	8, // [8:11] is the sub-list for method output_type
-	5, // [5:8] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	0, // 0: executor.v1.ExecutionState.status:type_name -> executor.v1.ExecutionStatus
+	8, // 1: executor.v1.ExecuteRequest.params:type_name -> executor.v1.ExecuteRequest.ParamsEntry
+	1, // 2: executor.v1.ExecuteResponse.execution_state:type_name -> executor.v1.ExecutionState
+	9, // 3: executor.v1.InterruptResponse.rescheduled_params:type_name -> executor.v1.InterruptResponse.RescheduledParamsEntry
+	1, // 4: executor.v1.InterruptResponse.execution_state:type_name -> executor.v1.ExecutionState
+	1, // 5: executor.v1.QueryResponse.execution_state:type_name -> executor.v1.ExecutionState
+	2, // 6: executor.v1.ExecutorService.Execute:input_type -> executor.v1.ExecuteRequest
+	4, // 7: executor.v1.ExecutorService.Interrupt:input_type -> executor.v1.InterruptRequest
+	6, // 8: executor.v1.ExecutorService.Query:input_type -> executor.v1.QueryRequest
+	3, // 9: executor.v1.ExecutorService.Execute:output_type -> executor.v1.ExecuteResponse
+	5, // 10: executor.v1.ExecutorService.Interrupt:output_type -> executor.v1.InterruptResponse
+	7, // 11: executor.v1.ExecutorService.Query:output_type -> executor.v1.QueryResponse
+	9, // [9:12] is the sub-list for method output_type
+	6, // [6:9] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_executor_v1_executor_proto_init() }
@@ -493,13 +558,14 @@ func file_executor_v1_executor_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_executor_v1_executor_proto_rawDesc), len(file_executor_v1_executor_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_executor_v1_executor_proto_goTypes,
 		DependencyIndexes: file_executor_v1_executor_proto_depIdxs,
+		EnumInfos:         file_executor_v1_executor_proto_enumTypes,
 		MessageInfos:      file_executor_v1_executor_proto_msgTypes,
 	}.Build()
 	File_executor_v1_executor_proto = out.File

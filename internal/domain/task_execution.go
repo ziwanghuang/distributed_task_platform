@@ -16,14 +16,15 @@ const (
 type TaskExecution struct {
 	ID int64
 	// Task快照信息
-	TaskID           int64
-	TaskName         string
-	TaskCronExpr     string
-	TaskGrpcConfig   *GrpcConfig
-	TaskHttpConfig   *HttpConfig
-	TaskRetryConfig  *RetryConfig
-	TaskVersion      int64
-	TaskScheduleNode string
+	TaskID             int64
+	TaskName           string
+	TaskCronExpr       string
+	TaskExecutorType   TaskExecutorType
+	TaskGrpcConfig     *GrpcConfig
+	TaskHttpConfig     *HttpConfig
+	TaskRetryConfig    *RetryConfig
+	TaskVersion        int64
+	TaskScheduleNodeID string
 	// 执行自身信息
 	StartTime     int64 // 开始时间戳
 	EndTime       int64 // 结束时间戳

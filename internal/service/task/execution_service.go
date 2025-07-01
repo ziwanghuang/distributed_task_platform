@@ -12,8 +12,8 @@ type ExecutionService interface {
 	Create(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error)
 
 	// UpdateStatus 更新执行状态
-	UpdateStatus(ctx context.Context, executionID int64, status domain.TaskExecutionStatus) error
+	UpdateStatus(ctx context.Context, id int64, status domain.TaskExecutionStatus) error
 
 	// GetByID 根据ID获取执行实例
-	GetByID(ctx context.Context, executionID int64) (domain.TaskExecution, error)
+	GetByID(ctx context.Context, id int64) (domain.TaskExecution, error)
 }

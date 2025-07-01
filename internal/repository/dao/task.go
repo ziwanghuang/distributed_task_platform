@@ -10,8 +10,9 @@ import (
 // Task 任务表DAO对象
 type Task struct {
 	Id             int64                               `gorm:"type:bigint;primary_key;auto_increment;"`
-	Name           string                              `gorm:"type:varchar(255);not null;comment:'任务名称'"`
+	Name           string                              `gorm:"type:varchar(255);not null;uniqueIndex:uniq_idx_name;comment:'任务名称'"`
 	CronExpr       string                              `gorm:"type:varchar(100);not null;comment:'cron表达式'"`
+	ExecutorType   string                              `gorm:"type:ENUM('LOCAL', 'REMOTE');not null;default:'REMOTE';comment:'任务执行方式：LOCAL-本地执行，REMOTE-远程执行'"`
 	GrpcConfig     sqlx.JsonColumn[domain.GrpcConfig]  `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
 	HttpConfig     sqlx.JsonColumn[domain.HttpConfig]  `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
 	RetryConfig    sqlx.JsonColumn[domain.RetryConfig] `gorm:"type:json;comment:'重试配置'"`
