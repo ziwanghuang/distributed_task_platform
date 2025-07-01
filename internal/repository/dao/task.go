@@ -155,11 +155,11 @@ func (g *GORMTaskDAO) UpdateNextTime(ctx context.Context, id, version, nextTime 
 			"utime":     time.Now().UnixMilli(),
 		})
 	if result.Error != nil {
-		return fmt.Errorf("%w: 数据库操作失败: %v", errs.ErrTaskReleaseFailed, result.Error)
+		return fmt.Errorf("%w: 数据库操作失败: %v", errs.ErrTaskUpdateNextTimeFailed, result.Error)
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("%w: 版本不匹配或任务不存在", errs.ErrTaskReleaseFailed)
+		return fmt.Errorf("%w: 版本不匹配或任务不存在", errs.ErrTaskUpdateNextTimeFailed)
 	}
 	return nil
 }

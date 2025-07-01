@@ -25,15 +25,13 @@ type Service interface {
 }
 
 type service struct {
-	repo           repository.TaskRepository
-	scheduleNodeId string // 当前调度节点ID
+	repo repository.TaskRepository
 }
 
 // NewService 创建任务服务实例
-func NewService(repo repository.TaskRepository, scheduleNodeId string) Service {
+func NewService(repo repository.TaskRepository) Service {
 	return &service{
-		repo:           repo,
-		scheduleNodeId: scheduleNodeId,
+		repo: repo,
 	}
 }
 

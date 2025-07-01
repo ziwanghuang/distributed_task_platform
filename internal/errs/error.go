@@ -7,6 +7,7 @@ var (
 	ErrTaskPreemptFailed         = errors.New("任务抢占失败")
 	ErrTaskRenewFailed           = errors.New("任务续约失败")
 	ErrTaskReleaseFailed         = errors.New("任务释放失败")
+	ErrTaskUpdateNextTimeFailed  = errors.New("更新任务下次执行时间失败")
 	ErrInvalidTaskScheduleNodeID = errors.New("任务调度节点ID非法，不能为空")
 
 	// 任务执行相关错误
