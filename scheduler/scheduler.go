@@ -7,7 +7,7 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"gitee.com/flycash/distributed_task_platform/scheduler/job"
+	v2 "gitee.com/flycash/distributed_task_platform/scheduler/job/v2"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/gotomicro/ego/core/standard"
 )
@@ -19,7 +19,7 @@ type Scheduler struct {
 	nodeID       string       // 当前调度节点ID
 	svc          task.Service // 任务服务
 	taskAcquirer TaskAcquirer // 任务抢占器
-	jobManager   *job.Manager // 任务管理器
+	jobManager   *v2.Manager  // 任务管理器
 	config       *Config      // 配置
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -28,6 +28,7 @@ type Scheduler struct {
 
 // Config 调度器配置
 type Config struct {
+	BatchTimeout     time.Duration
 	BatchSize        int           // 批量获取任务数量
 	ScheduleInterval time.Duration // 调度间隔
 	RenewInterval    time.Duration // 续约间隔
@@ -38,7 +39,7 @@ func NewScheduler(
 	nodeID string,
 	svc task.Service,
 	acquirer TaskAcquirer,
-	taskManager *job.Manager,
+	taskManager *v2.Manager,
 	config *Config,
 ) *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -95,12 +96,14 @@ func (s *Scheduler) scheduleLoop() {
 
 // schedule 单次调度逻辑
 func (s *Scheduler) schedule() error {
+
 	// 获取可调度的任务列表
-	tasks, err := s.svc.SchedulableTasks(s.ctx, s.config.BatchSize)
+	ctx, cancelFunc := context.WithTimeout(s.ctx, s.config.BatchTimeout)
+	tasks, err := s.svc.SchedulableTasks(ctx, s.config.BatchSize)
+	cancelFunc()
 	if err != nil {
 		return fmt.Errorf("获取可调度任务失败: %w", err)
 	}
-
 	if len(tasks) == 0 {
 		s.logger.Debug("没有可调度的任务")
 		return nil
@@ -208,9 +211,9 @@ func (s *Scheduler) Stop() error {
 	s.cancel()
 
 	// 关闭任务管理器
-	if err := s.jobManager.Close(); err != nil {
-		s.logger.Warn("关闭任务管理器失败", elog.FieldErr(err))
-		return err
-	}
+	// if err := s.jobManager.Close(); err != nil {
+	// 	s.logger.Warn("关闭任务管理器失败", elog.FieldErr(err))
+	// 	return err
+	// }
 	return nil
 }

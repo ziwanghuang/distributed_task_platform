@@ -1,4 +1,4 @@
-package job
+package v2
 
 import (
 	"context"
@@ -10,19 +10,27 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 	"github.com/ecodeclub/ekit/syncx"
-	"go.uber.org/multierr"
+	"github.com/gotomicro/ego/core/elog"
 )
+
+type JobEntry struct {
+	job   Job
+	task  domain.Task
+	chans *Chans
+}
 
 // Manager Job管理器，负责Job的创建、管理、生命周期跟踪
 type Manager struct {
-	jobs         syncx.Map[int64, Job]                           // 正在运行的Job
+	jobs         syncx.Map[int64, JobEntry]                      // 正在运行的Job
 	svc          task.ExecutionService                           // 执行服务
 	grpcClients  *grpc.Clients[executorv1.ExecutorServiceClient] // gRPC客户端池
 	pollInterval time.Duration
+
+	logger *elog.Component
 }
 
-// NewTaskManager 创建TaskManager实例
-func NewTaskManager(
+// NewManager 创建 Manager 实例
+func NewManager(
 	svc task.ExecutionService,
 	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
 	pollInterval time.Duration,
@@ -31,14 +39,13 @@ func NewTaskManager(
 		svc:          svc,
 		grpcClients:  grpcClients,
 		pollInterval: pollInterval,
+		logger:       elog.DefaultLogger.With(elog.FieldComponentName("job.Manager")),
 	}
 }
 
 // Run 异步执行任务，返回结果channel
 func (jm *Manager) Run(ctx context.Context, task domain.Task) <-chan error {
 	j := NewRemoteJob(jm.svc, jm.grpcClients, jm.pollInterval)
-	jm.jobs.Store(task.ID, j)
-
 	// 异步执行
 	ch := make(chan error, 1)
 	go func() {
@@ -46,44 +53,46 @@ func (jm *Manager) Run(ctx context.Context, task domain.Task) <-chan error {
 			jm.jobs.Delete(task.ID) // 清理
 			close(ch)
 		}()
-		err := j.Run(ctx, task)
+
+		chs, err := j.Run(ctx, task)
+
+		jm.jobs.Store(task.ID, JobEntry{
+			job:   j,
+			task:  task,
+			chans: chs,
+		})
+
 		ch <- err
 	}()
 	return ch
 }
 
-// Stop 停止指定的任务
-func (jm *Manager) Stop(ctx context.Context, task domain.Task) error {
-	if job, ok := jm.jobs.Load(task.ID); ok {
-		return job.Stop(ctx)
-	}
-	return fmt.Errorf("task %d not found", task.ID)
-}
-
 // RenewFailed 处理续约失败
-func (jm *Manager) RenewFailed(ctx context.Context, task domain.Task) error {
-	if job, ok := jm.jobs.Load(task.ID); ok {
-		return job.HandleRenewFailure(ctx)
+func (jm *Manager) RenewFailed(_ context.Context, task domain.Task) error {
+	if entry, ok := jm.jobs.Load(task.ID); ok {
+		if entry.chans != nil {
+			entry.chans.Renew <- true
+			return nil
+		}
+		jm.logger.Warn("忽略续约事件",
+			elog.String("jobName", entry.job.Name()),
+			elog.Any("task", task),
+		)
 	}
 	return nil
 }
 
-// HandleReport 处理执行节点主动上报的任务执行状态
-func (jm *Manager) HandleReport(ctx context.Context, taskID int64, report *domain.Report) error {
-	if job, exists := jm.jobs.Load(taskID); exists {
-		return job.HandleReport(ctx, report)
-	}
-	return fmt.Errorf("task %d not found", taskID)
-}
-
-// Close 关闭管理器，停止所有正在运行的Job
-func (jm *Manager) Close() error {
-	var err error
-	jm.jobs.Range(func(taskID int64, job Job) bool {
-		if err1 := job.Stop(context.Background()); err1 != nil {
-			err = multierr.Append(err, fmt.Errorf("stop task %d failed: %w", taskID, err))
+// OnReport 处理执行节点主动上报的任务执行状态
+func (jm *Manager) OnReport(_ context.Context, report *domain.Report) error {
+	if entry, exists := jm.jobs.Load(report.TaskID); exists {
+		if entry.chans != nil {
+			entry.chans.Report <- report
+		} else {
+			jm.logger.Warn("忽略上报进度事件",
+				elog.String("jobName", entry.job.Name()),
+				elog.Any("report", report),
+			)
 		}
-		return true
-	})
-	return err
+	}
+	return fmt.Errorf("task %d not found", report.TaskID)
 }
