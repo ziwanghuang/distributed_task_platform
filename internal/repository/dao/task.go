@@ -1,15 +1,20 @@
 package dao
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
+	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
+	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"github.com/ecodeclub/ekit/sqlx"
+	"github.com/ego-component/egorm"
 )
 
 // Task 任务表DAO对象
 type Task struct {
-	Id             int64                               `gorm:"type:bigint;primary_key;auto_increment;"`
+	Id             int64                               `gorm:"type:bigint;primaryKey;autoIncrement;"`
 	Name           string                              `gorm:"type:varchar(255);not null;uniqueIndex:uniq_idx_name;comment:'任务名称'"`
 	CronExpr       string                              `gorm:"type:varchar(100);not null;comment:'cron表达式'"`
 	ExecutorType   string                              `gorm:"type:ENUM('LOCAL', 'REMOTE');not null;default:'REMOTE';comment:'任务执行方式：LOCAL-本地执行，REMOTE-远程执行'"`
@@ -27,4 +32,134 @@ type Task struct {
 // TableName 指定表名
 func (Task) TableName() string {
 	return "tasks"
+}
+
+type TaskDAO interface {
+	// Create 创建任务
+	Create(ctx context.Context, task Task) (Task, error)
+	// FindSchedulableTasks 查询可调度的任务列表
+	// preemptedTimeoutMs: PREEMPTED状态任务的超时时间（毫秒），超过此时间未续约的任务可被重新抢占
+	FindSchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]Task, error)
+	// Preempt 抢占任务（CAS操作）
+	Preempt(ctx context.Context, id, version int64, scheduleNodeId string) error
+	// Renew 续约任务（CAS操作）
+	Renew(ctx context.Context, id, version int64, scheduleNodeId string) error
+	// Release 释放任务，更新状态为ACTIVE
+	Release(ctx context.Context, id, version int64, scheduleNodeId string) error
+	// UpdateNextTime 更新下一次执行时间
+	UpdateNextTime(ctx context.Context, id, version, nextTime int64) error
+}
+
+type GORMTaskDAO struct {
+	db *egorm.Component
+}
+
+func NewGORMTaskDAO(db *egorm.Component) TaskDAO {
+	return &GORMTaskDAO{db: db}
+}
+
+func (g *GORMTaskDAO) Create(ctx context.Context, task Task) (Task, error) {
+	now := time.Now().UnixMilli()
+	task.Utime, task.Ctime = now, now
+	// GORM的Create会自动填充ID到结构体中
+	err := g.db.WithContext(ctx).Create(&task).Error
+	if err != nil {
+		return Task{}, fmt.Errorf("创建任务失败: %v", err)
+	}
+	return task, nil
+}
+
+func (g *GORMTaskDAO) FindSchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]Task, error) {
+	var tasks []Task
+	now := time.Now().UnixMilli()
+	// 获取所有可调度的任务
+	// 1. ACTIVE 状态且到了执行时间的任务
+	// 2. PREEMPTED 状态但超时未续约的任务（疑似僵尸任务）
+	err := g.db.WithContext(ctx).
+		Where("next_time <= ? AND (status = ? OR (status = ? AND utime <= ?))",
+			now, "ACTIVE", "PREEMPTED", now-preemptedTimeoutMs).
+		Limit(limit).
+		Find(&tasks).Error
+	return tasks, err
+}
+
+func (g *GORMTaskDAO) Preempt(ctx context.Context, id, version int64, scheduleNodeId string) error {
+	now := time.Now().UnixMilli()
+	result := g.db.WithContext(ctx).
+		Model(&Task{}).
+		Where("id = ? AND version = ?", id, version).
+		Updates(map[string]any{
+			"status":           "PREEMPTED",
+			"schedule_node_id": scheduleNodeId,
+			"version":          version + 1,
+			"utime":            now,
+		})
+
+	if result.Error != nil {
+		return fmt.Errorf("%w: 数据库操作失败: %v", errs.ErrTaskPreemptFailed, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w: 版本不匹配或任务不存在", errs.ErrTaskPreemptFailed)
+	}
+
+	return nil
+}
+
+func (g *GORMTaskDAO) Renew(ctx context.Context, id, version int64, scheduleNodeId string) error {
+	result := g.db.WithContext(ctx).
+		Model(&Task{}).
+		Where("id = ? AND version = ? AND schedule_node_id = ?", id, version, scheduleNodeId).
+		Updates(map[string]any{
+			"version": version + 1,
+			"utime":   time.Now().UnixMilli(),
+		})
+	if result.Error != nil {
+		return fmt.Errorf("%w: 数据库操作失败: %v", errs.ErrTaskRenewFailed, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w: 版本不匹配、节点不匹配或任务不存在", errs.ErrTaskRenewFailed)
+	}
+
+	return nil
+}
+
+func (g *GORMTaskDAO) Release(ctx context.Context, id, version int64, scheduleNodeId string) error {
+	result := g.db.WithContext(ctx).
+		Model(&Task{}).
+		Where("id = ? AND version = ? AND schedule_node_id = ?", id, version, scheduleNodeId).
+		Updates(map[string]any{
+			"status":           "ACTIVE",
+			"schedule_node_id": nil,
+			"version":          version + 1,
+			"utime":            time.Now().UnixMilli(),
+		})
+	if result.Error != nil {
+		return fmt.Errorf("%w: 数据库操作失败: %v", errs.ErrTaskReleaseFailed, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w: 版本不匹配或任务不存在", errs.ErrTaskReleaseFailed)
+	}
+	return nil
+}
+
+func (g *GORMTaskDAO) UpdateNextTime(ctx context.Context, id, version, nextTime int64) error {
+	result := g.db.WithContext(ctx).
+		Model(&Task{}).
+		Where("id = ? AND version = ?", id, version).
+		Updates(map[string]any{
+			"next_time": nextTime,
+			"version":   version + 1,
+			"utime":     time.Now().UnixMilli(),
+		})
+	if result.Error != nil {
+		return fmt.Errorf("%w: 数据库操作失败: %v", errs.ErrTaskReleaseFailed, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w: 版本不匹配或任务不存在", errs.ErrTaskReleaseFailed)
+	}
+	return nil
 }

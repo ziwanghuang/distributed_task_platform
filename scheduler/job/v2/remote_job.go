@@ -69,13 +69,22 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) (*Chans, error) {
 		Status:             domain.TaskExecutionStatusPrepare,
 	})
 	if err != nil {
+		r.logger.Error("创建任务执行记录失败", elog.FieldErr(err))
 		return nil, fmt.Errorf("创建任务执行记录失败: %w", err)
 	}
 
-	// 发送执行请求并更新为RUNNING状态
+	// 发送执行请求并
 	err = r.sendRequest(ctx, &created)
 	if err != nil {
+		r.logger.Error("执行任务失败", elog.FieldErr(err))
 		return nil, fmt.Errorf("执行任务失败: %w", err)
+	}
+
+	// 更新为 RUNNING 状态
+	err = r.svc.UpdateStatus(ctx, created.ID, domain.TaskExecutionStatusRunning)
+	if err != nil {
+		r.logger.Error("更新任务执行记录状态失败", elog.FieldErr(err))
+		return nil, fmt.Errorf("更新任务执行记录状态失败: %w", err)
 	}
 
 	// 监控执行状态
@@ -108,14 +117,9 @@ func (r *RemoteJob) sendGRPCRequest(ctx context.Context, exec *domain.TaskExecut
 	if err != nil {
 		return fmt.Errorf("发送GRPC请求失败: %w", err)
 	}
-	// 更新状态为RUNNING
-	// todo: 	resp.GetExecutionState().GetStatus()
-	err = r.svc.UpdateStatus(ctx, exec.ID, domain.TaskExecutionStatusRunning)
-	if err != nil {
-		return fmt.Errorf("更新任务执行记录状态失败: %w", err)
-	}
+	// TODO: warning: 更新状态为RUNNING  r.svc.UpdateStatus(ctx, created.ID, domain.TaskExecutionStatusRunning)
 	// 处理初始响应状态
-	return r.handleExecutionState(ctx, exec, resp.ExecutionState)
+	return r.handleExecutionState(ctx, exec, resp.GetExecutionState())
 }
 
 // handleExecutionState 处理执行节点返回的状态
@@ -194,7 +198,7 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 			// 主动轮询执行节点
 			err := r.pollExecutionStatus(ctx, exec)
 			if err != nil {
-				r.logger.Warn("主动拉取任务执行状态，并更新执行状态失败",
+				r.logger.Warn("主动轮询任务执行状态，并更新执行状态失败",
 					elog.FieldErr(err))
 				continue
 			}

@@ -22,8 +22,8 @@ func (t TaskStatus) String() string {
 type TaskExecutorType string
 
 const (
-	TaskExecutorTypeLocal  TaskExecutorType = "local"
-	TaskExecutorTypeRemote TaskExecutorType = "remote"
+	TaskExecutorTypeLocal  TaskExecutorType = "LOCAL"
+	TaskExecutorTypeRemote TaskExecutorType = "REMOTE"
 )
 
 func (t TaskExecutorType) String() string {
@@ -51,12 +51,12 @@ type Task struct {
 	CTime          int64 // 创建时间戳
 }
 
-func (t *Task) SetNextTime() {
+func (t *Task) CalculateNextTime() time.Time {
 	p := cron.NewParser(
 		cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 	)
 	s, _ := p.Parse(t.CronExpr)
-	t.NextTime = s.Next(time.Now()).UnixMilli()
+	return s.Next(time.Now())
 }
 
 // RetryConfig 重试配置

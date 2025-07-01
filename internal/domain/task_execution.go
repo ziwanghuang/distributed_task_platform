@@ -12,6 +12,10 @@ const (
 	TaskExecutionStatusFailedPreempted TaskExecutionStatus = "FAILED_PREEMPTED" // 因续约失败导致的抢占失败
 )
 
+func (t TaskExecutionStatus) String() string {
+	return string(t)
+}
+
 // TaskExecution 任务执行实例领域模型
 type TaskExecution struct {
 	ID int64

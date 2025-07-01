@@ -30,6 +30,7 @@ type Scheduler struct {
 type Config struct {
 	BatchTimeout     time.Duration
 	BatchSize        int           // 批量获取任务数量
+	PreemptedTimeout time.Duration // 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
 	ScheduleInterval time.Duration // 调度间隔
 	RenewInterval    time.Duration // 续约间隔
 }
@@ -96,10 +97,9 @@ func (s *Scheduler) scheduleLoop() {
 
 // schedule 单次调度逻辑
 func (s *Scheduler) schedule() error {
-
 	// 获取可调度的任务列表
 	ctx, cancelFunc := context.WithTimeout(s.ctx, s.config.BatchTimeout)
-	tasks, err := s.svc.SchedulableTasks(ctx, s.config.BatchSize)
+	tasks, err := s.svc.SchedulableTasks(ctx, s.config.PreemptedTimeout.Milliseconds(), s.config.BatchSize)
 	cancelFunc()
 	if err != nil {
 		return fmt.Errorf("获取可调度任务失败: %w", err)
