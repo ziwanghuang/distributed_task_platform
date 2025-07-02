@@ -18,10 +18,44 @@ func (l *LocalJob) Name() string {
 	return domain.TaskExecutorTypeLocal.String()
 }
 
-func (l *LocalJob) Run(ctx context.Context, task domain.Task) (*Chans, error) {
-	fn, ok := l.fns[task.Name]
-	if !ok {
-		return nil, fmt.Errorf("未注册方法：%s", task.Name)
+func (l *LocalJob) Run(ctx context.Context, task domain.Task) *Chans {
+	reportCh := make(chan *domain.Report)
+	renewCh := make(chan bool)
+	errorCh := make(chan error, 1)
+
+	// 立即返回通道
+	chans := &Chans{
+		Report: reportCh,
+		Renew:  renewCh,
+		Error:  errorCh,
 	}
-	return nil, fn(ctx, task)
+
+	// 在后台执行本地任务
+	go func() {
+		defer func() {
+			close(reportCh)
+			close(renewCh)
+			close(errorCh)
+		}()
+
+		fn, ok := l.fns[task.Name]
+		if !ok {
+			// 未找到函数，发送错误
+			select {
+			case errorCh <- fmt.Errorf("未注册方法：%s", task.Name):
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		// 执行本地函数
+		err := fn(ctx, task)
+		// 发送执行结果（可能为nil表示成功）
+		select {
+		case errorCh <- err:
+		case <-ctx.Done():
+		}
+	}()
+
+	return chans
 }

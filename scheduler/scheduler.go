@@ -141,7 +141,7 @@ func (s *Scheduler) handleAcquiredTask(task domain.Task) {
 		elog.Int64("taskID", task.ID),
 		elog.String("taskName", task.Name))
 
-	// 确保最后释放任务
+	// 确保最后释放任务和清理缓存
 	defer func() {
 		if err := s.taskAcquirer.Release(s.ctx, task); err != nil {
 			s.logger.Error("释放任务失败",
@@ -152,7 +152,8 @@ func (s *Scheduler) handleAcquiredTask(task domain.Task) {
 	}()
 
 	// 启动任务执行
-	resultChan := s.jobManager.Run(s.ctx, task)
+	chans, cleanup := s.jobManager.Run(s.ctx, task)
+	defer cleanup()
 
 	// 续约定时器
 	renewTicker := time.NewTicker(s.config.RenewInterval)
@@ -160,18 +161,20 @@ func (s *Scheduler) handleAcquiredTask(task domain.Task) {
 
 	for {
 		select {
-		case err := <-resultChan:
+		case err := <-chans.Error:
 			// 任务完成
 			if err != nil {
 				s.logger.Error("任务执行失败",
 					elog.Int64("taskID", task.ID),
 					elog.String("taskName", task.Name),
 					elog.FieldErr(err))
-				return
+
+			} else {
+				s.logger.Info("任务执行成功",
+					elog.Int64("taskID", task.ID),
+					elog.String("taskName", task.Name))
 			}
-			s.logger.Info("任务执行成功",
-				elog.Int64("taskID", task.ID),
-				elog.String("taskName", task.Name))
+
 			// 更新下次执行时间
 			err = s.svc.UpdateNextTime(s.ctx, task)
 			if err != nil {
@@ -206,15 +209,8 @@ func (s *Scheduler) handleAcquiredTask(task domain.Task) {
 // Stop 停止调度器
 func (s *Scheduler) Stop() error {
 	s.logger.Info("停止分布式任务调度器", elog.String("nodeID", s.nodeID))
-
 	// 取消上下文
 	s.cancel()
-
-	// 关闭任务管理器
-	// if err := s.jobManager.Close(); err != nil {
-	// 	s.logger.Warn("关闭任务管理器失败", elog.FieldErr(err))
-	// 	return err
-	// }
 	return nil
 }
 

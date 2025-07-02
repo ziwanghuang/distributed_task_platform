@@ -46,38 +46,72 @@ func (r *RemoteJob) Name() string {
 	return domain.TaskExecutorTypeRemote.String()
 }
 
-func (r *RemoteJob) Run(ctx context.Context, task domain.Task) (*Chans, error) {
+func (r *RemoteJob) Run(ctx context.Context, task domain.Task) *Chans {
 	reportCh := make(chan *domain.Report)
 	renewCh := make(chan bool)
+	errorCh := make(chan error, 1)
 
-	// 创建任务执行记录
-	created, err := r.svc.Create(ctx, domain.TaskExecution{
-		Task: domain.Task{
-			ID: task.ID,
-		},
-		StartTime: time.Now().UnixMilli(), // 创建时自动添加
-		EndTime:   0,                      // 结束时间何时添加？
-		Status:    domain.TaskExecutionStatusPrepare,
-	})
-	if err != nil {
-		r.logger.Error("创建任务执行记录失败", elog.FieldErr(err))
-		return nil, fmt.Errorf("创建任务执行记录失败: %w", err)
+	// 立即返回chans
+	chans := &Chans{
+		Report: reportCh,
+		Renew:  renewCh,
+		Error:  errorCh,
 	}
 
-	// 发送执行请求
-	needMonitoring, err := r.sendRequest(ctx, &created)
-	if err != nil {
-		r.logger.Error("执行任务失败", elog.FieldErr(err))
-		return nil, fmt.Errorf("执行任务失败: %w", err)
-	}
+	// 在后台处理任务启动和监控
+	go func() {
+		defer func() {
+			// 确保所有通道都会被关闭
+			close(reportCh)
+			close(renewCh)
+			close(errorCh)
+		}()
 
-	// 如果任务已经完成，不需要监控
-	if !needMonitoring {
-		return &Chans{Report: reportCh, Renew: renewCh}, nil
-	}
+		// 创建任务执行记录
+		created, err := r.svc.Create(ctx, domain.TaskExecution{
+			Task: domain.Task{
+				ID: task.ID,
+			},
+			StartTime: time.Now().UnixMilli(),
+			EndTime:   0,
+			Status:    domain.TaskExecutionStatusPrepare,
+		})
+		if err != nil {
+			r.logger.Error("创建任务执行记录失败", elog.FieldErr(err))
+			// 启动错误也通过Error通道发送
+			r.sendError(ctx, errorCh, fmt.Errorf("创建任务执行记录失败: %w", err))
+			return
+		}
 
-	// 监控执行状态
-	return &Chans{Report: reportCh, Renew: renewCh}, r.monitor(ctx, reportCh, renewCh, &created)
+		// 发送执行请求
+		needMonitoring, err := r.sendRequest(ctx, &created)
+		if err != nil {
+			r.logger.Error("执行任务失败", elog.FieldErr(err))
+			// 启动错误也通过Error通道发送
+			r.sendError(ctx, errorCh, fmt.Errorf("执行任务失败: %w", err))
+			return
+		}
+
+		// 如果需要监控，继续监控
+		if needMonitoring {
+			err = r.monitor(ctx, reportCh, renewCh, &created)
+			if err != nil {
+				r.logger.Error("任务监控过程中发生错误", elog.FieldErr(err))
+				// 执行错误通过Error通道发送
+				r.sendError(ctx, errorCh, err)
+			}
+		}
+		// 如果不需要监控，任务已完成，正常结束（errorCh传递nil表示成功）
+	}()
+
+	return chans
+}
+
+func (r *RemoteJob) sendError(ctx context.Context, errorCh chan error, err error) {
+	select {
+	case errorCh <- err:
+	case <-ctx.Done():
+	}
 }
 
 // sendRequest 发送执行请求，返回是否需要监控和错误
