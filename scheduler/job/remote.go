@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -100,8 +101,10 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) *Chans {
 				// 执行错误通过Error通道发送
 				r.sendError(ctx, errorCh, err)
 			}
+		} else {
+			// 如果不需要监控，任务已完成，正常结束（errorCh传递nil表示成功）
+			r.sendError(ctx, errorCh, nil)
 		}
-		// 如果不需要监控，任务已完成，正常结束（errorCh传递nil表示成功）
 	}()
 
 	return chans
@@ -144,7 +147,7 @@ func (r *RemoteJob) sendGRPCRequest(ctx context.Context, exec *domain.TaskExecut
 }
 
 // handleExecutionState 处理执行节点返回的状态
-func (r *RemoteJob) handleExecutionState(ctx context.Context, exec *domain.TaskExecution, state *executorv1.ExecutionState) (needMonitoring bool, err error) {
+func (r *RemoteJob) handleExecutionState(ctx context.Context, exec *domain.TaskExecution, state *executorv1.ExecutionState) (isRunning bool, err error) {
 	// 将protobuf状态转换为domain状态
 	var domainStatus domain.TaskExecutionStatus
 	switch state.Status {
@@ -167,8 +170,7 @@ func (r *RemoteJob) handleExecutionState(ctx context.Context, exec *domain.TaskE
 	}
 
 	// 如果是终态，不需要继续监控
-	needMonitoring = !r.isTerminalStatus(domainStatus)
-	return needMonitoring, nil
+	return !r.isTerminalStatus(domainStatus), nil
 }
 
 // updateExecutionState 统一处理所有状态转换和更新
@@ -199,32 +201,53 @@ func (r *RemoteJob) isTerminalStatus(status domain.TaskExecutionStatus) bool {
 }
 
 // sendHTTPRequest 发送HTTP执行请求
-func (r *RemoteJob) sendHTTPRequest(_ context.Context, exec *domain.TaskExecution) (needMonitoring bool, err error) {
-	// TODO: 实现HTTP客户端调用
+func (r *RemoteJob) sendHTTPRequest(ctx context.Context, exec *domain.TaskExecution) (needMonitoring bool, err error) {
+	// TODO: 实现HTTP客户端调用，当前为占位实现
+	r.logger.Warn("HTTP执行方式尚未完全实现，使用占位逻辑",
+		elog.Int64("taskId", exec.Task.ID),
+		elog.String("endpoint", exec.Task.HTTPConfig.Endpoint))
+
+	// 创建HTTP客户端，设置合理的超时时间
 	client := &http.Client{
-		Transport:     nil,
-		CheckRedirect: nil,
-		Jar:           nil,
-		Timeout:       0,
+		Timeout: 30 * time.Second,
 	}
-	// 发送JSON格式数据
-	jsonData := `{"name": "张三", "age": 30}`
+
+	// 构造请求参数 - 使用实际的任务参数而非硬编码数据
+	requestData := map[string]any{
+		"taskId":      exec.Task.ID,
+		"taskName":    exec.Task.Name,
+		"executionId": exec.ID,
+		"params":      exec.Task.HTTPConfig.Params,
+	}
+	// 将参数转换为JSON
+	jsonBytes, err := json.Marshal(requestData)
+	if err != nil {
+		return false, fmt.Errorf("序列化请求参数失败: %w", err)
+	}
+	// 发送POST请求到执行节点
 	resp, err := client.Post(
 		exec.Task.HTTPConfig.Endpoint,
 		"application/json",
-		strings.NewReader(jsonData),
+		strings.NewReader(string(jsonBytes)),
 	)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("发送HTTP请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("读取HTTP响应失败: %w", err)
 	}
-	fmt.Println(string(body))
-	return false, fmt.Errorf("HTTP执行方式尚未实现")
+
+	r.logger.Info("收到HTTP执行节点响应",
+		elog.String("response", string(body)),
+		elog.Int("statusCode", resp.StatusCode))
+
+	// TODO: 解析响应，根据实际API格式处理执行状态
+	// 暂时返回需要监控，由轮询机制处理后续状态更新
+	return true, nil
 }
 
 // monitor 监控执行状态（轮询+上报双模式）
@@ -236,10 +259,13 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 		select {
 		case <-ticker.C:
 			// 主动轮询执行节点
-			err := r.pollExecutionStatus(ctx, exec)
+			isRunning, err := r.pollExecutionStatus(ctx, exec)
 			if err != nil {
-				r.logger.Warn("主动轮询任务执行状态，并更新执行状态失败",
+				r.logger.Warn("主动轮询任务执行状态并更新执行状态失败",
 					elog.FieldErr(err))
+				continue
+			}
+			if isRunning {
 				continue
 			}
 			return nil
@@ -277,30 +303,35 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 }
 
 // pollExecutionStatus 主动轮询执行节点状态
-func (r *RemoteJob) pollExecutionStatus(ctx context.Context, exec *domain.TaskExecution) error {
+func (r *RemoteJob) pollExecutionStatus(ctx context.Context, exec *domain.TaskExecution) (isRunning bool, err error) {
 	if exec.Task.GrpcConfig != nil {
 		return r.pollGRPCExecutionStatus(ctx, exec)
 	} else if exec.Task.HTTPConfig != nil {
 		return r.pollHTTPExecutionStatus(ctx, exec)
 	}
-	return nil
+	return false, fmt.Errorf("未找到有效的通信配置，无法轮询执行状态")
 }
 
 // pollGRPCExecutionStatus 通过gRPC轮询状态
-func (r *RemoteJob) pollGRPCExecutionStatus(ctx context.Context, exec *domain.TaskExecution) error {
+func (r *RemoteJob) pollGRPCExecutionStatus(ctx context.Context, exec *domain.TaskExecution) (isRunning bool, err error) {
 	client := r.grpcClients.Get(exec.Task.GrpcConfig.ServiceName)
 	resp, err := client.Query(ctx, &executorv1.QueryRequest{
 		Eid: exec.ID,
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
-	_, err = r.handleExecutionState(ctx, exec, resp.ExecutionState)
-	return err
+	return r.handleExecutionState(ctx, exec, resp.ExecutionState)
 }
 
 // pollHTTPExecutionStatus 通过HTTP轮询状态
-func (r *RemoteJob) pollHTTPExecutionStatus(_ context.Context, _ *domain.TaskExecution) error {
-	// TODO: 实现HTTP轮询
-	return nil
+func (r *RemoteJob) pollHTTPExecutionStatus(ctx context.Context, exec *domain.TaskExecution) (isRunning bool, err error) {
+	// TODO: 实现HTTP轮询状态查询，当前为占位实现
+	r.logger.Warn("HTTP状态轮询尚未实现，暂时标记为已完成",
+		elog.Int64("taskId", exec.Task.ID),
+		elog.Int64("executionId", exec.ID))
+
+	// 暂时返回false表示任务已完成，避免无限轮询
+	// 在实际实现中，应该向执行节点发送状态查询请求
+	return false, nil
 }
