@@ -32,7 +32,7 @@ type TaskExecution struct {
 	// 执行自身信息
 	StartTime     int64 // 开始时间戳
 	EndTime       int64 // 结束时间戳
-	RetryCount    int32
+	RetryCount    int64
 	NextRetryTime int64 // 下次重试时间戳
 	Status        TaskExecutionStatus
 	CTime         int64 // 创建时间戳

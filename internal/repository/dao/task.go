@@ -23,7 +23,7 @@ type Task struct {
 	RetryConfig    sqlx.JsonColumn[domain.RetryConfig] `gorm:"type:json;comment:'重试配置'"`
 	ScheduleNodeId sql.NullString                      `gorm:"type:varchar(255);comment:'当前抢占的调度节点ID'"`
 	NextTime       int64                               `gorm:"type:bigint;not null;index:idx_next_time_status;comment:'下次执行时间'"`
-	Status         string                              `gorm:"type:ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE');not null;default:'ACTIVE';index:idx_next_time_status;comment:'任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行'"`
+	Status         string                              `gorm:"type:ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE');not null;default:'ACTIVE';index:idx_next_time_status;comment:'任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行。处于INACTIVE也可以被再次 ACTIVE'"`
 	Version        int64                               `gorm:"type:bigint;not null;default:1;comment:'版本号，用于乐观锁'"`
 	Ctime          int64                               `gorm:"comment:'创建时间'"`
 	Utime          int64                               `gorm:"comment:'更新时间'"`

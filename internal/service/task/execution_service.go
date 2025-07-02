@@ -15,6 +15,13 @@ type ExecutionService interface {
 	GetByID(ctx context.Context, id int64) (domain.TaskExecution, error)
 	// UpdateStatus 更新执行状态
 	UpdateStatus(ctx context.Context, id int64, status domain.TaskExecutionStatus) error
+	// FindRetryableExecutions 查找所有可以重试的执行记录
+	// maxRetryCount: 最大重试次数限制
+	// prepareTimeoutMs: PREPARE状态超时时间（毫秒），超过此时间未执行视为超时
+	// limit: 查询结果数量限制
+	FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
+	// UpdateRetryResult 更新重试结果
+	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
 }
 
 type executionService struct {
@@ -36,4 +43,12 @@ func (s *executionService) UpdateStatus(ctx context.Context, id int64, status do
 
 func (s *executionService) GetByID(ctx context.Context, id int64) (domain.TaskExecution, error) {
 	return s.repo.GetByID(ctx, id)
+}
+
+func (s *executionService) FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error) {
+	return s.repo.FindRetryableExecutions(ctx, maxRetryCount, prepareTimeoutMs, limit)
+}
+
+func (s *executionService) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error {
+	return s.repo.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, endTime, status)
 }

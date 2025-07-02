@@ -9,7 +9,7 @@ var (
 	ErrTaskReleaseFailed         = errors.New("任务释放失败")
 	ErrTaskUpdateNextTimeFailed  = errors.New("更新任务下次执行时间失败")
 	ErrInvalidTaskScheduleNodeID = errors.New("任务调度节点ID非法，不能为空")
-
+	ErrInvalidTaskCronExpr       = errors.New("任务Cron表达式非法")
 	// 任务执行相关错误
 	ErrExecutionNotFound      = errors.New("执行记录不存在")
 	ErrExecutionAlreadyExists = errors.New("执行记录已存在")

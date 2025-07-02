@@ -5,6 +5,7 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
+	"github.com/ecodeclub/ekit/slice"
 	"github.com/ecodeclub/ekit/sqlx"
 )
 
@@ -15,6 +16,13 @@ type TaskExecutionRepository interface {
 	UpdateStatus(ctx context.Context, id int64, status domain.TaskExecutionStatus) error
 	// GetByID 根据ID获取执行实例
 	GetByID(ctx context.Context, id int64) (domain.TaskExecution, error)
+	// FindRetryableExecutions 查找所有可以重试的执行记录
+	// maxRetryCount: 最大重试次数限制
+	// prepareTimeoutMs: PREPARE状态超时时间（毫秒），超过此时间未执行视为超时
+	// limit: 查询结果数量限制
+	FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
+	// UpdateRetryResult 更新重试结果
+	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
 }
 
 type taskExecutionRepository struct {
@@ -43,6 +51,20 @@ func (r *taskExecutionRepository) GetByID(ctx context.Context, id int64) (domain
 		return domain.TaskExecution{}, err
 	}
 	return r.toDomain(daoExecution), nil
+}
+
+func (r *taskExecutionRepository) FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error) {
+	daoExecutions, err := r.dao.FindRetryableExecutions(ctx, maxRetryCount, prepareTimeoutMs, limit)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(daoExecutions, func(idx int, src dao.TaskExecution) domain.TaskExecution {
+		return r.toDomain(src)
+	}), nil
+}
+
+func (r *taskExecutionRepository) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error {
+	return r.dao.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, endTime, status.String())
 }
 
 // toEntity 将领域模型转换为DAO模型
@@ -75,7 +97,7 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 		TaskScheduleNodeId: execution.TaskScheduleNodeID,
 		Stime:              execution.StartTime,
 		Etime:              execution.EndTime,
-		RetryCnt:           int(execution.RetryCount),
+		RetryCount:         execution.RetryCount,
 		NextRetryTime:      execution.NextRetryTime,
 		Status:             execution.Status.String(),
 		Ctime:              execution.CTime,
@@ -113,7 +135,7 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 		TaskScheduleNodeID: daoExecution.TaskScheduleNodeId,
 		StartTime:          daoExecution.Stime,
 		EndTime:            daoExecution.Etime,
-		RetryCount:         int32(daoExecution.RetryCnt),
+		RetryCount:         daoExecution.RetryCount,
 		NextRetryTime:      daoExecution.NextRetryTime,
 		Status:             domain.TaskExecutionStatus(daoExecution.Status),
 		CTime:              daoExecution.Ctime,

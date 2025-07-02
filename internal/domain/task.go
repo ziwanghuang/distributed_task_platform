@@ -3,6 +3,7 @@ package domain
 import (
 	"time"
 
+	"gitee.com/flycash/distributed_task_platform/pkg/retry"
 	"github.com/robfig/cron/v3"
 )
 
@@ -61,10 +62,20 @@ func (t *Task) CalculateNextTime() time.Time {
 
 // RetryConfig 重试配置
 type RetryConfig struct {
-	MaxRetries      int32   `json:"maxRetries"`
-	InitialInterval int64   `json:"initialInterval"` // 毫秒
-	MaxInterval     int64   `json:"maxInterval"`     // 毫秒
-	Multiplier      float64 `json:"multiplier"`
+	MaxRetries      int32 `json:"maxRetries"`
+	InitialInterval int64 `json:"initialInterval"` // 毫秒
+	MaxInterval     int64 `json:"maxInterval"`     // 毫秒
+}
+
+func (r *RetryConfig) ToRetryConfig() retry.Config {
+	return retry.Config{
+		Type: "exponential",
+		ExponentialBackoff: &retry.ExponentialBackoffConfig{
+			InitialInterval: time.Duration(r.InitialInterval) * time.Millisecond,
+			MaxInterval:     time.Duration(r.MaxInterval) * time.Millisecond,
+			MaxRetries:      r.MaxRetries,
+		},
+	}
 }
 
 // GrpcConfig gRPC配置

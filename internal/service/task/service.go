@@ -36,6 +36,12 @@ func NewService(repo repository.TaskRepository) Service {
 }
 
 func (s *service) Create(ctx context.Context, task domain.Task) (domain.Task, error) {
+	// 计算并设置下次执行时间
+	nextTime := task.CalculateNextTime()
+	if nextTime.IsZero() {
+		return domain.Task{}, errs.ErrInvalidTaskCronExpr
+	}
+	task.NextTime = nextTime.UnixMilli()
 	return s.repo.Create(ctx, task)
 }
 
