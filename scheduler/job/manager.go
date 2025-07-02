@@ -1,4 +1,4 @@
-package v2
+package job
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/gotomicro/ego/core/elog"
 )
 
-type JobEntry struct {
+type entry struct {
 	job   Job
 	task  domain.Task
 	chans *Chans
@@ -21,7 +21,7 @@ type JobEntry struct {
 
 // Manager Job管理器，负责Job的创建、管理、生命周期跟踪
 type Manager struct {
-	jobs         syncx.Map[int64, JobEntry]                      // 正在运行的Job
+	jobs         syncx.Map[int64, entry]                         // 正在运行的Job
 	svc          task.ExecutionService                           // 执行服务
 	grpcClients  *grpc.Clients[executorv1.ExecutorServiceClient] // gRPC客户端池
 	pollInterval time.Duration
@@ -56,7 +56,7 @@ func (jm *Manager) Run(ctx context.Context, task domain.Task) <-chan error {
 
 		chs, err := j.Run(ctx, task)
 
-		jm.jobs.Store(task.ID, JobEntry{
+		jm.jobs.Store(task.ID, entry{
 			job:   j,
 			task:  task,
 			chans: chs,

@@ -7,7 +7,7 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	v2 "gitee.com/flycash/distributed_task_platform/scheduler/job/v2"
+	"gitee.com/flycash/distributed_task_platform/scheduler/job"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/gotomicro/ego/core/standard"
 )
@@ -19,7 +19,7 @@ type Scheduler struct {
 	nodeID       string       // 当前调度节点ID
 	svc          task.Service // 任务服务
 	taskAcquirer TaskAcquirer // 任务抢占器
-	jobManager   *v2.Manager  // 任务管理器
+	jobManager   *job.Manager // 任务管理器
 	config       *Config      // 配置
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -40,7 +40,7 @@ func NewScheduler(
 	nodeID string,
 	svc task.Service,
 	acquirer TaskAcquirer,
-	taskManager *v2.Manager,
+	taskManager *job.Manager,
 	config *Config,
 ) *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())
