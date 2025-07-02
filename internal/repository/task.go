@@ -13,6 +13,8 @@ import (
 type TaskRepository interface {
 	// Create 创建任务
 	Create(ctx context.Context, task domain.Task) (domain.Task, error)
+	// GetByID 根据ID获取任务
+	GetByID(ctx context.Context, id int64) (domain.Task, error)
 	// SchedulableTasks 获取可调度的任务列表，preemptedTimeoutMs 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
 	SchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]domain.Task, error)
 	// Acquire 抢占任务
@@ -23,6 +25,8 @@ type TaskRepository interface {
 	Renew(ctx context.Context, task domain.Task) error
 	// UpdateNextTime 更新任务的下次执行时间
 	UpdateNextTime(ctx context.Context, id, version, nextTime int64) error
+	// UpdateScheduleParams 更新调度参数
+	UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error
 }
 
 type taskRepository struct {
@@ -39,6 +43,14 @@ func (r *taskRepository) Create(ctx context.Context, task domain.Task) (domain.T
 		return domain.Task{}, err
 	}
 	return r.toDomain(created), nil
+}
+
+func (r *taskRepository) GetByID(ctx context.Context, id int64) (domain.Task, error) {
+	daoTask, err := r.dao.GetByID(ctx, id)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return r.toDomain(daoTask), nil
 }
 
 func (r *taskRepository) SchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]domain.Task, error) {
@@ -67,6 +79,10 @@ func (r *taskRepository) UpdateNextTime(ctx context.Context, id, version, nextTi
 	return r.dao.UpdateNextTime(ctx, id, version, nextTime)
 }
 
+func (r *taskRepository) UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error {
+	return r.dao.UpdateScheduleParams(ctx, id, version, scheduleParams)
+}
+
 // toEntity 将领域模型转换为DAO模型
 func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 	var scheduleNodeId sql.NullString
@@ -89,6 +105,11 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		retryConfig = sqlx.JsonColumn[domain.RetryConfig]{Val: *task.RetryConfig, Valid: true}
 	}
 
+	var scheduleParams sqlx.JsonColumn[map[string]string]
+	if task.ScheduleParams != nil {
+		scheduleParams = sqlx.JsonColumn[map[string]string]{Val: task.ScheduleParams, Valid: true}
+	}
+
 	return dao.Task{
 		Id:             task.ID,
 		Name:           task.Name,
@@ -97,12 +118,13 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		GrpcConfig:     grpcConfig,
 		HttpConfig:     httpConfig,
 		RetryConfig:    retryConfig,
+		ScheduleParams: scheduleParams,
 		ScheduleNodeId: scheduleNodeId,
 		NextTime:       task.NextTime,
 		Status:         task.Status.String(),
 		Version:        task.Version,
 		Ctime:          task.CTime,
-		Utime:          task.Utime,
+		Utime:          task.UTime,
 	}
 }
 
@@ -128,6 +150,11 @@ func (r *taskRepository) toDomain(daoTask dao.Task) domain.Task {
 		retryConfig = &daoTask.RetryConfig.Val
 	}
 
+	var scheduleParams map[string]string
+	if daoTask.ScheduleParams.Valid {
+		scheduleParams = daoTask.ScheduleParams.Val
+	}
+
 	return domain.Task{
 		ID:             daoTask.Id,
 		Name:           daoTask.Name,
@@ -136,11 +163,12 @@ func (r *taskRepository) toDomain(daoTask dao.Task) domain.Task {
 		GrpcConfig:     grpcConfig,
 		HttpConfig:     httpConfig,
 		RetryConfig:    retryConfig,
+		ScheduleParams: scheduleParams,
 		ScheduleNodeID: scheduleNodeId,
 		NextTime:       daoTask.NextTime,
 		Status:         domain.TaskStatus(daoTask.Status),
 		Version:        daoTask.Version,
-		Utime:          daoTask.Utime,
+		UTime:          daoTask.Utime,
 		CTime:          daoTask.Ctime,
 	}
 }

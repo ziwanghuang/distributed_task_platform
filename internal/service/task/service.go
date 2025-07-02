@@ -22,6 +22,10 @@ type Service interface {
 	Renew(ctx context.Context, task domain.Task) error
 	// UpdateNextTime 更新任务的下次执行时间
 	UpdateNextTime(ctx context.Context, task domain.Task) error
+	// GetByID 根据ID获取task
+	GetByID(ctx context.Context, id int64) (domain.Task, error)
+	// UpdateScheduleParams 更新调度参数
+	UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error
 }
 
 type service struct {
@@ -79,4 +83,12 @@ func (s *service) UpdateNextTime(ctx context.Context, task domain.Task) error {
 	}
 	task.NextTime = nextTime.UnixMilli()
 	return s.repo.UpdateNextTime(ctx, task.ID, task.Version, task.NextTime)
+}
+
+func (s *service) GetByID(ctx context.Context, id int64) (domain.Task, error) {
+	return s.repo.GetByID(ctx, id)
+}
+
+func (s *service) UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error {
+	return s.repo.UpdateScheduleParams(ctx, id, version, scheduleParams)
 }

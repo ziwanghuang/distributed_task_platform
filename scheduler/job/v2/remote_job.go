@@ -10,7 +10,6 @@ import (
 
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
-	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 	"github.com/gotomicro/ego/core/elog"
@@ -53,20 +52,12 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) (*Chans, error) {
 
 	// 创建任务执行记录
 	created, err := r.svc.Create(ctx, domain.TaskExecution{
-		TaskID:             task.ID,
-		TaskName:           task.Name,
-		TaskCronExpr:       task.CronExpr,
-		TaskExecutorType:   task.ExecutorType,
-		TaskGrpcConfig:     task.GrpcConfig,
-		TaskHttpConfig:     task.HttpConfig,
-		TaskRetryConfig:    task.RetryConfig,
-		TaskVersion:        task.Version,
-		TaskScheduleNodeID: task.ScheduleNodeID,
-		StartTime:          time.Now().UnixMilli(), // 创建时自动添加
-		EndTime:            0,                      // 结束时间何时添加？
-		RetryCount:         0,
-		NextRetryTime:      0,
-		Status:             domain.TaskExecutionStatusPrepare,
+		Task: domain.Task{
+			ID: task.ID,
+		},
+		StartTime: time.Now().UnixMilli(), // 创建时自动添加
+		EndTime:   0,                      // 结束时间何时添加？
+		Status:    domain.TaskExecutionStatusPrepare,
 	})
 	if err != nil {
 		r.logger.Error("创建任务执行记录失败", elog.FieldErr(err))
@@ -80,13 +71,6 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) (*Chans, error) {
 		return nil, fmt.Errorf("执行任务失败: %w", err)
 	}
 
-	// 更新为 RUNNING 状态
-	err = r.svc.UpdateStatus(ctx, created.ID, domain.TaskExecutionStatusRunning)
-	if err != nil {
-		r.logger.Error("更新任务执行记录状态失败", elog.FieldErr(err))
-		return nil, fmt.Errorf("更新任务执行记录状态失败: %w", err)
-	}
-
 	// 监控执行状态
 	return &Chans{Report: reportCh, Renew: renewCh}, r.monitor(ctx, reportCh, renewCh, &created)
 }
@@ -95,9 +79,9 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) (*Chans, error) {
 func (r *RemoteJob) sendRequest(ctx context.Context, exec *domain.TaskExecution) error {
 	// 根据配置选择通信方式
 	var err error
-	if exec.TaskGrpcConfig != nil {
+	if exec.Task.GrpcConfig != nil {
 		err = r.sendGRPCRequest(ctx, exec)
-	} else if exec.TaskHttpConfig != nil {
+	} else if exec.Task.HttpConfig != nil {
 		err = r.sendHTTPRequest(ctx, exec)
 	} else {
 		err = fmt.Errorf("未找到有效配置，无法发送请求")
@@ -107,18 +91,16 @@ func (r *RemoteJob) sendRequest(ctx context.Context, exec *domain.TaskExecution)
 
 // sendGRPCRequest 发送gRPC执行请求
 func (r *RemoteJob) sendGRPCRequest(ctx context.Context, exec *domain.TaskExecution) error {
-	client := r.grpcClients.Get(exec.TaskGrpcConfig.ServiceName)
+	client := r.grpcClients.Get(exec.Task.GrpcConfig.ServiceName)
 	// 发送执行请求
 	resp, err := client.Execute(ctx, &executorv1.ExecuteRequest{
 		Eid:      exec.ID,
-		TaskName: exec.TaskName,
-		Params:   nil, // TODO: 添加参数支持
+		TaskName: exec.Task.Name,
+		Params:   exec.GRPCParams(),
 	})
 	if err != nil {
 		return fmt.Errorf("发送GRPC请求失败: %w", err)
 	}
-	// TODO: warning: 更新状态为RUNNING  r.svc.UpdateStatus(ctx, created.ID, domain.TaskExecutionStatusRunning)
-	// 处理初始响应状态
 	return r.handleExecutionState(ctx, exec, resp.GetExecutionState())
 }
 
@@ -135,27 +117,11 @@ func (r *RemoteJob) handleExecutionState(ctx context.Context, exec *domain.TaskE
 		domainStatus = domain.TaskExecutionStatusFailed
 	case executorv1.ExecutionStatus_FAILED_RETRYABLE:
 		domainStatus = domain.TaskExecutionStatusFailedRetryable
-		return errs.ErrExecutionRetryable
 	default:
 		return fmt.Errorf("未知执行状态")
 	}
-	if r.isTerminalStatus(domainStatus) {
-		// 更新状态
-		return r.svc.UpdateStatus(ctx, exec.ID, domainStatus)
-	}
-	return nil
-}
-
-// isTerminalStatus 判断是否为终态
-func (r *RemoteJob) isTerminalStatus(status domain.TaskExecutionStatus) bool {
-	switch status {
-	case domain.TaskExecutionStatusSuccess,
-		domain.TaskExecutionStatusFailed,
-		domain.TaskExecutionStatusFailedPreempted:
-		return true
-	default:
-		return false
-	}
+	// todo: 更新状态和进度
+	return r.svc.UpdateStatus(ctx, exec.ID, domainStatus)
 }
 
 // sendHTTPRequest 发送HTTP执行请求
@@ -170,7 +136,7 @@ func (r *RemoteJob) sendHTTPRequest(_ context.Context, exec *domain.TaskExecutio
 	// POST JSON数据
 	jsonData := `{"name": "张三", "age": 30}`
 	resp, err := client.Post(
-		exec.TaskHttpConfig.Endpoint,
+		exec.Task.HttpConfig.Endpoint,
 		"application/json",
 		strings.NewReader(jsonData),
 	)
@@ -205,7 +171,7 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 			return nil
 		case report := <-reportCh:
 			// 收到执行点上报的任务执行状态
-			if report.TaskID != exec.TaskID || report.ExecutionID != exec.ID {
+			if report.TaskID != exec.Task.ID || report.ExecutionID != exec.ID {
 				r.logger.Warn("收到执行点上报的任务执行状态，与当前执行的任务不匹配",
 					elog.Any("report", report))
 				continue
@@ -236,9 +202,9 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 
 // pollExecutionStatus 主动轮询执行节点状态
 func (r *RemoteJob) pollExecutionStatus(ctx context.Context, exec *domain.TaskExecution) error {
-	if exec.TaskGrpcConfig != nil {
+	if exec.Task.GrpcConfig != nil {
 		return r.pollGRPCExecutionStatus(ctx, exec)
-	} else if exec.TaskHttpConfig != nil {
+	} else if exec.Task.HttpConfig != nil {
 		return r.pollHTTPExecutionStatus(ctx, exec)
 	}
 	return nil
@@ -246,7 +212,7 @@ func (r *RemoteJob) pollExecutionStatus(ctx context.Context, exec *domain.TaskEx
 
 // pollGRPCExecutionStatus 通过gRPC轮询状态
 func (r *RemoteJob) pollGRPCExecutionStatus(ctx context.Context, exec *domain.TaskExecution) error {
-	client := r.grpcClients.Get(exec.TaskGrpcConfig.ServiceName)
+	client := r.grpcClients.Get(exec.Task.GrpcConfig.ServiceName)
 	resp, err := client.Query(ctx, &executorv1.QueryRequest{
 		Eid: exec.ID,
 	})
@@ -260,4 +226,16 @@ func (r *RemoteJob) pollGRPCExecutionStatus(ctx context.Context, exec *domain.Ta
 func (r *RemoteJob) pollHTTPExecutionStatus(_ context.Context, _ *domain.TaskExecution) error {
 	// TODO: 实现HTTP轮询
 	return nil
+}
+
+// isTerminalStatus 判断是否为终态
+func (r *RemoteJob) isTerminalStatus(status domain.TaskExecutionStatus) bool {
+	switch status {
+	case domain.TaskExecutionStatusSuccess,
+		domain.TaskExecutionStatusFailed,
+		domain.TaskExecutionStatusFailedRetryable:
+		return true
+	default:
+		return false
+	}
 }

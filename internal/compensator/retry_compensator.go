@@ -94,7 +94,7 @@ func (r *RetryCompensator) retry(ctx context.Context) error {
 		if err != nil {
 			r.logger.Error("重试任务失败",
 				elog.Int64("executionId", execution.ID),
-				elog.String("taskName", execution.TaskName),
+				elog.String("taskName", execution.Task.Name),
 				elog.FieldErr(err))
 			continue
 		}
@@ -106,14 +106,14 @@ func (r *RetryCompensator) retry(ctx context.Context) error {
 func (r *RetryCompensator) retryExecution(ctx context.Context, execution domain.TaskExecution) error {
 	r.logger.Info("开始重试任务",
 		elog.Int64("executionId", execution.ID),
-		elog.String("taskName", execution.TaskName),
+		elog.String("taskName", execution.Task.Name),
 		elog.Int64("retryCount", execution.RetryCount))
 
 	// 使用retry包计算下次重试时间
-	if execution.TaskRetryConfig == nil {
+	if execution.Task.RetryConfig == nil {
 		return fmt.Errorf("任务重试配置为空")
 	}
-	retryStrategy, err := retry.NewRetry(execution.TaskRetryConfig.ToRetryConfig())
+	retryStrategy, err := retry.NewRetry(execution.Task.RetryConfig.ToRetryConfig())
 	if err != nil {
 		return fmt.Errorf("创建重试策略失败: %w", err)
 	}
@@ -152,7 +152,7 @@ func (r *RetryCompensator) retryExecution(ctx context.Context, execution domain.
 func (r *RetryCompensator) executeTask(execution domain.TaskExecution) bool {
 	// TODO: 根据execution的类型（LOCAL/REMOTE）调用不同的执行器
 	// 比如:
-	// if execution.TaskExecutorType == domain.TaskExecutorTypeLocal {
+	// if execution.Task.ExecutorType == domain.TaskExecutorTypeLocal {
 	//     return r.localExecutor.Execute(execution)
 	// } else {
 	//     return r.remoteExecutor.Execute(execution)
@@ -161,6 +161,6 @@ func (r *RetryCompensator) executeTask(execution domain.TaskExecution) bool {
 	// 暂时返回false表示需要重试
 	r.logger.Info("TODO: 实际执行任务逻辑",
 		elog.Int64("executionId", execution.ID),
-		elog.String("taskName", execution.TaskName))
+		elog.String("taskName", execution.Task.Name))
 	return false // 暂时假设执行失败，需要重试
 }

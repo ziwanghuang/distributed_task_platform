@@ -21,6 +21,7 @@ type Task struct {
 	GrpcConfig     sqlx.JsonColumn[domain.GrpcConfig]  `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
 	HttpConfig     sqlx.JsonColumn[domain.HttpConfig]  `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
 	RetryConfig    sqlx.JsonColumn[domain.RetryConfig] `gorm:"type:json;comment:'重试配置'"`
+	ScheduleParams sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'调度参数'"`
 	ScheduleNodeId sql.NullString                      `gorm:"type:varchar(255);comment:'当前抢占的调度节点ID'"`
 	NextTime       int64                               `gorm:"type:bigint;not null;index:idx_next_time_status;comment:'下次执行时间'"`
 	Status         string                              `gorm:"type:ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE');not null;default:'ACTIVE';index:idx_next_time_status;comment:'任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行。处于INACTIVE也可以被再次 ACTIVE'"`
@@ -37,6 +38,8 @@ func (Task) TableName() string {
 type TaskDAO interface {
 	// Create 创建任务
 	Create(ctx context.Context, task Task) (Task, error)
+	// GetByID 根据ID获取任务
+	GetByID(ctx context.Context, id int64) (Task, error)
 	// FindSchedulableTasks 查询可调度的任务列表
 	// preemptedTimeoutMs: PREEMPTED状态任务的超时时间（毫秒），超过此时间未续约的任务可被重新抢占
 	FindSchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]Task, error)
@@ -48,6 +51,8 @@ type TaskDAO interface {
 	Release(ctx context.Context, id, version int64, scheduleNodeId string) error
 	// UpdateNextTime 更新下一次执行时间
 	UpdateNextTime(ctx context.Context, id, version, nextTime int64) error
+	// UpdateScheduleParams 更新调度参数（CAS操作）
+	UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error
 }
 
 type GORMTaskDAO struct {
@@ -67,6 +72,12 @@ func (g *GORMTaskDAO) Create(ctx context.Context, task Task) (Task, error) {
 		return Task{}, fmt.Errorf("创建任务失败: %v", err)
 	}
 	return task, nil
+}
+
+func (g *GORMTaskDAO) GetByID(ctx context.Context, id int64) (Task, error) {
+	var task Task
+	err := g.db.WithContext(ctx).Where("id = ?", id).First(&task).Error
+	return task, err
 }
 
 func (g *GORMTaskDAO) FindSchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]Task, error) {
@@ -160,6 +171,24 @@ func (g *GORMTaskDAO) UpdateNextTime(ctx context.Context, id, version, nextTime 
 
 	if result.RowsAffected == 0 {
 		return fmt.Errorf("%w: 版本不匹配或任务不存在", errs.ErrTaskUpdateNextTimeFailed)
+	}
+	return nil
+}
+
+func (g *GORMTaskDAO) UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error {
+	result := g.db.WithContext(ctx).
+		Model(&Task{}).
+		Where("id = ? AND version = ?", id, version).
+		Updates(map[string]any{
+			"schedule_params": sqlx.JsonColumn[map[string]string]{Val: scheduleParams, Valid: scheduleParams != nil},
+			"version":         version + 1,
+			"utime":           time.Now().UnixMilli(),
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w: 版本不匹配或任务不存在", errs.ErrTaskUpdateScheduleParamsFailed)
 	}
 	return nil
 }

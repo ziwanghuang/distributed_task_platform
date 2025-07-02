@@ -217,3 +217,18 @@ func (s *Scheduler) Stop() error {
 	// }
 	return nil
 }
+
+func (s *Scheduler) Reschedule(task domain.Task) error {
+	// 填充调度节点ID
+	task.ScheduleNodeID = s.nodeID
+	err := s.taskAcquirer.Acquire(s.ctx, task)
+	if err != nil {
+		s.logger.Debug("重调度任务抢占失败",
+			elog.Int64("taskID", task.ID),
+			elog.String("taskName", task.Name),
+			elog.FieldErr(err))
+		return err
+	}
+	go s.handleAcquiredTask(task)
+	return nil
+}

@@ -45,11 +45,12 @@ type Task struct {
 	HttpConfig     *HttpConfig
 	RetryConfig    *RetryConfig
 	ScheduleNodeID string
-	NextTime       int64 // 下次执行时间戳
+	ScheduleParams map[string]string // 调度参数（如分页偏移量、处理进度等）
+	NextTime       int64             // 下次执行时间戳
 	Status         TaskStatus
-	Version        int64
-	Utime          int64 // 更新时间戳
+	Version        int64 // 版本号，用于乐观锁
 	CTime          int64 // 创建时间戳
+	UTime          int64 // 更新时间戳
 }
 
 func (t *Task) CalculateNextTime() time.Time {
@@ -80,10 +81,12 @@ func (r *RetryConfig) ToRetryConfig() retry.Config {
 
 // GrpcConfig gRPC配置
 type GrpcConfig struct {
-	ServiceName string `json:"serviceName"`
+	ServiceName string            `json:"serviceName"`
+	Params      map[string]string `json:"params"`
 }
 
 // HttpConfig HTTP配置
 type HttpConfig struct {
-	Endpoint string `json:"endpoint"`
+	Endpoint string            `json:"endpoint"`
+	Params   map[string]string `json:"params"`
 }

@@ -19,16 +19,6 @@ func (t TaskExecutionStatus) String() string {
 // TaskExecution 任务执行实例领域模型
 type TaskExecution struct {
 	ID int64
-	// Task快照信息
-	TaskID             int64
-	TaskName           string
-	TaskCronExpr       string
-	TaskExecutorType   TaskExecutorType
-	TaskGrpcConfig     *GrpcConfig
-	TaskHttpConfig     *HttpConfig
-	TaskRetryConfig    *RetryConfig
-	TaskVersion        int64
-	TaskScheduleNodeID string
 	// 执行自身信息
 	StartTime     int64 // 开始时间戳
 	EndTime       int64 // 结束时间戳
@@ -37,6 +27,8 @@ type TaskExecution struct {
 	Status        TaskExecutionStatus
 	CTime         int64 // 创建时间戳
 	UTime         int64 // 更新时间戳
+	// 创建时刻从Task冗余的信息
+	Task Task
 }
 
 // IsTerminal 判断是否为终态
@@ -48,4 +40,48 @@ func (te *TaskExecution) IsTerminal() bool {
 	default:
 		return false
 	}
+}
+
+// GRPCParams 获取gRPC执行参数（业务参数 + 调度参数）
+// 调度参数优先级更高，会覆盖同名的业务参数
+func (te *TaskExecution) GRPCParams() map[string]string {
+	result := make(map[string]string)
+
+	// 1. 先添加业务参数
+	if te.Task.GrpcConfig != nil && te.Task.GrpcConfig.Params != nil {
+		for k, v := range te.Task.GrpcConfig.Params {
+			result[k] = v
+		}
+	}
+
+	// 2. 添加/覆盖调度参数（优先级更高）
+	if te.Task.ScheduleParams != nil {
+		for k, v := range te.Task.ScheduleParams {
+			result[k] = v
+		}
+	}
+
+	return result
+}
+
+// HTTPParams 获取HTTP执行参数（业务参数 + 调度参数）
+// 调度参数优先级更高，会覆盖同名的业务参数
+func (te *TaskExecution) HTTPParams() map[string]string {
+	result := make(map[string]string)
+
+	// 1. 先添加业务参数
+	if te.Task.HttpConfig != nil && te.Task.HttpConfig.Params != nil {
+		for k, v := range te.Task.HttpConfig.Params {
+			result[k] = v
+		}
+	}
+
+	// 2. 添加/覆盖调度参数（优先级更高）
+	if te.Task.ScheduleParams != nil {
+		for k, v := range te.Task.ScheduleParams {
+			result[k] = v
+		}
+	}
+
+	return result
 }

@@ -24,6 +24,7 @@ type TaskExecution struct {
 	TaskRetryConfig    sqlx.JsonColumn[domain.RetryConfig] `gorm:"type:json;comment:'重试配置'"`
 	TaskVersion        int64                               `gorm:"type:bigint;not null;comment:'创建时Task的版本号'"`
 	TaskScheduleNodeId string                              `gorm:"type:varchar(255);not null;comment:'创建此执行的调度节点ID'"`
+	TaskScheduleParams sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
 
 	// 下面这些是 TaskExecution 的自身信息
 	Stime         int64  `gorm:"type:bigint;comment:'开始时间'"`

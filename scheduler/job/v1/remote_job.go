@@ -58,20 +58,14 @@ func (j *RemoteJob) Type() string {
 // Run 执行完整的任务流程
 func (j *RemoteJob) Run(ctx context.Context, task domain.Task) error {
 	created, err := j.svc.Create(ctx, domain.TaskExecution{
-		TaskID:             task.ID,
-		TaskName:           task.Name,
-		TaskCronExpr:       task.CronExpr,
-		TaskExecutorType:   task.ExecutorType,
-		TaskGrpcConfig:     task.GrpcConfig,
-		TaskHttpConfig:     task.HttpConfig,
-		TaskRetryConfig:    task.RetryConfig,
-		TaskVersion:        task.Version,
-		TaskScheduleNodeID: task.ScheduleNodeID,
-		StartTime:          time.Now().UnixMilli(), // 创建时自动添加
-		EndTime:            0,                      // 结束时间何时添加？
-		RetryCount:         0,
-		NextRetryTime:      0,
-		Status:             domain.TaskExecutionStatusPrepare,
+		Task: domain.Task{
+			ID: task.ID,
+		},
+		StartTime:     time.Now().UnixMilli(), // 创建时自动添加
+		EndTime:       0,                      // 结束时间何时添加？
+		RetryCount:    0,
+		NextRetryTime: 0,
+		Status:        domain.TaskExecutionStatusPrepare,
 	})
 	if err != nil {
 		return fmt.Errorf("创建任务执行记录失败: %w", err)
@@ -91,10 +85,10 @@ func (j *RemoteJob) Run(ctx context.Context, task domain.Task) error {
 func (j *RemoteJob) sendRequest(ctx context.Context) error {
 	// 根据配置选择通信方式
 	var err error
-	if j.exec.TaskGrpcConfig != nil {
-		err = j.sendGRPCRequest(ctx, j.exec.TaskGrpcConfig)
-	} else if j.exec.TaskHttpConfig != nil {
-		err = j.sendHTTPRequest(j.exec.TaskHttpConfig)
+	if j.exec.Task.GrpcConfig != nil {
+		err = j.sendGRPCRequest(ctx, j.exec.Task.GrpcConfig)
+	} else if j.exec.Task.HttpConfig != nil {
+		err = j.sendHTTPRequest(j.exec.Task.HttpConfig)
 	} else {
 		err = fmt.Errorf("未找到有效配置，无法发送请求")
 	}
@@ -107,7 +101,7 @@ func (j *RemoteJob) sendGRPCRequest(ctx context.Context, config *domain.GrpcConf
 	// 发送执行请求
 	resp, err := client.Execute(ctx, &executorv1.ExecuteRequest{
 		Eid:      j.exec.ID,
-		TaskName: j.exec.TaskName,
+		TaskName: j.exec.Task.Name,
 		Params:   nil, // TODO: 添加参数支持
 	})
 	if err != nil {
@@ -167,7 +161,7 @@ func (j *RemoteJob) wait(ctx context.Context) error {
 			return nil
 
 		case report := <-j.reportCh:
-			if report.TaskID != j.exec.TaskID || report.ExecutionID != j.exec.ID {
+			if report.TaskID != j.exec.Task.ID || report.ExecutionID != j.exec.ID {
 				j.logger.Warn("执行节点上报执行状态，收到不属于当前job的上报",
 					elog.Any("report", report))
 				continue
@@ -200,9 +194,9 @@ func (j *RemoteJob) wait(ctx context.Context) error {
 
 // pollExecutionStatus 主动轮询执行节点状态
 func (j *RemoteJob) pollExecutionStatus(ctx context.Context) error {
-	if j.exec.TaskGrpcConfig != nil {
-		return j.pollGrpcStatus(ctx, j.exec.TaskGrpcConfig)
-	} else if j.exec.TaskHttpConfig != nil {
+	if j.exec.Task.GrpcConfig != nil {
+		return j.pollGrpcStatus(ctx, j.exec.Task.GrpcConfig)
+	} else if j.exec.Task.HttpConfig != nil {
 		return j.pollHttpStatus(ctx)
 	}
 	return nil
