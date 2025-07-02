@@ -64,11 +64,13 @@ func (s *ReporterServer) toDomainReports(reqs []*reporterv1.ReportRequest) []*do
 	return slice.Map(reqs, func(_ int, src *reporterv1.ReportRequest) *domain.Report {
 		state := src.GetExecutionState()
 		return &domain.Report{
-			ID:                state.GetId(),
-			TaskID:            state.GetTaskId(),
-			TaskName:          state.GetTaskName(),
-			Status:            s.toTaskExecutionStatus(state.GetStatus()),
-			RunningProgress:   state.GetRunningProgress(),
+			ExecutionState: domain.ExecutionState{
+				ID:              state.GetId(),
+				TaskID:          state.GetTaskId(),
+				TaskName:        state.GetTaskName(),
+				Status:          s.toTaskExecutionStatus(state.GetStatus()),
+				RunningProgress: state.GetRunningProgress(),
+			},
 			RequestReschedule: src.GetRequestReschedule(),
 			RescheduleParams:  src.GetRescheduledParams(),
 		}

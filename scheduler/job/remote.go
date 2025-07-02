@@ -127,21 +127,6 @@ func (r *RemoteJob) sendRequest(ctx context.Context, exec *domain.TaskExecution)
 	}
 }
 
-// updateExecutionState 统一处理所有状态转换和更新
-func (r *RemoteJob) updateExecutionState(ctx context.Context, exec *domain.TaskExecution, status domain.TaskExecutionStatus, progress int32) error {
-	switch status {
-	case domain.TaskExecutionStatusRunning:
-		// PREPARE → RUNNING，设置状态和进度
-		return r.svc.SetRunningState(ctx, exec.ID, progress)
-	case domain.TaskExecutionStatusSuccess, domain.TaskExecutionStatusFailed,
-		domain.TaskExecutionStatusFailedRetryable, domain.TaskExecutionStatusFailedPreempted:
-		// 终态更新：设置状态和结束时间
-		return r.svc.UpdateStatusAndEndTime(ctx, exec.ID, status, time.Now().UnixMilli())
-	default:
-		return fmt.Errorf("未知执行状态: %v", status)
-	}
-}
-
 // sendGRPCRequest 发送gRPC执行请求
 func (r *RemoteJob) sendGRPCRequest(ctx context.Context, exec *domain.TaskExecution) (needMonitoring bool, err error) {
 	client := r.grpcClients.Get(exec.Task.GrpcConfig.ServiceName)
@@ -175,7 +160,7 @@ func (r *RemoteJob) handleExecutionState(ctx context.Context, exec *domain.TaskE
 		return false, fmt.Errorf("未知执行状态")
 	}
 
-	// 使用统一方法更新状态
+	// 更新状态
 	err = r.updateExecutionState(ctx, exec, domainStatus, state.RunningProgress)
 	if err != nil {
 		return false, fmt.Errorf("更新执行状态失败: %w", err)
@@ -184,6 +169,33 @@ func (r *RemoteJob) handleExecutionState(ctx context.Context, exec *domain.TaskE
 	// 如果是终态，不需要继续监控
 	needMonitoring = !r.isTerminalStatus(domainStatus)
 	return needMonitoring, nil
+}
+
+// updateExecutionState 统一处理所有状态转换和更新
+func (r *RemoteJob) updateExecutionState(ctx context.Context, exec *domain.TaskExecution, status domain.TaskExecutionStatus, progress int32) error {
+	switch status {
+	case domain.TaskExecutionStatusRunning:
+		// PREPARE → RUNNING，设置状态和进度
+		return r.svc.SetRunningState(ctx, exec.ID, progress)
+	case domain.TaskExecutionStatusSuccess, domain.TaskExecutionStatusFailed,
+		domain.TaskExecutionStatusFailedRetryable, domain.TaskExecutionStatusFailedPreempted:
+		// 终态更新：设置状态和结束时间
+		return r.svc.UpdateStatusAndEndTime(ctx, exec.ID, status, time.Now().UnixMilli())
+	default:
+		return fmt.Errorf("未知执行状态: %v", status)
+	}
+}
+
+// isTerminalStatus 判断是否为终态
+func (r *RemoteJob) isTerminalStatus(status domain.TaskExecutionStatus) bool {
+	switch status {
+	case domain.TaskExecutionStatusSuccess,
+		domain.TaskExecutionStatusFailed,
+		domain.TaskExecutionStatusFailedRetryable:
+		return true
+	default:
+		return false
+	}
 }
 
 // sendHTTPRequest 发送HTTP执行请求
@@ -233,13 +245,13 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 			return nil
 		case report := <-reportCh:
 			// 收到执行点上报的任务执行状态
-			if report.TaskID != exec.Task.ID || report.ID != exec.ID {
+			if report.ExecutionState.TaskID != exec.Task.ID || report.ExecutionState.ID != exec.ID {
 				r.logger.Warn("收到执行点上报的任务执行状态，与当前执行的任务不匹配",
 					elog.Any("report", report))
 				continue
 			}
 			// 更新状态
-			err := r.updateExecutionState(ctx, exec, report.Status, report.RunningProgress)
+			err := r.updateExecutionState(ctx, exec, report.ExecutionState.Status, report.ExecutionState.RunningProgress)
 			if err != nil {
 				r.logger.Warn("执行节点上报执行状态，更新执行状态失败",
 					elog.Any("report", report),
@@ -248,7 +260,7 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 			}
 
 			// 如果是终态，任务完成
-			if r.isTerminalStatus(report.Status) {
+			if r.isTerminalStatus(report.ExecutionState.Status) {
 				return nil
 			}
 		case ok := <-renewCh:
@@ -293,16 +305,4 @@ func (r *RemoteJob) pollGRPCExecutionStatus(ctx context.Context, exec *domain.Ta
 func (r *RemoteJob) pollHTTPExecutionStatus(_ context.Context, _ *domain.TaskExecution) error {
 	// TODO: 实现HTTP轮询
 	return nil
-}
-
-// isTerminalStatus 判断是否为终态
-func (r *RemoteJob) isTerminalStatus(status domain.TaskExecutionStatus) bool {
-	switch status {
-	case domain.TaskExecutionStatusSuccess,
-		domain.TaskExecutionStatusFailed,
-		domain.TaskExecutionStatusFailedRetryable:
-		return true
-	default:
-		return false
-	}
 }

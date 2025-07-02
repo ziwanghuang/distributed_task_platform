@@ -84,37 +84,37 @@ func (jm *Manager) HandleReports(ctx context.Context, reports []*domain.Report) 
 	for i := range reports {
 		report := reports[i]
 
-		chans, exists := jm.taskChans.Load(report.TaskID)
+		chans, exists := jm.taskChans.Load(report.ExecutionState.TaskID)
 		if !exists {
 			skippedCount++
 			jm.logger.Debug("任务不存在，跳过上报",
-				elog.Int64("taskID", report.TaskID),
-				elog.Int64("executionID", report.ID))
+				elog.Int64("taskID", report.ExecutionState.TaskID),
+				elog.Int64("executionID", report.ExecutionState.ID))
 			continue
 		}
 
 		if chans == nil {
 			skippedCount++
 			jm.logger.Warn("任务通道为空，跳过上报",
-				elog.Int64("taskID", report.TaskID),
-				elog.Int64("executionID", report.ID))
+				elog.Int64("taskID", report.ExecutionState.TaskID),
+				elog.Int64("executionID", report.ExecutionState.ID))
 			continue
 		}
 
 		// 使用带超时的发送避免阻塞
 		if err := jm.sendReportWithTimeout(ctx, chans.Report, report); err != nil {
 			channelBlockedCount++
-			reportErr := fmt.Errorf("发送上报到任务[%d]执行[%d]失败: %w", report.TaskID, report.ID, err)
+			reportErr := fmt.Errorf("发送上报到任务[%d]执行[%d]失败: %w", report.ExecutionState.TaskID, report.ExecutionState.ID, err)
 			combinedErr = multierr.Append(combinedErr, reportErr)
 			jm.logger.Warn("发送上报失败",
-				elog.Int64("taskID", report.TaskID),
-				elog.Int64("executionID", report.ID),
+				elog.Int64("taskID", report.ExecutionState.TaskID),
+				elog.Int64("executionID", report.ExecutionState.ID),
 				elog.FieldErr(err))
 		} else {
 			processedCount++
 			jm.logger.Debug("上报发送成功",
-				elog.Int64("taskID", report.TaskID),
-				elog.Int64("executionID", report.ID))
+				elog.Int64("taskID", report.ExecutionState.TaskID),
+				elog.Int64("executionID", report.ExecutionState.ID))
 		}
 	}
 

@@ -16,6 +16,20 @@ func (t TaskExecutionStatus) String() string {
 	return string(t)
 }
 
+func (t TaskExecutionStatus) IsValid() bool {
+	switch t {
+	case TaskExecutionStatusPrepare,
+		TaskExecutionStatusRunning,
+		TaskExecutionStatusSuccess,
+		TaskExecutionStatusFailed,
+		TaskExecutionStatusFailedRetryable,
+		TaskExecutionStatusFailedPreempted:
+		return true
+	default:
+		return false
+	}
+}
+
 // TaskExecution 任务执行实例领域模型
 type TaskExecution struct {
 	ID int64

@@ -11,8 +11,9 @@ var (
 	ErrTaskUpdateScheduleParamsFailed = errors.New("任务更新调度参数失败")
 
 	// 任务执行相关错误
-	ErrExecutionNotFound  = errors.New("执行记录不存在")
-	ErrExecutionRetryable = errors.New("执行失败可重试")
+	ErrExecutionNotFound          = errors.New("执行记录不存在")
+	ErrExecutionRetryable         = errors.New("执行失败可重试")
+	ErrInvalidTaskExecutionStatus = errors.New("执行记录状态非法")
 	// 业务逻辑错误
 	ErrInvalidTaskCronExpr        = errors.New("无效的cron表达式")
 	ErrInvalidTaskScheduleNodeID  = errors.New("无效的调度节点ID")

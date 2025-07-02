@@ -2,12 +2,16 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
+	"gitee.com/flycash/distributed_task_platform/internal/errs"
+	"gitee.com/flycash/distributed_task_platform/internal/event"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/scheduler/job"
+	"github.com/ecodeclub/mq-api"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/gotomicro/ego/core/standard"
 )
@@ -16,11 +20,12 @@ var _ standard.Component = &Scheduler{}
 
 // Scheduler 分布式任务调度器
 type Scheduler struct {
-	nodeID       string       // 当前调度节点ID
-	svc          task.Service // 任务服务
-	taskAcquirer TaskAcquirer // 任务抢占器
-	jobManager   *job.Manager // 任务管理器
-	config       *Config      // 配置
+	nodeID       string                     // 当前调度节点ID
+	svc          task.Service               // 任务服务
+	taskAcquirer TaskAcquirer               // 任务抢占器
+	jobManager   *job.Manager               // 任务管理器
+	consumers    map[string]*event.Consumer // 消费者
+	config       *Config                    // 配置
 	ctx          context.Context
 	cancel       context.CancelFunc
 	logger       *elog.Component
@@ -41,6 +46,7 @@ func NewScheduler(
 	svc task.Service,
 	acquirer TaskAcquirer,
 	taskManager *job.Manager,
+	consumers map[string]*event.Consumer,
 	config *Config,
 ) *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -49,6 +55,7 @@ func NewScheduler(
 		svc:          svc,
 		taskAcquirer: acquirer,
 		jobManager:   taskManager,
+		consumers:    consumers,
 		config:       config,
 		ctx:          ctx,
 		cancel:       cancel,
@@ -74,6 +81,23 @@ func (s *Scheduler) Start() error {
 
 	// 启动调度循环
 	go s.scheduleLoop()
+
+	// 初始化推送消息消费者
+	var err error
+	for key := range s.consumers {
+		switch key {
+		case "executionReport":
+			err = s.consumers[key].Start(s.ctx, s.consumeExecutionReportEvent)
+			if err != nil {
+				return err
+			}
+		case "executionBatchReport":
+			err = s.consumers[key].Start(s.ctx, s.consumeExecutionBatchReportEvent)
+			if err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }
@@ -229,6 +253,74 @@ func (s *Scheduler) HandleReports(ctx context.Context, reposts []*domain.Report)
 	return s.jobManager.HandleReports(ctx, reposts)
 }
 
+func (s *Scheduler) consumeExecutionReportEvent(ctx context.Context, message *mq.Message) error {
+	report := &domain.Report{}
+	err := json.Unmarshal(message.Value, report)
+	if err != nil {
+		s.logger.Error("反序列化MQ消息体失败",
+			elog.String("step", "consumeExecutionReportEvent"),
+			elog.String("MQ消息体", string(message.Value)),
+			elog.FieldErr(err),
+		)
+		return err
+	}
+
+	if !report.ExecutionState.Status.IsValid() {
+		err = errs.ErrInvalidTaskExecutionStatus
+		s.logger.Error("执行记录状态非法",
+			elog.String("step", "consumeExecutionReportEvent"),
+			elog.String("MQ消息体", string(message.Value)),
+			elog.FieldErr(err),
+		)
+		return err
+	}
+
+	err = s.HandleReports(ctx, []*domain.Report{report})
+	if err != nil {
+		s.logger.Error("处理异步上报失败",
+			elog.String("step", "consumeExecutionReportEvent"),
+			elog.Any("report", report),
+			elog.FieldErr(err))
+		return err
+	}
+	return nil
+}
+
+func (s *Scheduler) consumeExecutionBatchReportEvent(ctx context.Context, message *mq.Message) error {
+	batchReport := &domain.BatchReport{}
+	err := json.Unmarshal(message.Value, &batchReport)
+	if err != nil {
+		s.logger.Error("反序列化MQ消息体失败",
+			elog.String("step", "consumeExecutionBatchReportEvent"),
+			elog.String("MQ消息体", string(message.Value)),
+			elog.FieldErr(err),
+		)
+		return err
+	}
+
+	for i := range batchReport.Reports {
+		if !batchReport.Reports[i].ExecutionState.Status.IsValid() {
+			err = errs.ErrInvalidTaskExecutionStatus
+			s.logger.Error("执行记录状态非法",
+				elog.String("step", "consumeExecutionBatchReportEvent"),
+				elog.String("MQ消息体", string(message.Value)),
+				elog.FieldErr(err),
+			)
+			return err
+		}
+	}
+
+	err = s.HandleReports(ctx, batchReport.Reports)
+	if err != nil {
+		s.logger.Error("处理异步批量上报失败",
+			elog.String("step", "consumeExecutionBatchReportEvent"),
+			elog.Any("reports", batchReport),
+			elog.FieldErr(err))
+		return err
+	}
+	return nil
+}
+
 func (s *Scheduler) RescheduleNow(ctx context.Context, taskID int64, rescheduleParams map[string]string) {
 	tk, err := s.svc.GetByID(ctx, taskID)
 	if err != nil {
@@ -252,5 +344,4 @@ func (s *Scheduler) RescheduleNow(ctx context.Context, taskID int64, rescheduleP
 		return
 	}
 	go s.handleAcquiredTask(tk)
-	return
 }
