@@ -13,7 +13,7 @@ type Job interface {
 }
 
 type Chans struct {
-	Report chan<- *domain.Report
-	Renew  chan<- bool
-	Error  <-chan error // 任务执行错误通道
+	Report      chan<- *domain.Report
+	RenewFailed chan<- struct{} // 续约是否成功，失败传递false
+	Error       <-chan error    // 任务执行错误通道
 }

@@ -192,26 +192,25 @@ func (s *Scheduler) handleAcquiredTask(task domain.Task) {
 
 	for {
 		select {
-		case err := <-chans.Error:
+		case er := <-chans.Error:
 			// 任务完成
-			if err != nil {
+			if er != nil {
 				s.logger.Error("任务执行失败",
 					elog.Int64("taskID", task.ID),
 					elog.String("taskName", task.Name),
-					elog.FieldErr(err))
+					elog.FieldErr(er))
 			} else {
 				s.logger.Info("任务执行成功",
 					elog.Int64("taskID", task.ID),
 					elog.String("taskName", task.Name))
 			}
-
 			// 更新下次执行时间
-			err = s.svc.UpdateNextTime(s.ctx, task)
+			er = s.svc.UpdateNextTime(s.ctx, task)
 			if err != nil {
 				s.logger.Error("更新下次执行时间失败",
 					elog.Int64("taskID", task.ID),
 					elog.String("taskName", task.Name),
-					elog.FieldErr(err))
+					elog.FieldErr(er))
 			}
 			return
 		case <-renewTicker.C:

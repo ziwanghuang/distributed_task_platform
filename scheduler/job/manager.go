@@ -57,7 +57,7 @@ func (jm *Manager) Run(ctx context.Context, task domain.Task) (*Chans, func(), e
 func (jm *Manager) RenewFailed(_ context.Context, task domain.Task) error {
 	if chans, exists := jm.taskChans.Load(task.ID); exists {
 		if chans != nil {
-			chans.Renew <- false // 续约失败发送false
+			chans.RenewFailed <- struct{}{}
 			return nil
 		}
 		jm.logger.Warn("忽略续约事件",

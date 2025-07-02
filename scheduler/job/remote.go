@@ -48,14 +48,14 @@ func (r *RemoteJob) Name() string {
 
 func (r *RemoteJob) Run(ctx context.Context, task domain.Task) *Chans {
 	reportCh := make(chan *domain.Report)
-	renewCh := make(chan bool)
+	renewFailedCh := make(chan struct{})
 	errorCh := make(chan error, 1)
 
 	// 立即返回chans
 	chans := &Chans{
-		Report: reportCh,
-		Renew:  renewCh,
-		Error:  errorCh,
+		Report:      reportCh,
+		RenewFailed: renewFailedCh,
+		Error:       errorCh,
 	}
 
 	// 在后台处理任务启动和监控
@@ -63,7 +63,7 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) *Chans {
 		defer func() {
 			// 确保所有通道都会被关闭
 			close(reportCh)
-			close(renewCh)
+			close(renewFailedCh)
 			close(errorCh)
 		}()
 
@@ -94,7 +94,7 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) *Chans {
 
 		// 如果需要监控，继续监控
 		if needMonitoring {
-			err = r.monitor(ctx, reportCh, renewCh, &created)
+			err = r.monitor(ctx, reportCh, renewFailedCh, &created)
 			if err != nil {
 				r.logger.Error("任务监控过程中发生错误", elog.FieldErr(err))
 				// 执行错误通过Error通道发送
@@ -228,7 +228,7 @@ func (r *RemoteJob) sendHTTPRequest(_ context.Context, exec *domain.TaskExecutio
 }
 
 // monitor 监控执行状态（轮询+上报双模式）
-func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, renewCh chan bool, exec *domain.TaskExecution) error {
+func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, renewFailedCh chan struct{}, exec *domain.TaskExecution) error {
 	ticker := time.NewTicker(r.pollInterval)
 	defer ticker.Stop()
 
@@ -263,15 +263,13 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 			if r.isTerminalStatus(report.ExecutionState.Status) {
 				return nil
 			}
-		case ok := <-renewCh:
-			if !ok {
-				// 续约失败
-				err := r.svc.UpdateStatusAndEndTime(ctx, exec.ID, domain.TaskExecutionStatusFailedPreempted, time.Now().UnixMilli())
-				if err != nil {
-					r.logger.Error("更新续约失败状态失败", elog.FieldErr(err))
-				}
-				return err
+		case <-renewFailedCh:
+			// 续约失败
+			err := r.svc.UpdateStatusAndEndTime(ctx, exec.ID, domain.TaskExecutionStatusFailedPreempted, time.Now().UnixMilli())
+			if err != nil {
+				r.logger.Error("更新续约失败状态失败", elog.FieldErr(err))
 			}
+			return err
 		case <-ctx.Done():
 			return nil
 		}

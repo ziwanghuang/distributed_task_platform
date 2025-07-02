@@ -20,21 +20,21 @@ func (l *LocalJob) Name() string {
 
 func (l *LocalJob) Run(ctx context.Context, task domain.Task) *Chans {
 	reportCh := make(chan *domain.Report)
-	renewCh := make(chan bool)
+	renewFailedCh := make(chan struct{})
 	errorCh := make(chan error, 1)
 
 	// 立即返回通道
 	chans := &Chans{
-		Report: reportCh,
-		Renew:  renewCh,
-		Error:  errorCh,
+		Report:      reportCh,
+		RenewFailed: renewFailedCh,
+		Error:       errorCh,
 	}
 
 	// 在后台执行本地任务
 	go func() {
 		defer func() {
 			close(reportCh)
-			close(renewCh)
+			close(renewFailedCh)
 			close(errorCh)
 		}()
 
