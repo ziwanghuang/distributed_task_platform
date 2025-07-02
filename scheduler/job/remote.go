@@ -238,7 +238,7 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 					elog.Any("report", report))
 				continue
 			}
-			// 使用统一方法处理状态更新
+			// 更新状态
 			err := r.updateExecutionState(ctx, exec, report.Status, report.RunningProgress)
 			if err != nil {
 				r.logger.Warn("执行节点上报执行状态，更新执行状态失败",
@@ -246,6 +246,7 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 					elog.FieldErr(err))
 				continue
 			}
+
 			// 如果是终态，任务完成
 			if r.isTerminalStatus(report.Status) {
 				return nil

@@ -221,5 +221,36 @@ func (s *Scheduler) Stop() error {
 }
 
 func (s *Scheduler) HandleReports(ctx context.Context, reposts []*domain.Report) error {
+	// for i := range reposts {
+	// 	if reposts[i].RequestReschedule {
+	// 		go s.RescheduleNow(ctx, reposts[i].TaskID, reposts[i].RescheduleParams)
+	// 	}
+	// }
 	return s.jobManager.HandleReports(ctx, reposts)
+}
+
+func (s *Scheduler) RescheduleNow(ctx context.Context, taskID int64, rescheduleParams map[string]string) {
+	tk, err := s.svc.GetByID(ctx, taskID)
+	if err != nil {
+		s.logger.Error("查找Task失败", elog.FieldErr(err))
+		return
+	}
+	// 更新调度参数
+	err = s.svc.UpdateScheduleParams(ctx, tk.ID, tk.Version, rescheduleParams)
+	if err != nil {
+		s.logger.Error("更新调度信息失败", elog.FieldErr(err))
+		return
+	}
+	// 开始抢占并调度
+	tk.ScheduleNodeID = s.nodeID
+	err = s.taskAcquirer.Acquire(ctx, tk)
+	if err != nil {
+		s.logger.Debug("重调度任务抢占失败",
+			elog.Int64("taskID", tk.ID),
+			elog.String("taskName", tk.Name),
+			elog.FieldErr(err))
+		return
+	}
+	go s.handleAcquiredTask(tk)
+	return
 }
