@@ -20,37 +20,37 @@ func (t TaskStatus) String() string {
 	return string(t)
 }
 
-type TaskExecutorType string
+type TaskExecutionMethod string
 
 const (
-	TaskExecutorTypeLocal  TaskExecutorType = "LOCAL"
-	TaskExecutorTypeRemote TaskExecutorType = "REMOTE"
+	TaskExecutionMethodLocal  TaskExecutionMethod = "LOCAL"
+	TaskExecutionMethodRemote TaskExecutionMethod = "REMOTE"
 )
 
-func (t TaskExecutorType) String() string {
+func (t TaskExecutionMethod) String() string {
 	return string(t)
 }
 
-func (t TaskExecutorType) IsLocal() bool {
-	return t == TaskExecutorTypeLocal
+func (t TaskExecutionMethod) IsLocal() bool {
+	return t == TaskExecutionMethodLocal
 }
 
 // Task 任务领域模型
 type Task struct {
-	ID             int64
-	Name           string
-	CronExpr       string
-	ExecutorType   TaskExecutorType
-	GrpcConfig     *GrpcConfig
-	HTTPConfig     *HTTPConfig
-	RetryConfig    *RetryConfig
-	ScheduleNodeID string
-	ScheduleParams map[string]string // 调度参数（如分页偏移量、处理进度等）
-	NextTime       int64             // 下次执行时间戳
-	Status         TaskStatus
-	Version        int64 // 版本号，用于乐观锁
-	CTime          int64 // 创建时间戳
-	UTime          int64 // 更新时间戳
+	ID              int64
+	Name            string
+	CronExpr        string
+	ExecutionMethod TaskExecutionMethod
+	GrpcConfig      *GrpcConfig
+	HTTPConfig      *HTTPConfig
+	RetryConfig     *RetryConfig
+	ScheduleNodeID  string
+	ScheduleParams  map[string]string // 调度参数（如分页偏移量、处理进度等）
+	NextTime        int64             // 下次执行时间戳
+	Status          TaskStatus
+	Version         int64 // 版本号，用于乐观锁
+	CTime           int64 // 创建时间戳
+	UTime           int64 // 更新时间戳
 }
 
 func (t *Task) CalculateNextTime() time.Time {

@@ -111,20 +111,20 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 	}
 
 	return dao.Task{
-		ID:             task.ID,
-		Name:           task.Name,
-		CronExpr:       task.CronExpr,
-		ExecutorType:   task.ExecutorType.String(),
-		GrpcConfig:     grpcConfig,
-		HTTPConfig:     httpConfig,
-		RetryConfig:    retryConfig,
-		ScheduleParams: scheduleParams,
-		ScheduleNodeID: scheduleNodeID,
-		NextTime:       task.NextTime,
-		Status:         task.Status.String(),
-		Version:        task.Version,
-		Ctime:          task.CTime,
-		Utime:          task.UTime,
+		ID:              task.ID,
+		Name:            task.Name,
+		CronExpr:        task.CronExpr,
+		ExecutionMethod: task.ExecutionMethod.String(),
+		GrpcConfig:      grpcConfig,
+		HTTPConfig:      httpConfig,
+		RetryConfig:     retryConfig,
+		ScheduleParams:  scheduleParams,
+		ScheduleNodeID:  scheduleNodeID,
+		NextTime:        task.NextTime,
+		Status:          task.Status.String(),
+		Version:         task.Version,
+		Ctime:           task.CTime,
+		Utime:           task.UTime,
 	}
 }
 
@@ -156,19 +156,19 @@ func (r *taskRepository) toDomain(daoTask dao.Task) domain.Task {
 	}
 
 	return domain.Task{
-		ID:             daoTask.ID,
-		Name:           daoTask.Name,
-		CronExpr:       daoTask.CronExpr,
-		ExecutorType:   domain.TaskExecutorType(daoTask.ExecutorType),
-		GrpcConfig:     grpcConfig,
-		HTTPConfig:     httpConfig,
-		RetryConfig:    retryConfig,
-		ScheduleParams: scheduleParams,
-		ScheduleNodeID: scheduleNodeID,
-		NextTime:       daoTask.NextTime,
-		Status:         domain.TaskStatus(daoTask.Status),
-		Version:        daoTask.Version,
-		UTime:          daoTask.Utime,
-		CTime:          daoTask.Ctime,
+		ID:              daoTask.ID,
+		Name:            daoTask.Name,
+		CronExpr:        daoTask.CronExpr,
+		ExecutionMethod: domain.TaskExecutionMethod(daoTask.ExecutionMethod),
+		GrpcConfig:      grpcConfig,
+		HTTPConfig:      httpConfig,
+		RetryConfig:     retryConfig,
+		ScheduleParams:  scheduleParams,
+		ScheduleNodeID:  scheduleNodeID,
+		NextTime:        daoTask.NextTime,
+		Status:          domain.TaskStatus(daoTask.Status),
+		Version:         daoTask.Version,
+		UTime:           daoTask.Utime,
+		CTime:           daoTask.Ctime,
 	}
 }

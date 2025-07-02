@@ -14,6 +14,7 @@ var (
 	ErrExecutionNotFound  = errors.New("执行记录不存在")
 	ErrExecutionRetryable = errors.New("执行失败可重试")
 	// 业务逻辑错误
-	ErrInvalidTaskCronExpr       = errors.New("无效的cron表达式")
-	ErrInvalidTaskScheduleNodeID = errors.New("无效的调度节点ID")
+	ErrInvalidTaskCronExpr        = errors.New("无效的cron表达式")
+	ErrInvalidTaskScheduleNodeID  = errors.New("无效的调度节点ID")
+	ErrInvalidTaskExecutionMethod = errors.New("任务执行方式非法")
 )

@@ -80,12 +80,13 @@ func (ExecutionStatus) EnumDescriptor() ([]byte, []int) {
 type ExecutionState struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Id       int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	TaskName string                 `protobuf:"bytes,2,opt,name=task_name,json=taskName,proto3" json:"task_name,omitempty"`
+	TaskId   int64                  `protobuf:"varint,2,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	TaskName string                 `protobuf:"bytes,3,opt,name=task_name,json=taskName,proto3" json:"task_name,omitempty"`
 	// 中断时刻执行节点的执行进度
-	Status ExecutionStatus `protobuf:"varint,3,opt,name=status,proto3,enum=executor.v1.ExecutionStatus" json:"status,omitempty"` // RUNNING，FAILED_RETRYABLE，FAILED，SUCCESS
+	Status ExecutionStatus `protobuf:"varint,4,opt,name=status,proto3,enum=executor.v1.ExecutionStatus" json:"status,omitempty"` // RUNNING，FAILED_RETRYABLE，FAILED，SUCCESS
 	// 0-100 的数字。代表进度
 	// RUNNING 状态才有意义
-	RunningProgress int32 `protobuf:"varint,4,opt,name=running_progress,json=runningProgress,proto3" json:"running_progress,omitempty"`
+	RunningProgress int32 `protobuf:"varint,5,opt,name=running_progress,json=runningProgress,proto3" json:"running_progress,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -127,6 +128,13 @@ func (x *ExecutionState) GetId() int64 {
 	return 0
 }
 
+func (x *ExecutionState) GetTaskId() int64 {
+	if x != nil {
+		return x.TaskId
+	}
+	return 0
+}
+
 func (x *ExecutionState) GetTaskName() string {
 	if x != nil {
 		return x.TaskName
@@ -151,12 +159,13 @@ func (x *ExecutionState) GetRunningProgress() int32 {
 type ExecuteRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Eid      int64                  `protobuf:"varint,1,opt,name=eid,proto3" json:"eid,omitempty"` // execution id
-	TaskName string                 `protobuf:"bytes,2,opt,name=task_name,json=taskName,proto3" json:"task_name,omitempty"`
+	TaskId   int64                  `protobuf:"varint,2,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	TaskName string                 `protobuf:"bytes,3,opt,name=task_name,json=taskName,proto3" json:"task_name,omitempty"`
 	// 这里有两部分
 	// 1 一部分是通过管理后台，业务方自己搞的参数
 	// 2. 另外一部分是我们调度用的，比如说 offset, limit
 	// 即包含了业务参数和调度参数 (e.g., offset, limit)
-	Params        map[string]string `protobuf:"bytes,3,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Params        map[string]string `protobuf:"bytes,4,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -194,6 +203,13 @@ func (*ExecuteRequest) Descriptor() ([]byte, []int) {
 func (x *ExecuteRequest) GetEid() int64 {
 	if x != nil {
 		return x.Eid
+	}
+	return 0
+}
+
+func (x *ExecuteRequest) GetTaskId() int64 {
+	if x != nil {
+		return x.TaskId
 	}
 	return 0
 }
@@ -458,16 +474,18 @@ var File_executor_v1_executor_proto protoreflect.FileDescriptor
 
 const file_executor_v1_executor_proto_rawDesc = "" +
 	"\n" +
-	"\x1aexecutor/v1/executor.proto\x12\vexecutor.v1\"\x9e\x01\n" +
+	"\x1aexecutor/v1/executor.proto\x12\vexecutor.v1\"\xb7\x01\n" +
 	"\x0eExecutionState\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
-	"\ttask_name\x18\x02 \x01(\tR\btaskName\x124\n" +
-	"\x06status\x18\x03 \x01(\x0e2\x1c.executor.v1.ExecutionStatusR\x06status\x12)\n" +
-	"\x10running_progress\x18\x04 \x01(\x05R\x0frunningProgress\"\xbb\x01\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
+	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12\x1b\n" +
+	"\ttask_name\x18\x03 \x01(\tR\btaskName\x124\n" +
+	"\x06status\x18\x04 \x01(\x0e2\x1c.executor.v1.ExecutionStatusR\x06status\x12)\n" +
+	"\x10running_progress\x18\x05 \x01(\x05R\x0frunningProgress\"\xd4\x01\n" +
 	"\x0eExecuteRequest\x12\x10\n" +
-	"\x03eid\x18\x01 \x01(\x03R\x03eid\x12\x1b\n" +
-	"\ttask_name\x18\x02 \x01(\tR\btaskName\x12?\n" +
-	"\x06params\x18\x03 \x03(\v2'.executor.v1.ExecuteRequest.ParamsEntryR\x06params\x1a9\n" +
+	"\x03eid\x18\x01 \x01(\x03R\x03eid\x12\x17\n" +
+	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12\x1b\n" +
+	"\ttask_name\x18\x03 \x01(\tR\btaskName\x12?\n" +
+	"\x06params\x18\x04 \x03(\v2'.executor.v1.ExecuteRequest.ParamsEntryR\x06params\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"W\n" +

@@ -43,7 +43,7 @@ func NewRemoteJob(
 }
 
 func (r *RemoteJob) Name() string {
-	return domain.TaskExecutorTypeRemote.String()
+	return domain.TaskExecutionMethodRemote.String()
 }
 
 func (r *RemoteJob) Run(ctx context.Context, task domain.Task) *Chans {
@@ -148,6 +148,7 @@ func (r *RemoteJob) sendGRPCRequest(ctx context.Context, exec *domain.TaskExecut
 	// 发送执行请求
 	resp, err := client.Execute(ctx, &executorv1.ExecuteRequest{
 		Eid:      exec.ID,
+		TaskId:   exec.Task.ID,
 		TaskName: exec.Task.Name,
 		Params:   exec.GRPCParams(),
 	})
@@ -232,7 +233,7 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 			return nil
 		case report := <-reportCh:
 			// 收到执行点上报的任务执行状态
-			if report.TaskID != exec.Task.ID || report.ExecutionID != exec.ID {
+			if report.TaskID != exec.Task.ID || report.ID != exec.ID {
 				r.logger.Warn("收到执行点上报的任务执行状态，与当前执行的任务不匹配",
 					elog.Any("report", report))
 				continue

@@ -15,7 +15,7 @@ type LocalJob struct {
 }
 
 func (l *LocalJob) Name() string {
-	return domain.TaskExecutorTypeLocal.String()
+	return domain.TaskExecutionMethodLocal.String()
 }
 
 func (l *LocalJob) Run(ctx context.Context, task domain.Task) *Chans {

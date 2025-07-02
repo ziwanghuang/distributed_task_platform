@@ -59,6 +59,8 @@ func (m *ExecutionState) validate(all bool) error {
 
 	// no validation rules for Id
 
+	// no validation rules for TaskId
+
 	// no validation rules for TaskName
 
 	// no validation rules for Status
@@ -166,6 +168,8 @@ func (m *ExecuteRequest) validate(all bool) error {
 	var errors []error
 
 	// no validation rules for Eid
+
+	// no validation rules for TaskId
 
 	// no validation rules for TaskName
 

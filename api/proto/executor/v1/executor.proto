@@ -14,12 +14,13 @@ enum ExecutionStatus {
 
 message ExecutionState {
   int64 id = 1;
-  string task_name = 2;
+  int64 task_id = 2;
+  string task_name = 3;
   // 中断时刻执行节点的执行进度
-  ExecutionStatus status = 3; // RUNNING，FAILED_RETRYABLE，FAILED，SUCCESS
+  ExecutionStatus status = 4; // RUNNING，FAILED_RETRYABLE，FAILED，SUCCESS
   // 0-100 的数字。代表进度
   // RUNNING 状态才有意义
-  int32 running_progress = 4;
+  int32 running_progress = 5;
 }
 
 // ExecutorService 执行节点需要实现的接口，以便调度节点可以通知执行节点执行任务、中断任务及查询任务执行状态。
@@ -34,12 +35,13 @@ service ExecutorService {
 
 message ExecuteRequest {
   int64 eid = 1; // execution id
-  string task_name = 2;
+  int64 task_id = 2;
+  string task_name = 3;
   // 这里有两部分
   // 1 一部分是通过管理后台，业务方自己搞的参数
   // 2. 另外一部分是我们调度用的，比如说 offset, limit
   // 即包含了业务参数和调度参数 (e.g., offset, limit)
-  map<string, string> params = 3;
+  map<string, string> params = 4;
 }
 
 message ExecuteResponse {

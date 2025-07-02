@@ -2,7 +2,7 @@ package domain
 
 // Report 进度上报结构
 type Report struct {
-	ExecutionID     int64               // 执行实例ID
+	ID              int64               // 执行实例ID
 	TaskID          int64               // 任务ID
 	TaskName        string              // 任务名称
 	Status          TaskExecutionStatus // 执行状态
