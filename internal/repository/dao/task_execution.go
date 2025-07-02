@@ -58,7 +58,7 @@ type TaskExecutionDAO interface {
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status string) error
 	// SetRunningState 设置任务为运行状态并更新进度（从PREPARE状态转换）
 	SetRunningState(ctx context.Context, id int64, progress int32) error
-	// UpdateProgress 更新任务执行进度（仅在RUNNING状态下有效）
+	// UpdateProgress 更新任务执行进度、开始时间（仅在RUNNING状态下有效）
 	UpdateProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateStatusAndEndTime 更新任务状态和结束时间（用于终态更新）
 	UpdateStatusAndEndTime(ctx context.Context, id int64, status string, endTime int64) error
@@ -163,13 +163,15 @@ func (g *GORMTaskExecutionDAO) UpdateRetryResult(ctx context.Context, id, retryC
 }
 
 func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, progress int32) error {
+	now := time.Now().UnixMilli()
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
 		Where("id = ? AND status = ?", id, "PREPARE").
 		Updates(map[string]any{
 			"status":           "RUNNING",
 			"running_progress": progress,
-			"utime":            time.Now().UnixMilli(),
+			"stime":            now,
+			"utime":            now,
 		})
 
 	if result.Error != nil {

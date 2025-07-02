@@ -25,7 +25,7 @@ type TaskExecutionRepository interface {
 	FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
-	// SetRunningState 设置任务为运行状态并更新进度（从PREPARE状态转换）
+	// SetRunningState 设置任务为运行状态并更新进度、开始时间（从PREPARE状态转换）
 	SetRunningState(ctx context.Context, id int64, progress int32) error
 	// UpdateProgress 更新任务执行进度（仅在RUNNING状态下有效）
 	UpdateProgress(ctx context.Context, id int64, progress int32) error

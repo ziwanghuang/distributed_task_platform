@@ -72,8 +72,8 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) *Chans {
 			Task: domain.Task{
 				ID: task.ID,
 			},
+			// 可以认为开始执行了，防止执行节点直接返回”终态“状态Failed，Success等
 			StartTime: time.Now().UnixMilli(),
-			EndTime:   0,
 			Status:    domain.TaskExecutionStatusPrepare,
 		})
 		if err != nil {
