@@ -71,8 +71,8 @@ func (te *TaskExecution) HTTPParams() map[string]string {
 	result := make(map[string]string)
 
 	// 1. 先添加业务参数
-	if te.Task.HttpConfig != nil && te.Task.HttpConfig.Params != nil {
-		for k, v := range te.Task.HttpConfig.Params {
+	if te.Task.HTTPConfig != nil && te.Task.HTTPConfig.Params != nil {
+		for k, v := range te.Task.HTTPConfig.Params {
 			result[k] = v
 		}
 	}

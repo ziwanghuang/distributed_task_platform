@@ -42,7 +42,7 @@ type Task struct {
 	CronExpr       string
 	ExecutorType   TaskExecutorType
 	GrpcConfig     *GrpcConfig
-	HttpConfig     *HttpConfig
+	HTTPConfig     *HTTPConfig
 	RetryConfig    *RetryConfig
 	ScheduleNodeID string
 	ScheduleParams map[string]string // 调度参数（如分页偏移量、处理进度等）
@@ -85,8 +85,8 @@ type GrpcConfig struct {
 	Params      map[string]string `json:"params"`
 }
 
-// HttpConfig HTTP配置
-type HttpConfig struct {
+// HTTPConfig HTTP配置
+type HTTPConfig struct {
 	Endpoint string            `json:"endpoint"`
 	Params   map[string]string `json:"params"`
 }

@@ -22,7 +22,7 @@ type TaskExecutionRepository interface {
 	// maxRetryCount: 最大重试次数限制
 	// prepareTimeoutMs: PREPARE状态超时时间（毫秒），超过此时间未执行视为超时
 	// limit: 查询结果数量限制
-	FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
+	FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
 	// SetRunningState 设置任务为运行状态并更新进度（从PREPARE状态转换）
@@ -76,12 +76,12 @@ func (r *taskExecutionRepository) GetByID(ctx context.Context, id int64) (domain
 	return r.toDomain(daoExecution), nil
 }
 
-func (r *taskExecutionRepository) FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error) {
+func (r *taskExecutionRepository) FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error) {
 	daoExecutions, err := r.dao.FindRetryableExecutions(ctx, maxRetryCount, prepareTimeoutMs, limit)
 	if err != nil {
 		return nil, err
 	}
-	return slice.Map(daoExecutions, func(idx int, src dao.TaskExecution) domain.TaskExecution {
+	return slice.Map(daoExecutions, func(_ int, src dao.TaskExecution) domain.TaskExecution {
 		return r.toDomain(src)
 	}), nil
 }
@@ -109,9 +109,9 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 		grpcConfig = sqlx.JsonColumn[domain.GrpcConfig]{Val: *execution.Task.GrpcConfig, Valid: true}
 	}
 
-	var httpConfig sqlx.JsonColumn[domain.HttpConfig]
-	if execution.Task.HttpConfig != nil {
-		httpConfig = sqlx.JsonColumn[domain.HttpConfig]{Val: *execution.Task.HttpConfig, Valid: true}
+	var httpConfig sqlx.JsonColumn[domain.HTTPConfig]
+	if execution.Task.HTTPConfig != nil {
+		httpConfig = sqlx.JsonColumn[domain.HTTPConfig]{Val: *execution.Task.HTTPConfig, Valid: true}
 	}
 
 	var retryConfig sqlx.JsonColumn[domain.RetryConfig]
@@ -125,17 +125,17 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 	}
 
 	return dao.TaskExecution{
-		Id: execution.ID,
+		ID: execution.ID,
 		// 从Task展开的冗余字段
-		TaskId:             execution.Task.ID,
+		TaskID:             execution.Task.ID,
 		TaskName:           execution.Task.Name,
 		TaskCronExpr:       execution.Task.CronExpr,
 		TaskExecutorType:   execution.Task.ExecutorType.String(),
 		TaskGrpcConfig:     grpcConfig,
-		TaskHttpConfig:     httpConfig,
+		TaskHTTPConfig:     httpConfig,
 		TaskRetryConfig:    retryConfig,
 		TaskVersion:        execution.Task.Version,
-		TaskScheduleNodeId: execution.Task.ScheduleNodeID,
+		TaskScheduleNodeID: execution.Task.ScheduleNodeID,
 		TaskScheduleParams: taskScheduleParams,
 		// TaskExecution自身字段
 		Stime:           execution.StartTime,
@@ -156,9 +156,9 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 		taskGrpcConfig = &daoExecution.TaskGrpcConfig.Val
 	}
 
-	var taskHttpConfig *domain.HttpConfig
-	if daoExecution.TaskHttpConfig.Valid {
-		taskHttpConfig = &daoExecution.TaskHttpConfig.Val
+	var taskHTTPConfig *domain.HTTPConfig
+	if daoExecution.TaskHTTPConfig.Valid {
+		taskHTTPConfig = &daoExecution.TaskHTTPConfig.Val
 	}
 
 	var taskRetryConfig *domain.RetryConfig
@@ -172,17 +172,17 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 	}
 
 	return domain.TaskExecution{
-		ID: daoExecution.Id,
+		ID: daoExecution.ID,
 		Task: domain.Task{
-			ID:             daoExecution.TaskId,
+			ID:             daoExecution.TaskID,
 			Name:           daoExecution.TaskName,
 			CronExpr:       daoExecution.TaskCronExpr,
 			ExecutorType:   domain.TaskExecutorType(daoExecution.TaskExecutorType),
 			GrpcConfig:     taskGrpcConfig,
-			HttpConfig:     taskHttpConfig,
+			HTTPConfig:     taskHTTPConfig,
 			RetryConfig:    taskRetryConfig,
 			ScheduleParams: taskScheduleParams,
-			ScheduleNodeID: daoExecution.TaskScheduleNodeId,
+			ScheduleNodeID: daoExecution.TaskScheduleNodeID,
 			Version:        daoExecution.TaskVersion,
 		},
 		StartTime:       daoExecution.Stime,

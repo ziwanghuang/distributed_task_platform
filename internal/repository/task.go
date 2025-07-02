@@ -58,7 +58,7 @@ func (r *taskRepository) SchedulableTasks(ctx context.Context, preemptedTimeoutM
 	if err != nil {
 		return nil, err
 	}
-	return slice.Map(tasks, func(idx int, src dao.Task) domain.Task {
+	return slice.Map(tasks, func(_ int, src dao.Task) domain.Task {
 		return r.toDomain(src)
 	}), nil
 }
@@ -85,9 +85,9 @@ func (r *taskRepository) UpdateScheduleParams(ctx context.Context, id, version i
 
 // toEntity 将领域模型转换为DAO模型
 func (r *taskRepository) toEntity(task domain.Task) dao.Task {
-	var scheduleNodeId sql.NullString
+	var scheduleNodeID sql.NullString
 	if task.ScheduleNodeID != "" {
-		scheduleNodeId = sql.NullString{String: task.ScheduleNodeID, Valid: true}
+		scheduleNodeID = sql.NullString{String: task.ScheduleNodeID, Valid: true}
 	}
 
 	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
@@ -95,9 +95,9 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		grpcConfig = sqlx.JsonColumn[domain.GrpcConfig]{Val: *task.GrpcConfig, Valid: true}
 	}
 
-	var httpConfig sqlx.JsonColumn[domain.HttpConfig]
-	if task.HttpConfig != nil {
-		httpConfig = sqlx.JsonColumn[domain.HttpConfig]{Val: *task.HttpConfig, Valid: true}
+	var httpConfig sqlx.JsonColumn[domain.HTTPConfig]
+	if task.HTTPConfig != nil {
+		httpConfig = sqlx.JsonColumn[domain.HTTPConfig]{Val: *task.HTTPConfig, Valid: true}
 	}
 
 	var retryConfig sqlx.JsonColumn[domain.RetryConfig]
@@ -111,15 +111,15 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 	}
 
 	return dao.Task{
-		Id:             task.ID,
+		ID:             task.ID,
 		Name:           task.Name,
 		CronExpr:       task.CronExpr,
 		ExecutorType:   task.ExecutorType.String(),
 		GrpcConfig:     grpcConfig,
-		HttpConfig:     httpConfig,
+		HTTPConfig:     httpConfig,
 		RetryConfig:    retryConfig,
 		ScheduleParams: scheduleParams,
-		ScheduleNodeId: scheduleNodeId,
+		ScheduleNodeID: scheduleNodeID,
 		NextTime:       task.NextTime,
 		Status:         task.Status.String(),
 		Version:        task.Version,
@@ -130,9 +130,9 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 
 // toDomain 将DAO模型转换为领域模型
 func (r *taskRepository) toDomain(daoTask dao.Task) domain.Task {
-	var scheduleNodeId string
-	if daoTask.ScheduleNodeId.Valid {
-		scheduleNodeId = daoTask.ScheduleNodeId.String
+	var scheduleNodeID string
+	if daoTask.ScheduleNodeID.Valid {
+		scheduleNodeID = daoTask.ScheduleNodeID.String
 	}
 
 	var grpcConfig *domain.GrpcConfig
@@ -140,9 +140,9 @@ func (r *taskRepository) toDomain(daoTask dao.Task) domain.Task {
 		grpcConfig = &daoTask.GrpcConfig.Val
 	}
 
-	var httpConfig *domain.HttpConfig
-	if daoTask.HttpConfig.Valid {
-		httpConfig = &daoTask.HttpConfig.Val
+	var httpConfig *domain.HTTPConfig
+	if daoTask.HTTPConfig.Valid {
+		httpConfig = &daoTask.HTTPConfig.Val
 	}
 
 	var retryConfig *domain.RetryConfig
@@ -156,15 +156,15 @@ func (r *taskRepository) toDomain(daoTask dao.Task) domain.Task {
 	}
 
 	return domain.Task{
-		ID:             daoTask.Id,
+		ID:             daoTask.ID,
 		Name:           daoTask.Name,
 		CronExpr:       daoTask.CronExpr,
 		ExecutorType:   domain.TaskExecutorType(daoTask.ExecutorType),
 		GrpcConfig:     grpcConfig,
-		HttpConfig:     httpConfig,
+		HTTPConfig:     httpConfig,
 		RetryConfig:    retryConfig,
 		ScheduleParams: scheduleParams,
-		ScheduleNodeID: scheduleNodeId,
+		ScheduleNodeID: scheduleNodeID,
 		NextTime:       daoTask.NextTime,
 		Status:         domain.TaskStatus(daoTask.Status),
 		Version:        daoTask.Version,

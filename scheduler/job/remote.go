@@ -83,11 +83,12 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) (*Chans, error) {
 // sendRequest 发送执行请求，返回是否需要监控和错误
 func (r *RemoteJob) sendRequest(ctx context.Context, exec *domain.TaskExecution) (needMonitoring bool, err error) {
 	// 根据配置选择通信方式
-	if exec.Task.GrpcConfig != nil {
+	switch {
+	case exec.Task.GrpcConfig != nil:
 		return r.sendGRPCRequest(ctx, exec)
-	} else if exec.Task.HttpConfig != nil {
+	case exec.Task.HTTPConfig != nil:
 		return r.sendHTTPRequest(ctx, exec)
-	} else {
+	default:
 		return false, fmt.Errorf("未找到有效配置，无法发送请求")
 	}
 }
@@ -162,7 +163,7 @@ func (r *RemoteJob) sendHTTPRequest(_ context.Context, exec *domain.TaskExecutio
 	// 发送JSON格式数据
 	jsonData := `{"name": "张三", "age": 30}`
 	resp, err := client.Post(
-		exec.Task.HttpConfig.Endpoint,
+		exec.Task.HTTPConfig.Endpoint,
 		"application/json",
 		strings.NewReader(jsonData),
 	)
@@ -233,7 +234,7 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 func (r *RemoteJob) pollExecutionStatus(ctx context.Context, exec *domain.TaskExecution) error {
 	if exec.Task.GrpcConfig != nil {
 		return r.pollGRPCExecutionStatus(ctx, exec)
-	} else if exec.Task.HttpConfig != nil {
+	} else if exec.Task.HTTPConfig != nil {
 		return r.pollHTTPExecutionStatus(ctx, exec)
 	}
 	return nil

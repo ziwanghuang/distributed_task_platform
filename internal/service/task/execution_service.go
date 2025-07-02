@@ -51,7 +51,7 @@ func (s *executionService) GetByID(ctx context.Context, id int64) (domain.TaskEx
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *executionService) FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error) {
+func (s *executionService) FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error) {
 	return s.repo.FindRetryableExecutions(ctx, maxRetryCount, prepareTimeoutMs, limit)
 }
 

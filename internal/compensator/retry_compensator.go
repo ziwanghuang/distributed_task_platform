@@ -89,12 +89,12 @@ func (r *RetryCompensator) retry(ctx context.Context) error {
 	r.logger.Info("找到可重试任务", elog.Int("count", len(executions)))
 
 	// 处理每个可重试的执行
-	for _, execution := range executions {
-		err = r.retryExecution(ctx, execution)
+	for i := range executions {
+		err = r.retryExecution(ctx, executions[i])
 		if err != nil {
 			r.logger.Error("重试任务失败",
-				elog.Int64("executionId", execution.ID),
-				elog.String("taskName", execution.Task.Name),
+				elog.Int64("executionId", executions[i].ID),
+				elog.String("taskName", executions[i].Task.Name),
 				elog.FieldErr(err))
 			continue
 		}
