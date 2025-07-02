@@ -25,6 +25,12 @@ type TaskExecutionRepository interface {
 	FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
+	// SetRunningState 设置任务为运行状态并更新进度（从PREPARE状态转换）
+	SetRunningState(ctx context.Context, id int64, progress int32) error
+	// UpdateProgress 更新任务执行进度（仅在RUNNING状态下有效）
+	UpdateProgress(ctx context.Context, id int64, progress int32) error
+	// UpdateStatusAndEndTime 更新任务状态和结束时间（用于终态更新）
+	UpdateStatusAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, endTime int64) error
 }
 
 type taskExecutionRepository struct {
@@ -84,6 +90,18 @@ func (r *taskExecutionRepository) UpdateRetryResult(ctx context.Context, id, ret
 	return r.dao.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, endTime, status.String())
 }
 
+func (r *taskExecutionRepository) SetRunningState(ctx context.Context, id int64, progress int32) error {
+	return r.dao.SetRunningState(ctx, id, progress)
+}
+
+func (r *taskExecutionRepository) UpdateProgress(ctx context.Context, id int64, progress int32) error {
+	return r.dao.UpdateProgress(ctx, id, progress)
+}
+
+func (r *taskExecutionRepository) UpdateStatusAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, endTime int64) error {
+	return r.dao.UpdateStatusAndEndTime(ctx, id, status.String(), endTime)
+}
+
 // toEntity 将领域模型转换为DAO模型
 func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.TaskExecution {
 	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
@@ -120,13 +138,14 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 		TaskScheduleNodeId: execution.Task.ScheduleNodeID,
 		TaskScheduleParams: taskScheduleParams,
 		// TaskExecution自身字段
-		Stime:         execution.StartTime,
-		Etime:         execution.EndTime,
-		RetryCount:    execution.RetryCount,
-		NextRetryTime: execution.NextRetryTime,
-		Status:        execution.Status.String(),
-		Ctime:         execution.CTime,
-		Utime:         execution.UTime,
+		Stime:           execution.StartTime,
+		Etime:           execution.EndTime,
+		RetryCount:      execution.RetryCount,
+		NextRetryTime:   execution.NextRetryTime,
+		RunningProgress: execution.RunningProgress,
+		Status:          execution.Status.String(),
+		Ctime:           execution.CTime,
+		Utime:           execution.UTime,
 	}
 }
 
@@ -166,12 +185,13 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 			ScheduleNodeID: daoExecution.TaskScheduleNodeId,
 			Version:        daoExecution.TaskVersion,
 		},
-		StartTime:     daoExecution.Stime,
-		EndTime:       daoExecution.Etime,
-		RetryCount:    daoExecution.RetryCount,
-		NextRetryTime: daoExecution.NextRetryTime,
-		Status:        domain.TaskExecutionStatus(daoExecution.Status),
-		CTime:         daoExecution.Ctime,
-		UTime:         daoExecution.Utime,
+		StartTime:       daoExecution.Stime,
+		EndTime:         daoExecution.Etime,
+		RetryCount:      daoExecution.RetryCount,
+		NextRetryTime:   daoExecution.NextRetryTime,
+		RunningProgress: daoExecution.RunningProgress,
+		Status:          domain.TaskExecutionStatus(daoExecution.Status),
+		CTime:           daoExecution.Ctime,
+		UTime:           daoExecution.Utime,
 	}
 }

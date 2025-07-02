@@ -27,13 +27,14 @@ type TaskExecution struct {
 	TaskScheduleParams sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
 
 	// 下面这些是 TaskExecution 的自身信息
-	Stime         int64  `gorm:"type:bigint;comment:'开始时间'"`
-	Etime         int64  `gorm:"type:bigint;comment:'结束时间'"`
-	RetryCount    int64  `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
-	NextRetryTime int64  `gorm:"type:bigint;comment:'下次重试时间'"`
-	Status        string `gorm:"type:ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_PREEMPTED', 'FAILED', 'SUCCESS');not null;default:'PREPARE';comment:'执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_PREEMPTED-因续约失败导致的抢占失败， FAILED-失败, SUCCESS-成功'"`
-	Ctime         int64  `gorm:"comment:'创建时间'"`
-	Utime         int64  `gorm:"comment:'更新时间'"`
+	Stime           int64  `gorm:"type:bigint;comment:'开始时间'"`
+	Etime           int64  `gorm:"type:bigint;comment:'结束时间'"`
+	RetryCount      int64  `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
+	NextRetryTime   int64  `gorm:"type:bigint;comment:'下次重试时间'"`
+	RunningProgress int32  `gorm:"type:int;default:0;comment:'执行进度0-100，RUNNING状态下有效'"`
+	Status          string `gorm:"type:ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_PREEMPTED', 'FAILED', 'SUCCESS');not null;default:'PREPARE';comment:'执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_PREEMPTED-因续约失败导致的抢占失败， FAILED-失败, SUCCESS-成功'"`
+	Ctime           int64  `gorm:"comment:'创建时间'"`
+	Utime           int64  `gorm:"comment:'更新时间'"`
 }
 
 // TableName 指定表名
@@ -42,6 +43,7 @@ func (TaskExecution) TableName() string {
 }
 
 type TaskExecutionDAO interface {
+	// Create 创建任务执行记录
 	Create(ctx context.Context, execution TaskExecution) (TaskExecution, error)
 	// GetByID 根据ID获取执行记录
 	GetByID(ctx context.Context, id int64) (TaskExecution, error)
@@ -54,6 +56,12 @@ type TaskExecutionDAO interface {
 	FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status string) error
+	// SetRunningState 设置任务为运行状态并更新进度（从PREPARE状态转换）
+	SetRunningState(ctx context.Context, id int64, progress int32) error
+	// UpdateProgress 更新任务执行进度（仅在RUNNING状态下有效）
+	UpdateProgress(ctx context.Context, id int64, progress int32) error
+	// UpdateStatusAndEndTime 更新任务状态和结束时间（用于终态更新）
+	UpdateStatusAndEndTime(ctx context.Context, id int64, status string, endTime int64) error
 }
 
 type GORMTaskExecutionDAO struct {
@@ -143,6 +151,62 @@ func (g *GORMTaskExecutionDAO) UpdateRetryResult(ctx context.Context, id, retryC
 			"status":          status,
 			"etime":           endTime,
 			"utime":           time.Now().UnixMilli(),
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w: ID=%d", errs.ErrExecutionNotFound, id)
+	}
+	return nil
+}
+
+func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, progress int32) error {
+	result := g.db.WithContext(ctx).
+		Model(&TaskExecution{}).
+		Where("id = ? AND status = ?", id, "PREPARE").
+		Updates(map[string]any{
+			"status":           "RUNNING",
+			"running_progress": progress,
+			"utime":            time.Now().UnixMilli(),
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w: 任务不在PREPARE状态或不存在，ID=%d", errs.ErrExecutionNotFound, id)
+	}
+	return nil
+}
+
+func (g *GORMTaskExecutionDAO) UpdateProgress(ctx context.Context, id int64, progress int32) error {
+	result := g.db.WithContext(ctx).
+		Model(&TaskExecution{}).
+		Where("id = ? AND status = ?", id, "RUNNING").
+		Updates(map[string]any{
+			"running_progress": progress,
+			"utime":            time.Now().UnixMilli(),
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w: 任务不在RUNNING状态或不存在，ID=%d", errs.ErrExecutionNotFound, id)
+	}
+	return nil
+}
+
+func (g *GORMTaskExecutionDAO) UpdateStatusAndEndTime(ctx context.Context, id int64, status string, endTime int64) error {
+	result := g.db.WithContext(ctx).
+		Model(&TaskExecution{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status": status,
+			"etime":  endTime,
+			"utime":  time.Now().UnixMilli(),
 		})
 
 	if result.Error != nil {

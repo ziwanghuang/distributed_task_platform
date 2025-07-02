@@ -156,7 +156,7 @@ func (ds *DistributedScheduler) scheduleTaskToRemoteNode(ctx context.Context, ta
 
 	// 6. 处理执行结果
 	executionState := executeResp.ExecutionState
-	finalStatus := convertProtoStatus(executionState.Status)
+	finalStatus := convertProtoStatus(int32(executionState.Status))
 
 	err = ds.executionRepo.UpdateStatus(ctx, execution.ID, finalStatus)
 	if err != nil {
