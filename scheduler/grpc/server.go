@@ -49,6 +49,7 @@ func (s *ReporterServer) Report(ctx context.Context, req *reporterv1.ReportReque
 	if err != nil {
 		s.logger.Error("处理执行状态上报失败",
 			elog.Int64("executionId", req.ExecutionState.Id),
+			elog.String("taskName", req.ExecutionState.TaskName),
 			elog.FieldErr(err))
 		return nil, status.Error(codes.Internal, "处理失败")
 	}
@@ -95,7 +96,7 @@ func (s *ReporterServer) toTaskExecutionStatus(status executorv1.ExecutionStatus
 
 // handleReports 处理报告
 func (s *ReporterServer) handleReports(ctx context.Context, reports []*domain.Report) error {
-	s.logger.Info("处理执行状态上报", elog.Any("reports", reports))
+	s.logger.Debug("处理执行状态上报", elog.Int("count", len(reports)))
 	return s.scheduler.HandleReports(ctx, reports)
 }
 
