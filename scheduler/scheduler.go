@@ -14,6 +14,7 @@ import (
 	"github.com/ecodeclub/mq-api"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/gotomicro/ego/core/standard"
+	"golang.org/x/sync/semaphore"
 )
 
 var _ standard.Component = &Scheduler{}
@@ -25,6 +26,7 @@ type Scheduler struct {
 	taskAcquirer TaskAcquirer               // 任务抢占器
 	jobManager   *job.Manager               // 任务管理器
 	consumers    map[string]*event.Consumer // 消费者
+	tokens       *semaphore.Weighted        // 令牌
 	config       *Config                    // 配置
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -33,11 +35,13 @@ type Scheduler struct {
 
 // Config 调度器配置
 type Config struct {
-	BatchTimeout     time.Duration
-	BatchSize        int           // 批量获取任务数量
-	PreemptedTimeout time.Duration // 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
-	ScheduleInterval time.Duration // 调度间隔
-	RenewInterval    time.Duration // 续约间隔
+	BatchTimeout        time.Duration
+	BatchSize           int           // 批量获取任务数量
+	PreemptedTimeout    time.Duration // 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
+	ScheduleInterval    time.Duration // 调度间隔
+	RenewInterval       time.Duration // 续约间隔
+	MaxConcurrentTasks  int64         // 最大并发任务数
+	TokenAcquireTimeout time.Duration // 抢令牌超时时间
 }
 
 // NewScheduler 创建调度器实例
@@ -56,6 +60,7 @@ func NewScheduler(
 		taskAcquirer: acquirer,
 		jobManager:   taskManager,
 		consumers:    consumers,
+		tokens:       semaphore.NewWeighted(config.MaxConcurrentTasks),
 		config:       config,
 		ctx:          ctx,
 		cancel:       cancel,
@@ -138,13 +143,16 @@ func (s *Scheduler) schedule() error {
 	// 遍历任务，尝试抢占并启动
 	acquired := 0
 	for i := range tasks {
-		// 填充调度节点ID
-		tasks[i].ScheduleNodeID = s.nodeID
-		if err = s.taskAcquirer.Acquire(s.ctx, tasks[i]); err != nil {
+		// 抢令牌和抢占任务
+		success, err1 := s.acquireTokenAndTask(s.ctx, tasks[i])
+		if err1 != nil {
 			s.logger.Debug("任务抢占失败",
 				elog.Int64("taskID", tasks[i].ID),
 				elog.String("taskName", tasks[i].Name),
-				elog.FieldErr(err))
+				elog.FieldErr(err1))
+			continue
+		}
+		if !success {
 			continue
 		}
 
@@ -159,6 +167,42 @@ func (s *Scheduler) schedule() error {
 	return nil
 }
 
+// acquireTokenAndTask 抢令牌 + 抢占任务
+func (s *Scheduler) acquireTokenAndTask(ctx context.Context, task domain.Task) (bool, error) {
+	// 抢令牌
+	tokenCtx, tokenCancel := context.WithTimeout(s.ctx, s.config.TokenAcquireTimeout)
+	err := s.tokens.Acquire(tokenCtx, 1)
+	tokenCancel()
+	if err != nil {
+		return false, fmt.Errorf("抢令牌失败: %w", err)
+	}
+
+	// 令牌抢占成功，添加panic保护
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.Error("任务抢占过程中发生panic",
+				elog.Int64("taskID", task.ID),
+				elog.String("taskName", task.Name),
+				elog.Any("panic", r))
+			// 令牌已获取，需要释放
+			s.tokens.Release(1)
+			// 重新抛出panic
+			panic(r)
+		}
+	}()
+
+	// 填充调度节点ID
+	task.ScheduleNodeID = s.nodeID
+	if err = s.taskAcquirer.Acquire(ctx, task); err != nil {
+		// 抢占任务失败，归还令牌
+		s.tokens.Release(1)
+		return false, fmt.Errorf("任务抢占失败: %w", err)
+	}
+
+	// 抢占成功
+	return true, nil
+}
+
 // handleAcquiredTask 处理已抢占的任务
 func (s *Scheduler) handleAcquiredTask(task domain.Task) {
 	s.logger.Info("开始处理任务",
@@ -167,6 +211,7 @@ func (s *Scheduler) handleAcquiredTask(task domain.Task) {
 
 	// 确保最后释放任务和清理缓存
 	defer func() {
+		s.tokens.Release(1)
 		if err := s.taskAcquirer.Release(s.ctx, task); err != nil {
 			s.logger.Error("释放任务失败",
 				elog.Int64("taskID", task.ID),
@@ -332,15 +377,21 @@ func (s *Scheduler) RescheduleNow(ctx context.Context, taskID int64, rescheduleP
 		s.logger.Error("更新调度信息失败", elog.FieldErr(err))
 		return
 	}
-	// 开始抢占并调度
-	tk.ScheduleNodeID = s.nodeID
-	err = s.taskAcquirer.Acquire(ctx, tk)
+	// 立即开始重调度
+	success, err := s.acquireTokenAndTask(ctx, tk)
 	if err != nil {
-		s.logger.Debug("重调度任务抢占失败",
+		s.logger.Error("重调度任务抢占失败",
 			elog.Int64("taskID", tk.ID),
 			elog.String("taskName", tk.Name),
 			elog.FieldErr(err))
 		return
 	}
+	if !success {
+		s.logger.Warn("重调度任务抢占未成功",
+			elog.Int64("taskID", tk.ID),
+			elog.String("taskName", tk.Name))
+		return
+	}
+	// 抢占成功，启动异步任务管理
 	go s.handleAcquiredTask(tk)
 }
