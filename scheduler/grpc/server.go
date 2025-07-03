@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	reporterv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/reporter/v1"
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/scheduler"
@@ -21,7 +20,7 @@ type ReporterServer struct {
 	logger    *elog.Component
 }
 
-// NewReporterServer 创建ReporterServer实例
+// NewReporterServer 创建 ReporterServer 实例
 func NewReporterServer(
 	scheduler *scheduler.Scheduler,
 ) *ReporterServer {
@@ -62,38 +61,12 @@ func (s *ReporterServer) Report(ctx context.Context, req *reporterv1.ReportReque
 // toDomainReports 将protobuf ExecutionState转换为domain.Report
 func (s *ReporterServer) toDomainReports(reqs []*reporterv1.ReportRequest) []*domain.Report {
 	return slice.Map(reqs, func(_ int, src *reporterv1.ReportRequest) *domain.Report {
-		state := src.GetExecutionState()
 		return &domain.Report{
-			ExecutionState: domain.ExecutionState{
-				ID:              state.GetId(),
-				TaskID:          state.GetTaskId(),
-				TaskName:        state.GetTaskName(),
-				Status:          s.toTaskExecutionStatus(state.GetStatus()),
-				RunningProgress: state.GetRunningProgress(),
-			},
+			ExecutionState:    domain.ExecutionStateFromProto(src.GetExecutionState()),
 			RequestReschedule: src.GetRequestReschedule(),
 			RescheduleParams:  src.GetRescheduledParams(),
 		}
 	})
-}
-
-// toTaskExecutionStatus 将protobuf ExecutionStatus转换为domain.TaskExecutionStatus
-func (s *ReporterServer) toTaskExecutionStatus(status executorv1.ExecutionStatus) domain.TaskExecutionStatus {
-	switch status {
-	case executorv1.ExecutionStatus_RUNNING:
-		return domain.TaskExecutionStatusRunning
-	case executorv1.ExecutionStatus_SUCCESS:
-		return domain.TaskExecutionStatusSuccess
-	case executorv1.ExecutionStatus_FAILED:
-		return domain.TaskExecutionStatusFailed
-	case executorv1.ExecutionStatus_FAILED_RETRYABLE:
-		return domain.TaskExecutionStatusFailedRetryable
-	default:
-		// 记录未知状态的警告
-		s.logger.Warn("收到未知执行状态，默认设置为PREPARE",
-			elog.String("unknownStatus", status.String()))
-		return domain.TaskExecutionStatusPrepare
-	}
 }
 
 // handleReports 处理报告

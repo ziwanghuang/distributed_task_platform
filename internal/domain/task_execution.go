@@ -1,9 +1,12 @@
 package domain
 
+import executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
+
 // TaskExecutionStatus 任务执行状态
 type TaskExecutionStatus string
 
 const (
+	TaskExecutionStatusUnknown         TaskExecutionStatus = "UNKNOWN"
 	TaskExecutionStatusPrepare         TaskExecutionStatus = "PREPARE"          // 已创建，准备执行
 	TaskExecutionStatusRunning         TaskExecutionStatus = "RUNNING"          // 正在执行
 	TaskExecutionStatusSuccess         TaskExecutionStatus = "SUCCESS"          // 执行成功
@@ -27,6 +30,55 @@ func (t TaskExecutionStatus) IsValid() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (t TaskExecutionStatus) IsPrepare() bool {
+	return t == TaskExecutionStatusPrepare
+}
+
+func (t TaskExecutionStatus) IsRunning() bool {
+	return t == TaskExecutionStatusRunning
+}
+
+func (t TaskExecutionStatus) IsSuccess() bool {
+	return t == TaskExecutionStatusSuccess
+}
+
+func (t TaskExecutionStatus) IsFailed() bool {
+	return t == TaskExecutionStatusFailed
+}
+
+func (t TaskExecutionStatus) IsFailedRetryable() bool {
+	return t == TaskExecutionStatusFailedRetryable
+}
+
+func (t TaskExecutionStatus) IsTerminalStatus() bool {
+	return t.IsSuccess() || t.IsFailed() || t.IsFailedRetryable()
+}
+
+func TaskExecutionStatusFromProto(status executorv1.ExecutionStatus) TaskExecutionStatus {
+	switch status {
+	case executorv1.ExecutionStatus_RUNNING:
+		return TaskExecutionStatusRunning
+	case executorv1.ExecutionStatus_SUCCESS:
+		return TaskExecutionStatusSuccess
+	case executorv1.ExecutionStatus_FAILED:
+		return TaskExecutionStatusFailed
+	case executorv1.ExecutionStatus_FAILED_RETRYABLE:
+		return TaskExecutionStatusFailedRetryable
+	default:
+		return TaskExecutionStatusUnknown
+	}
+}
+
+func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionState {
+	return ExecutionState{
+		ID:              protoState.GetId(),
+		TaskID:          protoState.GetTaskId(),
+		TaskName:        protoState.GetTaskName(),
+		Status:          TaskExecutionStatusFromProto(protoState.GetStatus()),
+		RunningProgress: protoState.GetRunningProgress(),
 	}
 }
 

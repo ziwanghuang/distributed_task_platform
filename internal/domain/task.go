@@ -31,6 +31,10 @@ func (t TaskExecutionMethod) String() string {
 	return string(t)
 }
 
+func (t TaskExecutionMethod) IsRemote() bool {
+	return t == TaskExecutionMethodRemote
+}
+
 func (t TaskExecutionMethod) IsLocal() bool {
 	return t == TaskExecutionMethodLocal
 }

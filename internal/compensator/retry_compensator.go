@@ -8,6 +8,7 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
+	"gitee.com/flycash/distributed_task_platform/scheduler/executor"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -21,20 +22,33 @@ type RetryCompensatorConfig struct {
 
 // RetryCompensator 重试补偿器
 type RetryCompensator struct {
-	svc    task.ExecutionService
-	config RetryCompensatorConfig
-	logger *elog.Component
+	svc       task.ExecutionService
+	executors map[string]executor.Executor
+	config    *Config
+	logger    *elog.Component
+}
+
+// Config 重试补偿器配置
+type Config struct {
+	MaxRetryCount          int64         // 最大重试次数
+	PrepareTimeoutMs       int64         // PREPARE状态超时时间（毫秒）
+	PrepareTimeoutWindowMs int64         // PREPARE状态超时窗口
+	BatchSize              int           // 批量处理大小
+	MinDuration            time.Duration // 最小等待时间，防止空转
+	CompensateInterval     time.Duration // 补偿间隔
 }
 
 // NewRetryCompensator 创建重试补偿器
 func NewRetryCompensator(
 	svc task.ExecutionService,
-	cfg RetryCompensatorConfig,
+	executors map[string]executor.Executor,
+	config *Config,
 ) *RetryCompensator {
 	return &RetryCompensator{
-		svc:    svc,
-		config: cfg,
-		logger: elog.DefaultLogger.With(elog.FieldComponentName("compensator.RetryCompensator")),
+		svc:       svc,
+		executors: executors,
+		config:    config,
+		logger:    elog.DefaultLogger.With(elog.FieldComponentName("retry.Compensator")),
 	}
 }
 
@@ -118,9 +132,7 @@ func (r *RetryCompensator) retryExecution(ctx context.Context, execution domain.
 		return fmt.Errorf("创建重试策略失败: %w", err)
 	}
 
-	// TODO: 实际重试逻辑 - 这里需要一个具体执行Execution的组件
-	// 比如: success := r.executionEngine.Execute(ctx, execution)
-	success := r.executeTask(execution) // 用注释代替具体实现
+	success := r.executeTask(execution)
 
 	var status domain.TaskExecutionStatus
 	var nextRetryTime, endTime int64
@@ -150,17 +162,45 @@ func (r *RetryCompensator) retryExecution(ctx context.Context, execution domain.
 // executeTask 执行具体任务（暂时用注释代替）
 // TODO: 这里需要一个具体的执行组件来执行任务
 func (r *RetryCompensator) executeTask(execution domain.TaskExecution) bool {
-	// TODO: 根据execution的类型（LOCAL/REMOTE）调用不同的执行器
-	// 比如:
-	// if execution.Task.ExecutorType == domain.TaskExecutorTypeLocal {
-	//     return r.localExecutor.Execute(execution)
-	// } else {
-	//     return r.remoteExecutor.Execute(execution)
-	// }
-
-	// 暂时返回false表示需要重试
-	r.logger.Info("TODO: 实际执行任务逻辑",
+	r.logger.Info("开始执行重试任务",
 		elog.Int64("executionId", execution.ID),
 		elog.String("taskName", execution.Task.Name))
-	return false // 暂时假设执行失败，需要重试
+
+	executor, ok := r.executors[execution.Task.Name]
+	if !ok {
+		return false
+
+	}
+
+	// 使用任务管理器执行任务
+	state, err := executor.Run(context.Background(), execution)
+	if err != nil {
+		r.logger.Error("启动任务执行失败",
+			elog.Int64("executionId", execution.ID),
+			elog.String("taskName", execution.Task.Name),
+			elog.FieldErr(err))
+		return false
+	}
+
+	// 等待任务完成
+	select {
+	case err := <-errorCh:
+		if err != nil {
+			r.logger.Error("任务执行失败",
+				elog.Int64("executionId", execution.ID),
+				elog.String("taskName", execution.Task.Name),
+				elog.FieldErr(err))
+			return false
+		} else {
+			r.logger.Info("任务执行成功",
+				elog.Int64("executionId", execution.ID),
+				elog.String("taskName", execution.Task.Name))
+			return true
+		}
+	case <-time.After(30 * time.Minute): // 30分钟超时
+		r.logger.Error("任务执行超时",
+			elog.Int64("executionId", execution.ID),
+			elog.String("taskName", execution.Task.Name))
+		return false
+	}
 }
