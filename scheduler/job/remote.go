@@ -95,7 +95,7 @@ func (r *RemoteJob) Run(ctx context.Context, task domain.Task) *Chans {
 
 		// 如果需要监控，继续监控
 		if needMonitoring {
-			err = r.monitor(ctx, reportCh, renewFailedCh, &created)
+			err = r.monitor(ctx, reportCh, renewFailedCh, errorCh, &created)
 			if err != nil {
 				r.logger.Error("任务监控过程中发生错误", elog.FieldErr(err))
 				// 执行错误通过Error通道发送
@@ -251,7 +251,13 @@ func (r *RemoteJob) sendHTTPRequest(ctx context.Context, exec *domain.TaskExecut
 }
 
 // monitor 监控执行状态（轮询+上报双模式）
-func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, renewFailedCh chan struct{}, exec *domain.TaskExecution) error {
+func (r *RemoteJob) monitor(
+	ctx context.Context,
+	reportCh chan *domain.Report,
+	renewFailedCh chan struct{},
+	errorCh chan error,
+	exec *domain.TaskExecution,
+) error {
 	ticker := time.NewTicker(r.pollInterval)
 	defer ticker.Stop()
 
@@ -268,6 +274,8 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 			if isRunning {
 				continue
 			}
+			// 通知调度节点中的 handleAcquiredTask 退出
+			r.sendError(ctx, errorCh, nil)
 			return nil
 		case report := <-reportCh:
 			// 收到执行点上报的任务执行状态
@@ -287,6 +295,8 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 
 			// 如果是终态，任务完成
 			if r.isTerminalStatus(report.ExecutionState.Status) {
+				// 通知调度节点中的 handleAcquiredTask 退出
+				r.sendError(ctx, errorCh, nil)
 				return nil
 			}
 		case <-renewFailedCh:
@@ -295,8 +305,12 @@ func (r *RemoteJob) monitor(ctx context.Context, reportCh chan *domain.Report, r
 			if err != nil {
 				r.logger.Error("更新续约失败状态失败", elog.FieldErr(err))
 			}
+			// 通知调度节点中的 handleAcquiredTask 退出
+			r.sendError(ctx, errorCh, err)
 			return err
 		case <-ctx.Done():
+			// 通知调度节点中的 handleAcquiredTask 退出
+			r.sendError(ctx, errorCh, nil)
 			return nil
 		}
 	}

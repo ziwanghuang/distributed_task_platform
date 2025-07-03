@@ -13,40 +13,40 @@ import (
 
 // RetryCompensatorConfig 重试补偿器配置
 type RetryCompensatorConfig struct {
-	BatchSize        int           // 批次大小
-	MinDuration      time.Duration // 最小等待时间，防止空转
-	MaxRetryCount    int64         // 最大重试次数
-	PrepareTimeoutMs int64         // PREPARE状态超时时间
+	BatchSize              int           // 批次大小
+	MinDuration            time.Duration // 最小等待时间，防止空转
+	MaxRetryCount          int64         // 最大重试次数
+	PrepareTimeoutWindowMs int64         // PREPARE状态超时窗口
 }
 
 // RetryCompensator 重试补偿器
 type RetryCompensator struct {
-	config  RetryCompensatorConfig
-	execSvc task.ExecutionService
-	logger  *elog.Component
+	svc    task.ExecutionService
+	config RetryCompensatorConfig
+	logger *elog.Component
 }
 
 // NewRetryCompensator 创建重试补偿器
 func NewRetryCompensator(
-	config RetryCompensatorConfig,
-	execSvc task.ExecutionService,
+	svc task.ExecutionService,
+	cfg RetryCompensatorConfig,
 ) *RetryCompensator {
 	return &RetryCompensator{
-		config:  config,
-		execSvc: execSvc,
-		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.RetryCompensator")),
+		svc:    svc,
+		config: cfg,
+		logger: elog.DefaultLogger.With(elog.FieldComponentName("compensator.RetryCompensator")),
 	}
 }
 
 // Start 启动补偿器
-func (r *RetryCompensator) Start(ctx context.Context) error {
+func (r *RetryCompensator) Start(ctx context.Context) {
 	r.logger.Info("重试补偿器启动")
 
 	for {
 		select {
 		case <-ctx.Done():
 			r.logger.Info("重试补偿器停止")
-			return ctx.Err()
+			return
 		default:
 			startTime := time.Now()
 
@@ -60,7 +60,7 @@ func (r *RetryCompensator) Start(ctx context.Context) error {
 			if elapsed < r.config.MinDuration {
 				select {
 				case <-ctx.Done():
-					return ctx.Err()
+					return
 				case <-time.After(r.config.MinDuration - elapsed):
 				}
 			}
@@ -71,10 +71,10 @@ func (r *RetryCompensator) Start(ctx context.Context) error {
 // retry 执行一轮补偿
 func (r *RetryCompensator) retry(ctx context.Context) error {
 	// 查找可重试的执行记录
-	executions, err := r.execSvc.FindRetryableExecutions(
+	executions, err := r.svc.FindRetryableExecutions(
 		ctx,
 		r.config.MaxRetryCount,
-		r.config.PrepareTimeoutMs,
+		r.config.PrepareTimeoutWindowMs,
 		r.config.BatchSize,
 	)
 	if err != nil {
@@ -113,7 +113,7 @@ func (r *RetryCompensator) retryExecution(ctx context.Context, execution domain.
 	if execution.Task.RetryConfig == nil {
 		return fmt.Errorf("任务重试配置为空")
 	}
-	retryStrategy, err := retry.NewRetry(execution.Task.RetryConfig.ToRetryConfig())
+	retryStrategy, err := retry.NewRetry(execution.Task.RetryConfig.ToRetryComponentConfig())
 	if err != nil {
 		return fmt.Errorf("创建重试策略失败: %w", err)
 	}
@@ -144,7 +144,7 @@ func (r *RetryCompensator) retryExecution(ctx context.Context, execution domain.
 			endTime = time.Now().UnixMilli()
 		}
 	}
-	return r.execSvc.UpdateRetryResult(ctx, execution.ID, newRetryCount, nextRetryTime, endTime, status)
+	return r.svc.UpdateRetryResult(ctx, execution.ID, newRetryCount, nextRetryTime, endTime, status)
 }
 
 // executeTask 执行具体任务（暂时用注释代替）

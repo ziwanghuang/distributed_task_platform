@@ -68,7 +68,7 @@ type RetryConfig struct {
 	MaxInterval     int64 `json:"maxInterval"`     // 毫秒
 }
 
-func (r *RetryConfig) ToRetryConfig() retry.Config {
+func (r *RetryConfig) ToRetryComponentConfig() retry.Config {
 	return retry.Config{
 		Type: "exponential",
 		ExponentialBackoff: &retry.ExponentialBackoffConfig{
