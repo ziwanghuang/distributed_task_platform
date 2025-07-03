@@ -1,3 +1,4 @@
+//nolint:contextcheck // 忽略
 package scheduler
 
 import (
@@ -17,13 +18,14 @@ import (
 	"gitee.com/flycash/distributed_task_platform/scheduler/executor"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/ecodeclub/mq-api"
+	"github.com/gotomicro/ego/core/constant"
 	"github.com/gotomicro/ego/core/elog"
-	"github.com/gotomicro/ego/core/standard"
+	"github.com/gotomicro/ego/server"
 	"go.uber.org/multierr"
 	"golang.org/x/sync/semaphore"
 )
 
-var _ standard.Component = &Scheduler{}
+var _ server.Server = &Scheduler{}
 
 type result struct {
 	state domain.ExecutionState
@@ -55,16 +57,16 @@ type Scheduler struct {
 
 // Config 调度器配置
 type Config struct {
-	BatchTimeout        time.Duration
-	BatchSize           int           // 批量获取任务数量
-	PreemptedTimeout    time.Duration // 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
-	ScheduleInterval    time.Duration // 调度间隔
-	RenewInterval       time.Duration // 续约间隔
-	MaxConcurrentTasks  int64         // 最大并发任务数
-	TokenAcquireTimeout time.Duration // 抢令牌超时时间
-	PollInterval        time.Duration // 轮询间隔
-	PollTimeout         time.Duration // 轮询超时
-	ReportTimeout       time.Duration
+	BatchTimeout        time.Duration `yaml:"batchTimeout"`
+	BatchSize           int           `yaml:"batchSize"`           // 批量获取任务数量
+	PreemptedTimeout    time.Duration `yaml:"preemptedTimeout"`    // 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
+	ScheduleInterval    time.Duration `yaml:"scheduleInterval"`    // 调度间隔
+	RenewInterval       time.Duration `yaml:"renewInterval"`       // 续约间隔
+	MaxConcurrentTasks  int64         `yaml:"maxConcurrentTasks"`  // 最大并发任务数
+	TokenAcquireTimeout time.Duration `yaml:"tokenAcquireTimeout"` // 抢令牌超时时间
+	PollInterval        time.Duration `yaml:"pollInterval"`        // 轮询间隔
+	PollTimeout         time.Duration `yaml:"pollTimeout"`         // 轮询超时
+	ReportTimeout       time.Duration `yaml:"reportTimeout"`
 }
 
 // NewScheduler 创建调度器实例
@@ -95,6 +97,10 @@ func NewScheduler(
 	}
 }
 
+func (s *Scheduler) NodeID() string {
+	return s.nodeID
+}
+
 func (s *Scheduler) Name() string {
 	return fmt.Sprintf("Scheduler-%s", s.nodeID)
 }
@@ -121,19 +127,18 @@ func (s *Scheduler) Start() error {
 	var err error
 	for key := range s.consumers {
 		switch key {
-		case "executionReport":
+		case "executionReportEvent":
 			err = s.consumers[key].Start(s.ctx, s.consumeExecutionReportEvent)
 			if err != nil {
 				return err
 			}
-		case "executionBatchReport":
+		case "executionBatchReportEvent":
 			err = s.consumers[key].Start(s.ctx, s.consumeExecutionBatchReportEvent)
 			if err != nil {
 				return err
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -306,7 +311,8 @@ func (s *Scheduler) taskExecutionHandleLoop(execution domain.TaskExecution, hand
 		return
 	}
 
-	resultChan := make(chan *result, 10)
+	const resultChanBufferSize = 10
+	resultChan := make(chan *result, resultChanBufferSize)
 
 	// 远程任务需要轮询
 	if execution.Task.ExecutionMethod.IsRemote() {
@@ -452,9 +458,9 @@ func (s *Scheduler) pollingLoop() {
 				case <-s.ctx.Done():
 					return true
 				case <-time.After(s.config.ReportTimeout):
-					err = multierr.Append(err, fmt.Errorf("处理上报超时: taskID=%d, executionID = %d",
-						state.TaskID,
-						state.ID))
+					s.logger.Error("处理上报超时",
+						elog.Int64("taskID", state.TaskID),
+						elog.Int64("executionID", state.ID))
 				case value.resultChan <- &result{state: state}:
 				}
 
@@ -623,14 +629,6 @@ func (s *Scheduler) consumeExecutionBatchReportEvent(ctx context.Context, messag
 			elog.FieldErr(err))
 		return err
 	}
-	return nil
-}
-
-// Stop 停止调度器
-func (s *Scheduler) Stop() error {
-	s.logger.Info("停止分布式任务调度器", elog.String("nodeID", s.nodeID))
-	// 取消上下文
-	s.cancel()
 	return nil
 }
 
@@ -805,4 +803,43 @@ func (s *Scheduler) updateRetryingExecutionState(ctx context.Context, execution 
 	default:
 		return fmt.Errorf("重试任务不支持的状态转换：%s → %s", execution.Status.String(), targetState.Status.String())
 	}
+}
+
+// Stop 停止调度器
+func (s *Scheduler) Stop() error {
+	s.logger.Info("停止分布式任务调度器", elog.String("nodeID", s.nodeID))
+	// 取消上下文
+	s.cancel()
+	return nil
+}
+
+func (s *Scheduler) GracefulStop(ctx context.Context) error {
+	s.logger.Info("停止分布式任务调度器", elog.String("nodeID", s.nodeID))
+
+	// 关闭消费者
+	for key := range s.consumers {
+		err := s.consumers[key].Stop()
+		if err != nil {
+			s.logger.Error("关闭消费者失败",
+				elog.String("name", s.consumers[key].Name()),
+				elog.FieldErr(err))
+		} else {
+			s.logger.Info("关闭消费者成功",
+				elog.String("name", s.consumers[key].Name()),
+			)
+		}
+	}
+
+	s.cancel()
+	<-ctx.Done()
+	return nil
+}
+
+func (s *Scheduler) Info() *server.ServiceInfo {
+	info := server.ApplyOptions(
+		server.WithName(s.Name()),
+		server.WithKind(constant.ServiceProvider),
+	)
+	info.Healthy = s.ctx.Err() == nil
+	return &info
 }

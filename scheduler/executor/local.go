@@ -9,12 +9,14 @@ import (
 
 var _ Executor = &LocalExecutor{}
 
+type LocalExecuteFunc func(ctx context.Context, execution domain.TaskExecution) (domain.ExecutionState, error)
+
 // LocalExecutor 本地执行器
 type LocalExecutor struct {
-	fns map[string]func(ctx context.Context, execution domain.TaskExecution) (domain.ExecutionState, error)
+	fns map[string]LocalExecuteFunc
 }
 
-func NewLocalExecutor(fns map[string]func(ctx context.Context, execution domain.TaskExecution) (domain.ExecutionState, error)) *LocalExecutor {
+func NewLocalExecutor(fns map[string]LocalExecuteFunc) *LocalExecutor {
 	return &LocalExecutor{fns: fns}
 }
 

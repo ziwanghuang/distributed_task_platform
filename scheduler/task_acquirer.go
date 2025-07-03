@@ -25,7 +25,7 @@ type MySQLTaskAcquirer struct {
 }
 
 // NewTaskAcquirer 创建TaskAcquirer实例
-func NewTaskAcquirer(taskSvc task.Service) TaskAcquirer {
+func NewTaskAcquirer(taskSvc task.Service) *MySQLTaskAcquirer {
 	return &MySQLTaskAcquirer{
 		taskSvc: taskSvc,
 	}

@@ -67,15 +67,16 @@ func (r *RemoteExecutor) sendGRPCRequest(ctx context.Context, exec *domain.TaskE
 }
 
 // sendHTTPRequest 发送HTTP执行请求
-func (r *RemoteExecutor) sendHTTPRequest(_ context.Context, exec *domain.TaskExecution) (domain.ExecutionState, error) {
+func (r *RemoteExecutor) sendHTTPRequest(ctx context.Context, exec *domain.TaskExecution) (domain.ExecutionState, error) {
 	// TODO: 实现HTTP客户端调用，当前为占位实现
 	r.logger.Warn("HTTP执行方式尚未完全实现，使用占位逻辑",
 		elog.Int64("taskId", exec.Task.ID),
 		elog.String("endpoint", exec.Task.HTTPConfig.Endpoint))
 
 	// 创建HTTP客户端，设置合理的超时时间
+	const timeout = 30 * time.Second
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 	}
 
 	// 构造请求参数 - 使用实际的任务参数而非硬编码数据
@@ -90,12 +91,16 @@ func (r *RemoteExecutor) sendHTTPRequest(_ context.Context, exec *domain.TaskExe
 	if err != nil {
 		return domain.ExecutionState{}, fmt.Errorf("序列化请求参数失败: %w", err)
 	}
+
+	// 创建带有context的HTTP请求
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, exec.Task.HTTPConfig.Endpoint, strings.NewReader(string(jsonBytes)))
+	if err != nil {
+		return domain.ExecutionState{}, fmt.Errorf("创建HTTP请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
 	// 发送POST请求到执行节点
-	resp, err := client.Post(
-		exec.Task.HTTPConfig.Endpoint,
-		"application/json",
-		strings.NewReader(string(jsonBytes)),
-	)
+	resp, err := client.Do(req)
 	if err != nil {
 		return domain.ExecutionState{}, fmt.Errorf("发送HTTP请求失败: %w", err)
 	}

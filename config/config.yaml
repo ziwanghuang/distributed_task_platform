@@ -22,14 +22,40 @@ cache:
   valueExpiration: 600000000000
 
 server:
-  webhook:
-    port: 8001
-    rebalancePercent: 0.5
+  scheduler:
+    grpc:
+      host: "0.0.0.0"
+      port: 9002
   governor:
     host: "0.0.0.0"
     port: 9003
-  websocket:
-    host: "0.0.0.0"
-    port: 9002
+  executor:
+    grpc:
+      host: "0.0.0.0"
+      port: 9004
 
+scheduler:
+  batchTimeout: 3000000000
+  batchSize: 100
+  preemptedTimeout: 600000000000 # 10m
+  scheduleInterval: 10000000000
+  renewInterval: 5000000000
+  maxConcurrentTasks: 1000
+  tokenAcquireTimeout: 3000000000
+  pollInterval: 1000000000
+  reportTimeout: 10000000000
 
+compensator:
+  retry:
+    maxRetryCount: 3
+    prepareTimeoutWindowMs: 10000000000
+    batchSize: 100
+    minDuration: 1000000000
+
+executionReportEvent:
+  topic: "execution_report"
+  partitions: 2
+
+executionBatchReportEvent:
+  topic: "execution_batch_report"
+  partitions: 2

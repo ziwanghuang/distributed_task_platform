@@ -30,12 +30,10 @@ type RetryCompensator struct {
 
 // Config 重试补偿器配置
 type Config struct {
-	MaxRetryCount          int64         // 最大重试次数
-	PrepareTimeoutMs       int64         // PREPARE状态超时时间（毫秒）
-	PrepareTimeoutWindowMs int64         // PREPARE状态超时窗口
-	BatchSize              int           // 批量处理大小
-	MinDuration            time.Duration // 最小等待时间，防止空转
-	CompensateInterval     time.Duration // 补偿间隔
+	MaxRetryCount          int64         `yaml:"maxRetryCount"`          // 最大重试次数
+	PrepareTimeoutWindowMs int64         `yaml:"prepareTimeoutWindowMs"` // PREPARE状态超时窗口
+	BatchSize              int           `yaml:"batchSize"`              // 批量处理大小
+	MinDuration            time.Duration `yaml:"minDuration"`            // 最小等待时间，防止空转
 }
 
 // NewRetryCompensator 创建重试补偿器
