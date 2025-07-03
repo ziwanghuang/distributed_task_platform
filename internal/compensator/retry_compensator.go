@@ -24,7 +24,7 @@ type RetryCompensator struct {
 	taskSvc   task.Service
 	execSvc   task.ExecutionService
 	scheduler *scheduler.Scheduler
-	config    *Config
+	config    Config
 	logger    *elog.Component
 }
 
@@ -41,7 +41,7 @@ func NewRetryCompensator(
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	scheduler *scheduler.Scheduler,
-	config *Config,
+	config Config,
 ) *RetryCompensator {
 	return &RetryCompensator{
 		taskSvc:   taskSvc,

@@ -12,8 +12,8 @@ func InitRetryCompensator(
 	execSvc task.ExecutionService,
 	scheduler *scheduler.Scheduler,
 ) *compensator.RetryCompensator {
-	var cfg *compensator.Config
-	err := econf.UnmarshalKey("compensator.retry", cfg)
+	var cfg compensator.Config
+	err := econf.UnmarshalKey("compensator.retry", &cfg)
 	if err != nil {
 		panic(err)
 	}

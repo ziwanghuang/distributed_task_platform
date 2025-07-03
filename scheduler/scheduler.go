@@ -49,7 +49,7 @@ type Scheduler struct {
 	executors        map[string]executor.Executor
 	consumers        map[string]*event.Consumer                      // 消费者
 	grpcClients      *grpc.Clients[executorv1.ExecutorServiceClient] // gRPC客户端池
-	config           *Config                                         // 配置
+	config           Config                                          // 配置
 	ctx              context.Context
 	cancel           context.CancelFunc
 	logger           *elog.Component
@@ -78,7 +78,7 @@ func NewScheduler(
 	executors map[string]executor.Executor,
 	consumers map[string]*event.Consumer,
 	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
-	config *Config,
+	config Config,
 ) *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Scheduler{
@@ -144,11 +144,16 @@ func (s *Scheduler) Start() error {
 
 // scheduleLoop 主调度循环
 func (s *Scheduler) scheduleLoop() {
+	s.logger.Info("启动调度循环中.....")
+	defer func() {
+		s.logger.Info("退出调度循环中.....")
+	}()
 	ticker := time.NewTicker(s.config.ScheduleInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
+			s.logger.Info("开始一次调度")
 			if err := s.schedule(); err != nil {
 				s.logger.Error("本次调度失败", elog.FieldErr(err))
 			}
@@ -169,7 +174,7 @@ func (s *Scheduler) schedule() error {
 		return fmt.Errorf("获取可调度任务失败: %w", err)
 	}
 	if len(tasks) == 0 {
-		s.logger.Debug("没有可调度的任务")
+		s.logger.Info("没有可调度的任务")
 		return nil
 	}
 
@@ -209,7 +214,12 @@ func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
 	}
 
 	// 抢占成功，立即创建TaskExecution记录
-	execution, err := s.createTaskExecution(task)
+	execution, err := s.execSvc.Create(s.ctx, domain.TaskExecution{
+		Task: task,
+		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
+		StartTime: time.Now().UnixMilli(),
+		Status:    domain.TaskExecutionStatusPrepare,
+	})
 	if err != nil {
 		s.logger.Error("创建任务执行记录失败",
 			elog.Int64("taskID", task.ID),
@@ -259,17 +269,6 @@ func (s *Scheduler) acquireTokenAndTask(ctx context.Context, task domain.Task) (
 
 	// 抢占成功
 	return true, nil
-}
-
-// createTaskExecution 创建任务执行记录
-func (s *Scheduler) createTaskExecution(task domain.Task) (domain.TaskExecution, error) {
-	execution := domain.TaskExecution{
-		Task: task,
-		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
-		StartTime: time.Now().UnixMilli(),
-		Status:    domain.TaskExecutionStatusPrepare,
-	}
-	return s.execSvc.Create(s.ctx, execution)
 }
 
 // releaseTokenAndTask 释放令牌和任务锁
@@ -429,12 +428,17 @@ func (s *Scheduler) updateSchedulingExecutionState(ctx context.Context, status d
 
 // pollingLoop 轮询循环，每隔一段时间轮询所有 remoteExecutions
 func (s *Scheduler) pollingLoop() {
+	s.logger.Info("启动轮询循环中.....")
+	defer func() {
+		s.logger.Info("退出轮询循环中.....")
+	}()
 	ticker := time.NewTicker(s.config.PollInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			// 遍历所有需要轮询的executions
+			s.logger.Info("开始新一轮执行状态轮询.....")
 			s.remoteExecutions.Range(func(_ int64, value *executionContext) bool {
 				exec := value.execution
 				ctx, cancel := context.WithTimeout(context.Background(), s.config.PollTimeout)
@@ -632,35 +636,6 @@ func (s *Scheduler) consumeExecutionBatchReportEvent(ctx context.Context, messag
 	return nil
 }
 
-func (s *Scheduler) RescheduleNow(ctx context.Context, taskID int64, rescheduleParams map[string]string) {
-	tk, err := s.taskSvc.GetByID(ctx, taskID)
-	if err != nil {
-		s.logger.Error("查找Task失败", elog.FieldErr(err))
-		return
-	}
-	// 更新调度参数
-	err = s.taskSvc.UpdateScheduleParams(ctx, tk.ID, tk.Version, rescheduleParams)
-	if err != nil {
-		s.logger.Error("更新调度信息失败", elog.FieldErr(err))
-		return
-	}
-	// 立即开始重调度
-	success, err := s.scheduleTask(tk)
-	if err != nil {
-		s.logger.Error("重调度任务失败",
-			elog.Int64("taskID", tk.ID),
-			elog.String("taskName", tk.Name),
-			elog.FieldErr(err))
-		return
-	}
-	if !success {
-		s.logger.Warn("重调度任务失败",
-			elog.Int64("taskID", tk.ID),
-			elog.String("taskName", tk.Name))
-		return
-	}
-}
-
 // RetryTaskExecution 重试任务执行 - 原始版本
 func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) (bool, error) {
 	tk := execution.Task
@@ -759,7 +734,7 @@ func (s *Scheduler) handleRetryingTaskExecutionFunc(ctx context.Context, res *re
 }
 
 func (s *Scheduler) updateRetryingExecutionState(ctx context.Context, execution *domain.TaskExecution, targetState domain.ExecutionState) error {
-	// 重试任务的状态转换逻辑，使用真正的重试策略
+	// 重试任务的状态转换逻辑
 	switch {
 	// FAILED_RETRYABLE → RUNNING：重试任务开始执行
 	case execution.Status.IsFailedRetryable() && targetState.Status.IsRunning():
@@ -802,6 +777,35 @@ func (s *Scheduler) updateRetryingExecutionState(ctx context.Context, execution 
 		return s.execSvc.UpdateRetryResult(ctx, execution.ID, execution.RetryCount, execution.NextRetryTime, execution.EndTime, execution.Status)
 	default:
 		return fmt.Errorf("重试任务不支持的状态转换：%s → %s", execution.Status.String(), targetState.Status.String())
+	}
+}
+
+func (s *Scheduler) RescheduleNow(ctx context.Context, taskID int64, rescheduleParams map[string]string) {
+	tk, err := s.taskSvc.GetByID(ctx, taskID)
+	if err != nil {
+		s.logger.Error("查找Task失败", elog.FieldErr(err))
+		return
+	}
+	// 更新调度参数
+	err = s.taskSvc.UpdateScheduleParams(ctx, tk.ID, tk.Version, rescheduleParams)
+	if err != nil {
+		s.logger.Error("更新调度信息失败", elog.FieldErr(err))
+		return
+	}
+	// 立即开始重调度
+	success, err := s.scheduleTask(tk)
+	if err != nil {
+		s.logger.Error("重调度任务失败",
+			elog.Int64("taskID", tk.ID),
+			elog.String("taskName", tk.Name),
+			elog.FieldErr(err))
+		return
+	}
+	if !success {
+		s.logger.Warn("重调度任务失败",
+			elog.Int64("taskID", tk.ID),
+			elog.String("taskName", tk.Name))
+		return
 	}
 }
 

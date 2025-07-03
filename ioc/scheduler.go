@@ -24,8 +24,8 @@ func InitScheduler(
 	consumers map[string]*event.Consumer,
 	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
 ) *scheduler.Scheduler {
-	var cfg *scheduler.Config
-	err := econf.UnmarshalKey("scheduler", cfg)
+	var cfg scheduler.Config
+	err := econf.UnmarshalKey("scheduler", &cfg)
 	if err != nil {
 		panic(err)
 	}

@@ -166,7 +166,7 @@ func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, pr
 	now := time.Now().UnixMilli()
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
-		Where("id = ? AND status = ?", id, "PREPARE").
+		Where("id = ? AND (status = ? OR status = ?) ", id, "PREPARE", "FAILED_RETRYABLE").
 		Updates(map[string]any{
 			"status":           "RUNNING",
 			"running_progress": progress,

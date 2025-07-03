@@ -1,6 +1,9 @@
 log:
   debug: true
 
+mysql:
+  dsn: "root:root@tcp(localhost:13316)/task?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true"
+
 redis:
   addr: "localhost:6379"
 
