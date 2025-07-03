@@ -17,10 +17,6 @@ service ReporterService {
 // 异步 Kafka 消息定义参考这个
 message ReportRequest {
   executor.v1.ExecutionState execution_state = 1;
-  // 执行节点请求调度节点执行重调度，
-  // 调度节点无需调interrupt，调度节点可以直接重调度，因为此时执行节点必然已经停止了
-  bool request_reschedule = 2;
-  map<string, string> rescheduled_params = 3;
 }
 
 message ReportResponse {}

@@ -32,29 +32,30 @@ func NewReporterServer(
 
 // Report 单个上报进度
 func (s *ReporterServer) Report(ctx context.Context, req *reporterv1.ReportRequest) (*reporterv1.ReportResponse, error) {
-	if req.ExecutionState == nil {
+	state := req.ExecutionState
+	if state == nil {
 		s.logger.Warn("收到空的执行状态上报请求")
 		return &reporterv1.ReportResponse{}, nil
 	}
 
 	s.logger.Info("收到执行状态上报请求",
-		elog.Int64("executionId", req.ExecutionState.Id),
-		elog.String("taskName", req.ExecutionState.TaskName),
-		elog.String("status", req.ExecutionState.Status.String()),
-		elog.String("requestReschedule", fmt.Sprintf("%v", req.RequestReschedule)))
+		elog.Int64("executionId", state.Id),
+		elog.String("taskName", state.TaskName),
+		elog.String("status", state.Status.String()),
+		elog.String("requestReschedule", fmt.Sprintf("%v", state.RequestReschedule)))
 
 	// 调用业务处理方法
 	err := s.handleReports(ctx, s.toDomainReports([]*reporterv1.ReportRequest{req}))
 	if err != nil {
 		s.logger.Error("处理执行状态上报失败",
-			elog.Int64("executionId", req.ExecutionState.Id),
-			elog.String("taskName", req.ExecutionState.TaskName),
+			elog.Int64("executionId", state.Id),
+			elog.String("taskName", state.TaskName),
 			elog.FieldErr(err))
 		return nil, status.Error(codes.Internal, "处理失败")
 	}
 
 	s.logger.Debug("执行状态上报处理成功",
-		elog.Int64("executionId", req.ExecutionState.Id))
+		elog.Int64("executionId", state.Id))
 	return &reporterv1.ReportResponse{}, nil
 }
 
@@ -62,9 +63,7 @@ func (s *ReporterServer) Report(ctx context.Context, req *reporterv1.ReportReque
 func (s *ReporterServer) toDomainReports(reqs []*reporterv1.ReportRequest) []*domain.Report {
 	return slice.Map(reqs, func(_ int, src *reporterv1.ReportRequest) *domain.Report {
 		return &domain.Report{
-			ExecutionState:    domain.ExecutionStateFromProto(src.GetExecutionState()),
-			RequestReschedule: src.GetRequestReschedule(),
-			RescheduleParams:  src.GetRescheduledParams(),
+			ExecutionState: domain.ExecutionStateFromProto(src.GetExecutionState()),
 		}
 	})
 }

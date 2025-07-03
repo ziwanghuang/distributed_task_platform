@@ -86,10 +86,6 @@ func (m *ReportRequest) validate(all bool) error {
 		}
 	}
 
-	// no validation rules for RequestReschedule
-
-	// no validation rules for RescheduledParams
-
 	if len(errors) > 0 {
 		return ReportRequestMultiError(errors)
 	}

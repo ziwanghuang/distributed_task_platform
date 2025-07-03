@@ -780,33 +780,71 @@ func (s *Scheduler) updateRetryingExecutionState(ctx context.Context, execution 
 	}
 }
 
-func (s *Scheduler) RescheduleNow(ctx context.Context, taskID int64, rescheduleParams map[string]string) {
-	tk, err := s.taskSvc.GetByID(ctx, taskID)
+func (s *Scheduler) InterruptTaskExecution(ctx context.Context, execution *domain.TaskExecution) error {
+	if execution.Task.GrpcConfig == nil {
+		return fmt.Errorf("未找到GPRC配置，无法执行中断任务")
+	}
+
+	client := s.grpcClients.Get(execution.Task.GrpcConfig.ServiceName)
+	resp, err := client.Interrupt(ctx, &executorv1.InterruptRequest{
+		Eid: execution.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("发送中断请求失败：%w", err)
+	}
+
+	state := domain.ExecutionStateFromProto(resp.GetExecutionState())
+	if !resp.GetSuccess() {
+		// 中断失败
+		return errs.ErrInterruptTaskExecutionFailed
+	}
+	// 等效于执行节点主动请求中断，因为此时执行节点已经停止了。
+	state.RequestReschedule = true
+	// 通知其退出调度循环
+	exeCtx, ok := s.remoteExecutions.Load(state.ID)
+	if ok {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%w: %w", errs.ErrRescheduleTaskExecutionFailed, ctx.Err())
+		case <-s.ctx.Done():
+			return fmt.Errorf("%w: %w", errs.ErrRescheduleTaskExecutionFailed, s.ctx.Err())
+		case exeCtx.resultChan <- &result{state: state}:
+			// 通知调度或者重试协程停止（释放Task），立即重调度
+			return s.RescheduleNow(ctx, state)
+		}
+	}
+	return nil
+}
+
+func (s *Scheduler) RescheduleNow(ctx context.Context, state domain.ExecutionState) error {
+	tk, err := s.taskSvc.GetByID(ctx, state.TaskID)
 	if err != nil {
 		s.logger.Error("查找Task失败", elog.FieldErr(err))
-		return
+		return err
 	}
 	// 更新调度参数
-	err = s.taskSvc.UpdateScheduleParams(ctx, tk.ID, tk.Version, rescheduleParams)
+	err = s.taskSvc.UpdateScheduleParams(ctx, tk.ID, tk.Version, state.RescheduleParams)
 	if err != nil {
 		s.logger.Error("更新调度信息失败", elog.FieldErr(err))
-		return
+		return err
 	}
 	// 立即开始重调度
+	tk.Version++
 	success, err := s.scheduleTask(tk)
 	if err != nil {
 		s.logger.Error("重调度任务失败",
 			elog.Int64("taskID", tk.ID),
 			elog.String("taskName", tk.Name),
 			elog.FieldErr(err))
-		return
+		return err
 	}
 	if !success {
 		s.logger.Warn("重调度任务失败",
 			elog.Int64("taskID", tk.ID),
 			elog.String("taskName", tk.Name))
-		return
+		return errs.ErrRescheduleTaskExecutionFailed
 	}
+	return nil
 }
 
 // Stop 停止调度器

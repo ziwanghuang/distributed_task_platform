@@ -21,6 +21,16 @@ message ExecutionState {
   // 0-100 的数字。代表进度
   // RUNNING 状态才有意义
   int32 running_progress = 5;
+  // 执行节点请求调度节点执行重调度，
+  // 调度节点无需调interrupt，调度节点可以直接重调度，因为此时执行节点必然已经停止了
+  bool request_reschedule = 6;
+  // 重调度（执行节点主动提出）或者中断后的恢复参数（调度节点主动要求）
+  // 用于重调度或中断恢复重新调度的参数
+  // 比如：调用 A 节点上，中断任务
+  // A 节点返回 offset = 10000, limit = 100
+  // 你后续重调度到 B 节点上，
+  // 传递给 B 节点的 ExecuteRequest 的 params 里面就包含 offset, limit
+  map<string, string> rescheduled_params = 7;
 }
 
 // ExecutorService 执行节点需要实现的接口，以便调度节点可以通知执行节点执行任务、中断任务及查询任务执行状态。
@@ -53,14 +63,7 @@ message InterruptRequest {
 }
 
 message InterruptResponse {
-  bool succeed = 1; // 是否成功中断
-  // 中断时刻的恢复参数，用于重调度
-  // 恢复重新调度的参数
-  // 调用 A 节点上，中断任务
-  // A 节点返回 offset = 10000, limit = 100
-  // 你后续重调度到 B 节点上，
-  // 传递给 B 节点的 ExecuteRequest 的 params 里面就包含 offset, limit
-  map<string, string> rescheduled_params = 2;
+  bool success = 1; // 是否成功中断
   ExecutionState execution_state = 3;
 }
 

@@ -3,9 +3,6 @@ package domain
 // Report 进度上报结构
 type Report struct {
 	ExecutionState ExecutionState `json:"executionState"`
-	// 执行节点请求调度节点执行重调度，调度节点无需调interrupt，调度节点可以直接重调度，因为此时执行节点必然已经停止了
-	RequestReschedule bool              `json:"requestReschedule"`
-	RescheduleParams  map[string]string `json:"rescheduleParams"`
 }
 
 type ExecutionState struct {
@@ -14,6 +11,9 @@ type ExecutionState struct {
 	TaskName        string              `json:"taskName"`        // 任务名称
 	Status          TaskExecutionStatus `json:"status"`          // 执行状态
 	RunningProgress int32               `json:"runningProgress"` // 进度 0-100，RUNNING 状态才有意义
+	// 执行节点请求调度节点执行重调度，调度节点无需调interrupt，调度节点可以直接重调度，因为此时执行节点必然已经停止了
+	RequestReschedule bool              `json:"requestReschedule"`
+	RescheduleParams  map[string]string `json:"rescheduleParams"`
 }
 
 type BatchReport struct {

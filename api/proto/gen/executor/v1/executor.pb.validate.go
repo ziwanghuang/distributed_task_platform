@@ -67,6 +67,10 @@ func (m *ExecutionState) validate(all bool) error {
 
 	// no validation rules for RunningProgress
 
+	// no validation rules for RequestReschedule
+
+	// no validation rules for RescheduledParams
+
 	if len(errors) > 0 {
 		return ExecutionStateMultiError(errors)
 	}
@@ -506,9 +510,7 @@ func (m *InterruptResponse) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Succeed
-
-	// no validation rules for RescheduledParams
+	// no validation rules for Success
 
 	if all {
 		switch v := interface{}(m.GetExecutionState()).(type) {

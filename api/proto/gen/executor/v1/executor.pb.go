@@ -87,8 +87,18 @@ type ExecutionState struct {
 	// 0-100 的数字。代表进度
 	// RUNNING 状态才有意义
 	RunningProgress int32 `protobuf:"varint,5,opt,name=running_progress,json=runningProgress,proto3" json:"running_progress,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 执行节点请求调度节点执行重调度，
+	// 调度节点无需调interrupt，调度节点可以直接重调度，因为此时执行节点必然已经停止了
+	RequestReschedule bool `protobuf:"varint,6,opt,name=request_reschedule,json=requestReschedule,proto3" json:"request_reschedule,omitempty"`
+	// 重调度（执行节点主动提出）或者中断后的恢复参数（调度节点主动要求）
+	// 用于重调度或中断恢复重新调度的参数
+	// 比如：调用 A 节点上，中断任务
+	// A 节点返回 offset = 10000, limit = 100
+	// 你后续重调度到 B 节点上，
+	// 传递给 B 节点的 ExecuteRequest 的 params 里面就包含 offset, limit
+	RescheduledParams map[string]string `protobuf:"bytes,7,rep,name=rescheduled_params,json=rescheduledParams,proto3" json:"rescheduled_params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ExecutionState) Reset() {
@@ -154,6 +164,20 @@ func (x *ExecutionState) GetRunningProgress() int32 {
 		return x.RunningProgress
 	}
 	return 0
+}
+
+func (x *ExecutionState) GetRequestReschedule() bool {
+	if x != nil {
+		return x.RequestReschedule
+	}
+	return false
+}
+
+func (x *ExecutionState) GetRescheduledParams() map[string]string {
+	if x != nil {
+		return x.RescheduledParams
+	}
+	return nil
 }
 
 type ExecuteRequest struct {
@@ -317,18 +341,11 @@ func (x *InterruptRequest) GetEid() int64 {
 }
 
 type InterruptResponse struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
-	Succeed bool                   `protobuf:"varint,1,opt,name=succeed,proto3" json:"succeed,omitempty"` // 是否成功中断
-	// 中断时刻的恢复参数，用于重调度
-	// 恢复重新调度的参数
-	// 调用 A 节点上，中断任务
-	// A 节点返回 offset = 10000, limit = 100
-	// 你后续重调度到 B 节点上，
-	// 传递给 B 节点的 ExecuteRequest 的 params 里面就包含 offset, limit
-	RescheduledParams map[string]string `protobuf:"bytes,2,rep,name=rescheduled_params,json=rescheduledParams,proto3" json:"rescheduled_params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	ExecutionState    *ExecutionState   `protobuf:"bytes,3,opt,name=execution_state,json=executionState,proto3" json:"execution_state,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Success        bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"` // 是否成功中断
+	ExecutionState *ExecutionState        `protobuf:"bytes,3,opt,name=execution_state,json=executionState,proto3" json:"execution_state,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *InterruptResponse) Reset() {
@@ -361,18 +378,11 @@ func (*InterruptResponse) Descriptor() ([]byte, []int) {
 	return file_executor_v1_executor_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *InterruptResponse) GetSucceed() bool {
+func (x *InterruptResponse) GetSuccess() bool {
 	if x != nil {
-		return x.Succeed
+		return x.Success
 	}
 	return false
-}
-
-func (x *InterruptResponse) GetRescheduledParams() map[string]string {
-	if x != nil {
-		return x.RescheduledParams
-	}
-	return nil
 }
 
 func (x *InterruptResponse) GetExecutionState() *ExecutionState {
@@ -474,13 +484,18 @@ var File_executor_v1_executor_proto protoreflect.FileDescriptor
 
 const file_executor_v1_executor_proto_rawDesc = "" +
 	"\n" +
-	"\x1aexecutor/v1/executor.proto\x12\vexecutor.v1\"\xb7\x01\n" +
+	"\x1aexecutor/v1/executor.proto\x12\vexecutor.v1\"\x8f\x03\n" +
 	"\x0eExecutionState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
 	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12\x1b\n" +
 	"\ttask_name\x18\x03 \x01(\tR\btaskName\x124\n" +
 	"\x06status\x18\x04 \x01(\x0e2\x1c.executor.v1.ExecutionStatusR\x06status\x12)\n" +
-	"\x10running_progress\x18\x05 \x01(\x05R\x0frunningProgress\"\xd4\x01\n" +
+	"\x10running_progress\x18\x05 \x01(\x05R\x0frunningProgress\x12-\n" +
+	"\x12request_reschedule\x18\x06 \x01(\bR\x11requestReschedule\x12a\n" +
+	"\x12rescheduled_params\x18\a \x03(\v22.executor.v1.ExecutionState.RescheduledParamsEntryR\x11rescheduledParams\x1aD\n" +
+	"\x16RescheduledParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd4\x01\n" +
 	"\x0eExecuteRequest\x12\x10\n" +
 	"\x03eid\x18\x01 \x01(\x03R\x03eid\x12\x17\n" +
 	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12\x1b\n" +
@@ -492,14 +507,10 @@ const file_executor_v1_executor_proto_rawDesc = "" +
 	"\x0fExecuteResponse\x12D\n" +
 	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState\"$\n" +
 	"\x10InterruptRequest\x12\x10\n" +
-	"\x03eid\x18\x01 \x01(\x03R\x03eid\"\x9f\x02\n" +
+	"\x03eid\x18\x01 \x01(\x03R\x03eid\"s\n" +
 	"\x11InterruptResponse\x12\x18\n" +
-	"\asucceed\x18\x01 \x01(\bR\asucceed\x12d\n" +
-	"\x12rescheduled_params\x18\x02 \x03(\v25.executor.v1.InterruptResponse.RescheduledParamsEntryR\x11rescheduledParams\x12D\n" +
-	"\x0fexecution_state\x18\x03 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState\x1aD\n" +
-	"\x16RescheduledParamsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\" \n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12D\n" +
+	"\x0fexecution_state\x18\x03 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState\" \n" +
 	"\fQueryRequest\x12\x10\n" +
 	"\x03eid\x18\x01 \x01(\x03R\x03eid\"U\n" +
 	"\rQueryResponse\x12D\n" +
@@ -541,16 +552,16 @@ var (
 		(*InterruptResponse)(nil), // 5: executor.v1.InterruptResponse
 		(*QueryRequest)(nil),      // 6: executor.v1.QueryRequest
 		(*QueryResponse)(nil),     // 7: executor.v1.QueryResponse
-		nil,                       // 8: executor.v1.ExecuteRequest.ParamsEntry
-		nil,                       // 9: executor.v1.InterruptResponse.RescheduledParamsEntry
+		nil,                       // 8: executor.v1.ExecutionState.RescheduledParamsEntry
+		nil,                       // 9: executor.v1.ExecuteRequest.ParamsEntry
 	}
 )
 
 var file_executor_v1_executor_proto_depIdxs = []int32{
 	0, // 0: executor.v1.ExecutionState.status:type_name -> executor.v1.ExecutionStatus
-	8, // 1: executor.v1.ExecuteRequest.params:type_name -> executor.v1.ExecuteRequest.ParamsEntry
-	1, // 2: executor.v1.ExecuteResponse.execution_state:type_name -> executor.v1.ExecutionState
-	9, // 3: executor.v1.InterruptResponse.rescheduled_params:type_name -> executor.v1.InterruptResponse.RescheduledParamsEntry
+	8, // 1: executor.v1.ExecutionState.rescheduled_params:type_name -> executor.v1.ExecutionState.RescheduledParamsEntry
+	9, // 2: executor.v1.ExecuteRequest.params:type_name -> executor.v1.ExecuteRequest.ParamsEntry
+	1, // 3: executor.v1.ExecuteResponse.execution_state:type_name -> executor.v1.ExecutionState
 	1, // 4: executor.v1.InterruptResponse.execution_state:type_name -> executor.v1.ExecutionState
 	1, // 5: executor.v1.QueryResponse.execution_state:type_name -> executor.v1.ExecutionState
 	2, // 6: executor.v1.ExecutorService.Execute:input_type -> executor.v1.ExecuteRequest

@@ -74,11 +74,13 @@ func TaskExecutionStatusFromProto(status executorv1.ExecutionStatus) TaskExecuti
 
 func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionState {
 	return ExecutionState{
-		ID:              protoState.GetId(),
-		TaskID:          protoState.GetTaskId(),
-		TaskName:        protoState.GetTaskName(),
-		Status:          TaskExecutionStatusFromProto(protoState.GetStatus()),
-		RunningProgress: protoState.GetRunningProgress(),
+		ID:                protoState.GetId(),
+		TaskID:            protoState.GetTaskId(),
+		TaskName:          protoState.GetTaskName(),
+		Status:            TaskExecutionStatusFromProto(protoState.GetStatus()),
+		RunningProgress:   protoState.GetRunningProgress(),
+		RequestReschedule: protoState.GetRequestReschedule(),
+		RescheduleParams:  protoState.GetRescheduledParams(),
 	}
 }
 
