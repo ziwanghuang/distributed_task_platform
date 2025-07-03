@@ -214,6 +214,7 @@ func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
 	}
 
 	// 抢占成功，立即创建TaskExecution记录
+	task.Version++
 	execution, err := s.execSvc.Create(s.ctx, domain.TaskExecution{
 		Task: task,
 		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
@@ -458,14 +459,13 @@ func (s *Scheduler) pollingLoop() {
 					elog.String("status", state.Status.String()),
 				)
 				// 推送轮询结果
-				select {
-				case <-s.ctx.Done():
-					return true
-				case <-time.After(s.config.ReportTimeout):
-					s.logger.Error("处理上报超时",
+				sendErr := s.trySendResult(context.Background(), value.resultChan, &result{state: state}, s.config.ReportTimeout)
+				if sendErr != nil {
+					s.logger.Warn("推送轮询结果失败",
 						elog.Int64("taskID", state.TaskID),
-						elog.Int64("executionID", state.ID))
-				case value.resultChan <- &result{state: state}:
+						elog.Int64("executionID", state.ID),
+						elog.String("timeout", s.config.ReportTimeout.String()),
+						elog.FieldErr(sendErr))
 				}
 
 				return true
@@ -473,6 +473,23 @@ func (s *Scheduler) pollingLoop() {
 		case <-s.ctx.Done():
 			return
 		}
+	}
+}
+
+// trySendResult 尝试发送结果到resultChan，支持超时和context取消
+func (s *Scheduler) trySendResult(ctx context.Context, resultChan chan<- *result, result *result, timeout time.Duration) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	select {
+	case <-s.ctx.Done():
+		// 调度器被停止
+		return s.ctx.Err()
+	case <-timeoutCtx.Done():
+		// 超时或外部context被取消
+		return timeoutCtx.Err()
+	case resultChan <- result:
+		// 成功发送
+		return nil
 	}
 }
 
@@ -581,15 +598,14 @@ func (s *Scheduler) HandleReports(_ context.Context, reports []*domain.Report) e
 		}
 
 		// 推送上报结果
-		select {
-		case <-s.ctx.Done():
-			return nil
-		case <-time.After(s.config.ReportTimeout):
-			err = multierr.Append(err, fmt.Errorf("处理上报超时: taskID=%d, executionID = %d",
-				report.ExecutionState.TaskID,
-				report.ExecutionState.ID))
-		case execCtx.resultChan <- &result{state: report.ExecutionState}:
+		sendErr := s.trySendResult(context.Background(), execCtx.resultChan, &result{state: report.ExecutionState}, s.config.ReportTimeout)
+		if sendErr == nil {
 			processedCount++
+		} else {
+			// 包装错误，添加上报场景的特定信息
+			wrappedErr := fmt.Errorf("处理上报超时: taskID=%d, executionID=%d: %w",
+				report.ExecutionState.TaskID, report.ExecutionState.ID, sendErr)
+			err = multierr.Append(err, wrappedErr)
 		}
 	}
 	// 记录处理统计信息
@@ -638,13 +654,12 @@ func (s *Scheduler) consumeExecutionBatchReportEvent(ctx context.Context, messag
 
 // RetryTaskExecution 重试任务执行 - 原始版本
 func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) (bool, error) {
-	tk := execution.Task
 	// 抢令牌和抢占任务
-	success, err := s.acquireTokenAndTask(s.ctx, tk)
+	success, err := s.acquireTokenAndTask(s.ctx, execution.Task)
 	if err != nil {
 		s.logger.Error("重试：任务抢占失败",
-			elog.Int64("taskID", tk.ID),
-			elog.String("taskName", tk.Name),
+			elog.Int64("taskID", execution.Task.ID),
+			elog.String("taskName", execution.Task.Name),
 			elog.FieldErr(err))
 		return false, err
 	}
@@ -652,11 +667,12 @@ func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) (bool, er
 		return false, nil
 	}
 	// 抢占成功，启动异步任务管理
-
+	execution.Task.Version++
 	// 是否有重试配置
 	if execution.Task.RetryConfig == nil {
 		execution.RetryCount++
 		_ = s.execSvc.UpdateRetryResult(s.ctx, execution.ID, execution.RetryCount, execution.NextRetryTime, time.Now().UnixMilli(), domain.TaskExecutionStatusFailed)
+		s.releaseTokenAndTask(execution.Task)
 		return false, fmt.Errorf("任务重试配置为空")
 	}
 	// 是否能够正常初始化
@@ -664,6 +680,7 @@ func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) (bool, er
 	if err != nil {
 		execution.RetryCount++
 		_ = s.execSvc.UpdateRetryResult(s.ctx, execution.ID, execution.RetryCount, execution.NextRetryTime, time.Now().UnixMilli(), domain.TaskExecutionStatusFailed)
+		s.releaseTokenAndTask(execution.Task)
 		return false, fmt.Errorf("创建重试策略失败: %w", err)
 	}
 
@@ -803,17 +820,20 @@ func (s *Scheduler) InterruptTaskExecution(ctx context.Context, execution *domai
 	// 通知其退出调度循环
 	exeCtx, ok := s.remoteExecutions.Load(state.ID)
 	if ok {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("%w: %w", errs.ErrRescheduleTaskExecutionFailed, ctx.Err())
-		case <-s.ctx.Done():
-			return fmt.Errorf("%w: %w", errs.ErrRescheduleTaskExecutionFailed, s.ctx.Err())
-		case exeCtx.resultChan <- &result{state: state}:
-			// 通知调度或者重试协程停止（释放Task），立即重调度
-			return s.RescheduleNow(ctx, state)
+		// 仍有调度或重试协程，通知其退出。
+		// 这里有一个假设 —— InterruptResp.Success = true 时，应该是"终止态" 成功，失败，可重试失败，最好给一个 INTERRUPT 状态。
+		sendErr := s.trySendResult(ctx, exeCtx.resultChan, &result{state: state}, s.config.ReportTimeout)
+		if sendErr != nil {
+			s.logger.Warn("推送中断结果失败",
+				elog.Int64("taskID", state.TaskID),
+				elog.Int64("executionID", state.ID),
+				elog.String("timeout", s.config.ReportTimeout.String()),
+				elog.FieldErr(sendErr))
+			// 不返回错误，开始重调度
 		}
 	}
-	return nil
+	// 通知调度或者重试协程停止（释放Task），立即重调度
+	return s.RescheduleNow(ctx, state)
 }
 
 func (s *Scheduler) RescheduleNow(ctx context.Context, state domain.ExecutionState) error {
