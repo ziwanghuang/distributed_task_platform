@@ -20,4 +20,10 @@ var (
 	ErrInvalidTaskCronExpr        = errors.New("无效的cron表达式")
 	ErrInvalidTaskScheduleNodeID  = errors.New("无效的调度节点ID")
 	ErrInvalidTaskExecutionMethod = errors.New("任务执行方式非法")
+
+	ErrSetExecutionStateRunningFailed        = errors.New("设置运行状态失败")
+	ErrUpdateExecutionStatusFailed           = errors.New("更新任务执行记录状态失败")
+	ErrUpdateExecutionStatusAndEndTimeFailed = errors.New("更新任务执行记录状态和结束时间失败")
+	ErrUpdateExecutionRunningProgressFailed  = errors.New("更新任务执行记录的运行状态失败")
+	ErrUpdateExecutionRetryResultFailed      = errors.New("更新任务执行记录的重试结果失败")
 )

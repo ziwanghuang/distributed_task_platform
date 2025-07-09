@@ -12,11 +12,11 @@ var _ TaskAcquirer = &MySQLTaskAcquirer{}
 // TaskAcquirer 任务抢占接口
 type TaskAcquirer interface {
 	// Acquire 抢占指定任务
-	Acquire(ctx context.Context, task domain.Task) error
+	Acquire(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error)
 	// Release 释放指定任务
-	Release(ctx context.Context, task domain.Task) error
+	Release(ctx context.Context, taskID int64, scheduleNodeID string) error
 	// Renew 续约指定任务
-	Renew(ctx context.Context, task domain.Task) error
+	Renew(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error)
 }
 
 // MySQLTaskAcquirer 基于MySQL实现的TaskAcquirer
@@ -31,17 +31,26 @@ func NewTaskAcquirer(taskSvc task.Service) *MySQLTaskAcquirer {
 	}
 }
 
-// Acquire 抢占指定任务
-func (t *MySQLTaskAcquirer) Acquire(ctx context.Context, task domain.Task) error {
-	return t.taskSvc.Acquire(ctx, task)
+// Acquire 抢占指定任务，返回抢占后的任务信息
+func (t *MySQLTaskAcquirer) Acquire(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error) {
+	tk, err := t.taskSvc.Acquire(ctx, taskID, scheduleNodeID)
+	if err != nil {
+		return nil, err
+	}
+	return &tk, nil
 }
 
 // Release 释放指定任务
-func (t *MySQLTaskAcquirer) Release(ctx context.Context, task domain.Task) error {
-	return t.taskSvc.Release(ctx, task)
+func (t *MySQLTaskAcquirer) Release(ctx context.Context, taskID int64, scheduleNodeID string) error {
+	_, err := t.taskSvc.Release(ctx, taskID, scheduleNodeID)
+	return err
 }
 
-// Renew 续约指定任务
-func (t *MySQLTaskAcquirer) Renew(ctx context.Context, task domain.Task) error {
-	return t.taskSvc.Renew(ctx, task)
+// Renew 续约指定任务，返回续约后的任务信息
+func (t *MySQLTaskAcquirer) Renew(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error) {
+	tk, err := t.taskSvc.Renew(ctx, taskID, scheduleNodeID)
+	if err != nil {
+		return nil, err
+	}
+	return &tk, nil
 }

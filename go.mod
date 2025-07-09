@@ -18,6 +18,7 @@ require (
 	golang.org/x/sync v0.15.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
+	gorm.io/gorm v1.26.0
 )
 
 require (
@@ -110,6 +111,5 @@ require (
 	gorm.io/driver/mysql v1.5.7 // indirect
 	gorm.io/driver/postgres v1.3.5 // indirect
 	gorm.io/driver/sqlserver v1.5.1 // indirect
-	gorm.io/gorm v1.26.0 // indirect
 	gorm.io/hints v1.1.2 // indirect
 )

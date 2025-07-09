@@ -18,15 +18,15 @@ type TaskRepository interface {
 	// SchedulableTasks 获取可调度的任务列表，preemptedTimeoutMs 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
 	SchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]domain.Task, error)
 	// Acquire 抢占任务
-	Acquire(ctx context.Context, task domain.Task) error
+	Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// Release 释放任务
-	Release(ctx context.Context, task domain.Task) error
+	Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// Renew 续约任务
-	Renew(ctx context.Context, task domain.Task) error
+	Renew(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// UpdateNextTime 更新任务的下次执行时间
-	UpdateNextTime(ctx context.Context, id, version, nextTime int64) error
+	UpdateNextTime(ctx context.Context, id, version, nextTime int64) (domain.Task, error)
 	// UpdateScheduleParams 更新调度参数
-	UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error
+	UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) (domain.Task, error)
 }
 
 type taskRepository struct {
@@ -58,29 +58,49 @@ func (r *taskRepository) SchedulableTasks(ctx context.Context, preemptedTimeoutM
 	if err != nil {
 		return nil, err
 	}
-	return slice.Map(tasks, func(_ int, src dao.Task) domain.Task {
+	return slice.Map(tasks, func(_ int, src *dao.Task) domain.Task {
 		return r.toDomain(src)
 	}), nil
 }
 
-func (r *taskRepository) Acquire(ctx context.Context, task domain.Task) error {
-	return r.dao.Preempt(ctx, task.ID, task.Version, task.ScheduleNodeID)
+func (r *taskRepository) Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
+	task, err := r.dao.Preempt(ctx, id, scheduleNodeID)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return r.toDomain(task), nil
 }
 
-func (r *taskRepository) Release(ctx context.Context, task domain.Task) error {
-	return r.dao.Release(ctx, task.ID, task.Version, task.ScheduleNodeID)
+func (r *taskRepository) Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
+	task, err := r.dao.Release(ctx, id, scheduleNodeID)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return r.toDomain(task), nil
 }
 
-func (r *taskRepository) Renew(ctx context.Context, task domain.Task) error {
-	return r.dao.Renew(ctx, task.ID, task.Version, task.ScheduleNodeID)
+func (r *taskRepository) Renew(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
+	task, err := r.dao.Renew(ctx, id, scheduleNodeID)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return r.toDomain(task), nil
 }
 
-func (r *taskRepository) UpdateNextTime(ctx context.Context, id, version, nextTime int64) error {
-	return r.dao.UpdateNextTime(ctx, id, version, nextTime)
+func (r *taskRepository) UpdateNextTime(ctx context.Context, id, version, nextTime int64) (domain.Task, error) {
+	task, err := r.dao.UpdateNextTime(ctx, id, version, nextTime)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return r.toDomain(task), nil
 }
 
-func (r *taskRepository) UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error {
-	return r.dao.UpdateScheduleParams(ctx, id, version, scheduleParams)
+func (r *taskRepository) UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) (domain.Task, error) {
+	task, err := r.dao.UpdateScheduleParams(ctx, id, version, scheduleParams)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return r.toDomain(task), nil
 }
 
 // toEntity 将领域模型转换为DAO模型
@@ -129,7 +149,7 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 }
 
 // toDomain 将DAO模型转换为领域模型
-func (r *taskRepository) toDomain(daoTask dao.Task) domain.Task {
+func (r *taskRepository) toDomain(daoTask *dao.Task) domain.Task {
 	var scheduleNodeID string
 	if daoTask.ScheduleNodeID.Valid {
 		scheduleNodeID = daoTask.ScheduleNodeID.String

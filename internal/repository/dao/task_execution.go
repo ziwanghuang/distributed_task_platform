@@ -11,6 +11,12 @@ import (
 	"github.com/ego-component/egorm"
 )
 
+const (
+	TaskExecutionStatusPrepare         = "PREPARE"
+	TaskExecutionStatusRunning         = "RUNNING"
+	TaskExecutionStatusFailedRetryable = "FAILED_RETRYABLE"
+)
+
 // TaskExecution 任务执行记录表DAO对象
 type TaskExecution struct {
 	ID int64 `gorm:"type:bigint;primaryKey;autoIncrement;"`
@@ -89,6 +95,9 @@ func (g *GORMTaskExecutionDAO) Create(ctx context.Context, execution TaskExecuti
 func (g *GORMTaskExecutionDAO) GetByID(ctx context.Context, id int64) (TaskExecution, error) {
 	var execution TaskExecution
 	err := g.db.WithContext(ctx).Where("id = ?", id).First(&execution).Error
+	if err != nil {
+		return TaskExecution{}, fmt.Errorf("%w: ID=%d, %w", errs.ErrExecutionNotFound, id, err)
+	}
 	return execution, err
 }
 
@@ -101,10 +110,10 @@ func (g *GORMTaskExecutionDAO) UpdateStatus(ctx context.Context, id int64, statu
 			"utime":  time.Now().UnixMilli(),
 		})
 	if result.Error != nil {
-		return result.Error
+		return fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrUpdateExecutionStatusFailed, result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("%w: ID=%d", errs.ErrExecutionNotFound, id)
+		return fmt.Errorf("%w：ID=%d", errs.ErrUpdateExecutionStatusFailed, id)
 	}
 	return nil
 }
@@ -154,10 +163,10 @@ func (g *GORMTaskExecutionDAO) UpdateRetryResult(ctx context.Context, id, retryC
 		})
 
 	if result.Error != nil {
-		return result.Error
+		return fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrUpdateExecutionRetryResultFailed, result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("%w: ID=%d", errs.ErrExecutionNotFound, id)
+		return fmt.Errorf("%w: ID=%d", errs.ErrUpdateExecutionRetryResultFailed, id)
 	}
 	return nil
 }
@@ -166,19 +175,19 @@ func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, pr
 	now := time.Now().UnixMilli()
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
-		Where("id = ? AND (status = ? OR status = ?) ", id, "PREPARE", "FAILED_RETRYABLE").
+		Where("id = ? AND (status = ? OR status = ?) ", id, TaskExecutionStatusPrepare, TaskExecutionStatusFailedRetryable).
 		Updates(map[string]any{
-			"status":           "RUNNING",
+			"status":           TaskExecutionStatusRunning,
 			"running_progress": progress,
 			"stime":            now,
 			"utime":            now,
 		})
 
 	if result.Error != nil {
-		return result.Error
+		return fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrSetExecutionStateRunningFailed, result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("%w: 任务不在PREPARE状态或不存在，ID=%d", errs.ErrExecutionNotFound, id)
+		return fmt.Errorf("%w: 任务不在PREPARE/FAILED_RETRYABLE状态或不存在, ID=%d", errs.ErrSetExecutionStateRunningFailed, id)
 	}
 	return nil
 }
@@ -186,17 +195,17 @@ func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, pr
 func (g *GORMTaskExecutionDAO) UpdateProgress(ctx context.Context, id int64, progress int32) error {
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
-		Where("id = ? AND status = ?", id, "RUNNING").
+		Where("id = ? AND status = ?", id, TaskExecutionStatusRunning).
 		Updates(map[string]any{
 			"running_progress": progress,
 			"utime":            time.Now().UnixMilli(),
 		})
 
 	if result.Error != nil {
-		return result.Error
+		return fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrUpdateExecutionRunningProgressFailed, result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("%w: 任务不在RUNNING状态或不存在，ID=%d", errs.ErrExecutionNotFound, id)
+		return fmt.Errorf("%w: 任务不在RUNNING状态或不存在，ID=%d", errs.ErrUpdateExecutionRunningProgressFailed, id)
 	}
 	return nil
 }
@@ -210,12 +219,11 @@ func (g *GORMTaskExecutionDAO) UpdateStatusAndEndTime(ctx context.Context, id in
 			"etime":  endTime,
 			"utime":  time.Now().UnixMilli(),
 		})
-
 	if result.Error != nil {
-		return result.Error
+		return fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrUpdateExecutionStatusAndEndTimeFailed, result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("%w: ID=%d", errs.ErrExecutionNotFound, id)
+		return fmt.Errorf("%w: ID=%d", errs.ErrUpdateExecutionStatusAndEndTimeFailed, id)
 	}
 	return nil
 }

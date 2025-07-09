@@ -35,7 +35,7 @@ type result struct {
 // executionContext 执行上下文，包含TaskExecution和相关通道
 type executionContext struct {
 	execution  *domain.TaskExecution
-	resultChan chan *result
+	resultChan chan<- *result
 }
 
 // Scheduler 分布式任务调度器
@@ -187,7 +187,7 @@ func (s *Scheduler) schedule() error {
 			s.logger.Error("调度任务失败",
 				elog.Int64("taskID", tasks[i].ID),
 				elog.String("taskName", tasks[i].Name),
-				elog.FieldErr(err))
+				elog.FieldErr(err1))
 		}
 		if ok {
 			success++
@@ -201,7 +201,7 @@ func (s *Scheduler) schedule() error {
 
 func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
 	// 抢令牌和抢占任务
-	success, err := s.acquireTokenAndTask(s.ctx, task)
+	acquiredTask, err := s.acquireTokenAndTask(s.ctx, task)
 	if err != nil {
 		s.logger.Error("任务抢占失败",
 			elog.Int64("taskID", task.ID),
@@ -209,14 +209,10 @@ func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
 			elog.FieldErr(err))
 		return false, err
 	}
-	if !success {
-		return false, nil
-	}
 
 	// 抢占成功，立即创建TaskExecution记录
-	task.Version++
 	execution, err := s.execSvc.Create(s.ctx, domain.TaskExecution{
-		Task: task,
+		Task: *acquiredTask,
 		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
 		StartTime: time.Now().UnixMilli(),
 		Status:    domain.TaskExecutionStatusPrepare,
@@ -227,7 +223,7 @@ func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
 			elog.String("taskName", task.Name),
 			elog.FieldErr(err))
 		// 创建失败，释放令牌和锁
-		s.releaseTokenAndTask(task)
+		s.releaseTokenAndTask(*acquiredTask)
 		return false, err
 	}
 
@@ -237,13 +233,13 @@ func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
 }
 
 // acquireTokenAndTask 抢令牌 + 抢占任务
-func (s *Scheduler) acquireTokenAndTask(ctx context.Context, task domain.Task) (bool, error) {
+func (s *Scheduler) acquireTokenAndTask(ctx context.Context, task domain.Task) (*domain.Task, error) {
 	// 抢令牌
 	tokenCtx, tokenCancel := context.WithTimeout(s.ctx, s.config.TokenAcquireTimeout)
 	err := s.tokens.Acquire(tokenCtx, 1)
 	tokenCancel()
 	if err != nil {
-		return false, fmt.Errorf("抢令牌失败: %w", err)
+		return nil, fmt.Errorf("抢令牌失败: %w", err)
 	}
 
 	// 令牌抢占成功，添加panic保护
@@ -260,22 +256,22 @@ func (s *Scheduler) acquireTokenAndTask(ctx context.Context, task domain.Task) (
 		}
 	}()
 
-	// 填充调度节点ID
-	task.ScheduleNodeID = s.nodeID
-	if err = s.taskAcquirer.Acquire(ctx, task); err != nil {
+	// 抢占任务
+	acquiredTask, err := s.taskAcquirer.Acquire(ctx, task.ID, s.nodeID)
+	if err != nil {
 		// 抢占任务失败，归还令牌
 		s.tokens.Release(1)
-		return false, fmt.Errorf("任务抢占失败: %w", err)
+		return nil, fmt.Errorf("任务抢占失败: %w", err)
 	}
 
-	// 抢占成功
-	return true, nil
+	// 抢占成功，，返回最新的 Task 对象指针
+	return acquiredTask, nil
 }
 
 // releaseTokenAndTask 释放令牌和任务锁
 func (s *Scheduler) releaseTokenAndTask(task domain.Task) {
 	s.tokens.Release(1)
-	if err := s.taskAcquirer.Release(s.ctx, task); err != nil {
+	if err := s.taskAcquirer.Release(s.ctx, task.ID, s.nodeID); err != nil {
 		s.logger.Error("释放任务失败",
 			elog.Int64("taskID", task.ID),
 			elog.String("taskName", task.Name),
@@ -317,7 +313,11 @@ func (s *Scheduler) taskExecutionHandleLoop(execution domain.TaskExecution, hand
 	// 远程任务需要轮询
 	if execution.Task.ExecutionMethod.IsRemote() {
 		s.remoteExecutions.Store(execution.ID, &executionContext{
-			execution:  &execution,
+			execution: &execution,
+			// 远程任务通过这个通道传递结果，主要路径有
+			// 下方 selectedExecutor 执行
+			// 执行节点通过GPRC上报
+			// 执行节点通过消息队列上报
 			resultChan: resultChan,
 		})
 		defer s.remoteExecutions.Delete(execution.ID)
@@ -332,6 +332,14 @@ func (s *Scheduler) taskExecutionHandleLoop(execution domain.TaskExecution, hand
 	for {
 		select {
 		case res := <-resultChan:
+			// 执行失败，执行状态未更新
+			if res.err != nil {
+				s.logger.Error("任务执行失败",
+					elog.Int64("taskID", execution.Task.ID),
+					elog.String("taskName", execution.Task.Name),
+					elog.FieldErr(res.err))
+				return
+			}
 			// 处理结果
 			stop := handleFunc(s.ctx, res, &execution)
 			if stop {
@@ -339,7 +347,8 @@ func (s *Scheduler) taskExecutionHandleLoop(execution domain.TaskExecution, hand
 			}
 		case <-renewTicker.C:
 			// 续约
-			if err := s.taskAcquirer.Renew(s.ctx, execution.Task); err != nil {
+			renewedTask, err := s.taskAcquirer.Renew(s.ctx, execution.Task.ID, s.nodeID)
+			if err != nil {
 				s.logger.Error("任务续约失败",
 					elog.Int64("taskID", execution.Task.ID),
 					elog.String("taskName", execution.Task.Name),
@@ -354,6 +363,8 @@ func (s *Scheduler) taskExecutionHandleLoop(execution domain.TaskExecution, hand
 				}
 				return
 			}
+			// 更新execution中的task为最新版本
+			execution.Task = *renewedTask
 			s.logger.Debug("任务续约成功",
 				elog.Int64("taskID", execution.Task.ID),
 				elog.String("taskName", execution.Task.Name))
@@ -366,65 +377,68 @@ func (s *Scheduler) taskExecutionHandleLoop(execution domain.TaskExecution, hand
 }
 
 func (s *Scheduler) handleSchedulingTaskExecutionFunc(ctx context.Context, res *result, execution *domain.TaskExecution) (stop bool) {
-	// 执行失败，执行状态未更新，这个由重试补偿任务来处理
-	if res.err != nil {
-		s.logger.Error("任务执行失败",
+	switch {
+	case execution.Status.IsPrepare() && res.state.Status.IsRunning():
+		return s.setRunningState(ctx, res, execution)
+	case execution.Status.IsRunning() && res.state.Status.IsRunning():
+		return s.updateRunningProgress(ctx, res, execution)
+	case (execution.Status.IsPrepare() || execution.Status.IsRunning()) && res.state.Status.IsTerminalStatus():
+		return s.updateStatusAndEndTime(ctx, res, execution)
+	default:
+		s.logger.Info("正常调度不支持的状态转换",
 			elog.Int64("taskID", execution.Task.ID),
 			elog.String("taskName", execution.Task.Name),
-			elog.FieldErr(res.err))
+			elog.String("currentStatus", execution.Status.String()),
+			elog.String("finalStatus", res.state.Status.String()))
 		return true
 	}
+}
 
-	// 执行成功，更新状态 - 使用正常任务的状态转换
-	err := s.updateSchedulingExecutionState(ctx, execution.Status, res.state)
+func (s *Scheduler) setRunningState(ctx context.Context, res *result, execution *domain.TaskExecution) (stop bool) {
+	s.logger.Info("设置RUNNING状态",
+		elog.Int64("executionID", res.state.ID),
+		elog.String("currentStatus", execution.Status.String()),
+		elog.String("targetStatus", res.state.Status.String()))
+	// PREPARE → RUNNING
+	// FAILED_RETRYABLE → RUNNING
+	err := s.execSvc.SetRunningState(ctx, res.state.ID, res.state.RunningProgress)
 	if err != nil {
-		s.logger.Error("更新执行状态失败",
-			elog.Int64("taskID", execution.Task.ID),
-			elog.String("taskName", execution.Task.Name),
-			elog.Any("state", res.state),
-			elog.FieldErr(err))
-		return false // 继续等待重试
+		return false
 	}
 	// 更新内存中信息
 	execution.Status = res.state.Status
 	execution.RunningProgress = res.state.RunningProgress
+	return false
+}
 
-	// 继续等待轮询协程或者上报流程处理状态迁移
-	if execution.Status.IsRunning() {
+func (s *Scheduler) updateRunningProgress(ctx context.Context, res *result, execution *domain.TaskExecution) (stop bool) {
+	// RUNNING → RUNNING：更新进度
+	err := s.execSvc.UpdateProgress(ctx, res.state.ID, res.state.RunningProgress)
+	if err != nil {
 		return false
 	}
+	// 更新内存中信息
+	execution.Status = res.state.Status
+	execution.RunningProgress = res.state.RunningProgress
+	return false
+}
 
+func (s *Scheduler) updateStatusAndEndTime(ctx context.Context, res *result, execution *domain.TaskExecution) bool {
+	err := s.execSvc.UpdateStatusAndEndTime(ctx, res.state.ID, res.state.Status, time.Now().UnixMilli())
+	if err != nil {
+		return false
+	}
 	s.logger.Info("任务执行完成",
 		elog.Int64("taskID", execution.Task.ID),
 		elog.String("taskName", execution.Task.Name),
 		elog.String("status", res.state.Status.String()))
-
-	// 更新下次执行时间，允许其再次被调度
-	if updateErr := s.taskSvc.UpdateNextTime(s.ctx, execution.Task); updateErr != nil {
+	if _, updateErr := s.taskSvc.UpdateNextTime(s.ctx, execution.Task); updateErr != nil {
 		s.logger.Error("更新下次执行时间失败",
 			elog.Int64("taskID", execution.Task.ID),
 			elog.String("taskName", execution.Task.Name),
 			elog.FieldErr(updateErr))
 	}
 	return true
-}
-
-// updateSchedulingExecutionState 更新执行状态，统一处理所有状态转换和更新
-func (s *Scheduler) updateSchedulingExecutionState(ctx context.Context, status domain.TaskExecutionStatus, targetState domain.ExecutionState) error {
-	switch {
-	// PREPARE 状态的转换
-	case status.IsPrepare() && targetState.Status.IsRunning():
-		return s.execSvc.SetRunningState(ctx, targetState.ID, targetState.RunningProgress)
-	case status.IsPrepare() && targetState.Status.IsTerminalStatus():
-		return s.execSvc.UpdateStatusAndEndTime(ctx, targetState.ID, targetState.Status, time.Now().UnixMilli())
-	// RUNNING 状态的转换
-	case status.IsRunning() && targetState.Status.IsRunning():
-		return s.execSvc.UpdateProgress(ctx, targetState.ID, targetState.RunningProgress)
-	case status.IsRunning() && targetState.Status.IsTerminalStatus():
-		return s.execSvc.UpdateStatusAndEndTime(ctx, targetState.ID, targetState.Status, time.Now().UnixMilli())
-	default:
-		return fmt.Errorf("不支持的状态转换：%s → %s", status.String(), targetState.Status.String())
-	}
 }
 
 // pollingLoop 轮询循环，每隔一段时间轮询所有 remoteExecutions
@@ -655,7 +669,7 @@ func (s *Scheduler) consumeExecutionBatchReportEvent(ctx context.Context, messag
 // RetryTaskExecution 重试任务执行 - 原始版本
 func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) (bool, error) {
 	// 抢令牌和抢占任务
-	success, err := s.acquireTokenAndTask(s.ctx, execution.Task)
+	acquiredTask, err := s.acquireTokenAndTask(s.ctx, execution.Task)
 	if err != nil {
 		s.logger.Error("重试：任务抢占失败",
 			elog.Int64("taskID", execution.Task.ID),
@@ -663,11 +677,10 @@ func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) (bool, er
 			elog.FieldErr(err))
 		return false, err
 	}
-	if !success {
-		return false, nil
-	}
+
+	execution.Task = *acquiredTask
+
 	// 抢占成功，启动异步任务管理
-	execution.Task.Version++
 	// 是否有重试配置
 	if execution.Task.RetryConfig == nil {
 		execution.RetryCount++
@@ -693,108 +706,63 @@ func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) (bool, er
 }
 
 func (s *Scheduler) handleRetryingTaskExecutionFunc(ctx context.Context, res *result, execution *domain.TaskExecution, retryStrategy strategy.Strategy) (stop bool) {
-	// 执行失败
-	if res.err != nil {
-		s.logger.Error("重试任务执行失败",
+	switch {
+	case execution.Status.IsFailedRetryable() && res.state.Status.IsRunning():
+		return s.setRunningState(ctx, res, execution)
+	case execution.Status.IsRunning() && res.state.Status.IsRunning():
+		return s.updateRunningProgress(ctx, res, execution)
+	case (execution.Status.IsFailedRetryable() || execution.Status.IsRunning()) && res.state.Status.IsTerminalStatus():
+		return s.updateRetryResult(ctx, res, execution, retryStrategy)
+	default:
+		s.logger.Info("重试补偿不支持的状态转换",
 			elog.Int64("taskID", execution.Task.ID),
 			elog.String("taskName", execution.Task.Name),
-			elog.FieldErr(res.err))
+			elog.String("currentStatus", execution.Status.String()),
+			elog.String("finalStatus", res.state.Status.String()))
 		return true
 	}
+}
 
+func (s *Scheduler) updateRetryResult(ctx context.Context, res *result, execution *domain.TaskExecution, retryStrategy strategy.Strategy) (stop bool) {
+	// FAILED_RETRYABLE 或者 RUNNING  → 终态：重试任务直接完成（成功或最终失败）
+	s.logger.Info("重试任务完成",
+		elog.Int64("executionID", res.state.ID),
+		elog.String("currentStatus", execution.Status.String()),
+		elog.String("finalStatus", res.state.Status.String()))
+
+	// 设置结束时间
+	execution.EndTime = time.Now().UnixMilli()
+	// 增加重试计数
 	execution.RetryCount++
-
+	// 计算出下次重试时间
 	duration, shouldRetry := retryStrategy.NextWithRetries(int32(execution.RetryCount))
 	if !shouldRetry {
-		// 到达最大重试次数，直接结束
-		execution.EndTime = time.Now().UnixMilli()
-		_ = s.execSvc.UpdateRetryResult(ctx, execution.ID, execution.RetryCount, execution.NextRetryTime, execution.EndTime, domain.TaskExecutionStatusFailed)
+		// 达到最大重试次数，直接结束
+		_ = s.execSvc.UpdateRetryResult(ctx, execution.ID, execution.RetryCount, execution.NextRetryTime, execution.EndTime, res.state.Status)
 		return true
 	}
-
-	// 计算出下次重试时间
-	execution.NextRetryTime = time.Now().Add(duration).UnixMilli()
-	execution.EndTime = time.Now().UnixMilli()
-
-	// 执行成功，更新状态 - 使用重试任务的状态转换
-	err := s.updateRetryingExecutionState(s.ctx, execution, res.state)
-	if err != nil {
-		s.logger.Error("更新重试执行状态失败",
-			elog.Int64("taskID", execution.Task.ID),
-			elog.String("taskName", execution.Task.Name),
-			elog.Any("state", res.state),
-			elog.FieldErr(err))
-		return false // 继续等待重试
+	// 计算结束时间
+	if res.state.Status.IsSuccess() || res.state.Status.IsFailed() {
+		execution.NextRetryTime = 0
+	} else {
+		execution.NextRetryTime = time.Now().Add(duration).UnixMilli()
 	}
 
-	// 更新内存中信息
-	execution.Status = res.state.Status
-	execution.RunningProgress = res.state.RunningProgress
+	err := s.execSvc.UpdateRetryResult(ctx, execution.ID, execution.RetryCount, execution.NextRetryTime, execution.EndTime, res.state.Status)
+	if err != nil {
+		return false
+	}
 
-	// 重试任务执行完成
+	// 更新任务的下次执行时间
 	if execution.Status.IsSuccess() || execution.Status.IsFailed() {
-		s.logger.Info("重试任务执行完成",
-			elog.Int64("taskID", execution.Task.ID),
-			elog.String("taskName", execution.Task.Name),
-			elog.String("status", res.state.Status.String()))
-
-		// 重试完成，更新任务的下次执行时间
-		if updateErr := s.taskSvc.UpdateNextTime(s.ctx, execution.Task); updateErr != nil {
+		if _, updateErr := s.taskSvc.UpdateNextTime(s.ctx, execution.Task); updateErr != nil {
 			s.logger.Error("更新下次执行时间失败",
 				elog.Int64("taskID", execution.Task.ID),
 				elog.String("taskName", execution.Task.Name),
 				elog.FieldErr(updateErr))
 		}
-		return true
 	}
-	return false
-}
-
-func (s *Scheduler) updateRetryingExecutionState(ctx context.Context, execution *domain.TaskExecution, targetState domain.ExecutionState) error {
-	// 重试任务的状态转换逻辑
-	switch {
-	// FAILED_RETRYABLE → RUNNING：重试任务开始执行
-	case execution.Status.IsFailedRetryable() && targetState.Status.IsRunning():
-		s.logger.Info("重试任务开始执行",
-			elog.Int64("executionID", targetState.ID),
-			elog.String("currentStatus", execution.Status.String()),
-			elog.String("targetStatus", targetState.Status.String()))
-		return s.execSvc.SetRunningState(ctx, targetState.ID, targetState.RunningProgress)
-
-	// FAILED_RETRYABLE → 终态：重试任务直接完成（成功或最终失败）
-	case execution.Status.IsFailedRetryable() && targetState.Status.IsTerminalStatus():
-		s.logger.Info("重试任务直接完成",
-			elog.Int64("executionID", targetState.ID),
-			elog.String("currentStatus", execution.Status.String()),
-			elog.String("finalStatus", targetState.Status.String()))
-		if targetState.Status.IsSuccess() || targetState.Status.IsFailed() {
-			// 不需要下次重试时间
-			execution.Status = targetState.Status
-			execution.NextRetryTime = 0
-			execution.EndTime = time.Now().UnixMilli()
-		}
-		return s.execSvc.UpdateRetryResult(ctx, execution.ID, execution.RetryCount, execution.NextRetryTime, execution.EndTime, execution.Status)
-
-	// RUNNING → RUNNING：更新进度
-	case execution.Status.IsRunning() && targetState.Status.IsRunning():
-		return s.execSvc.UpdateProgress(ctx, targetState.ID, targetState.RunningProgress)
-
-	// RUNNING → 终态：执行完成
-	case execution.Status.IsRunning() && targetState.Status.IsTerminalStatus():
-		s.logger.Info("重试任务执行完成",
-			elog.Int64("executionID", targetState.ID),
-			elog.String("currentStatus", execution.Status.String()),
-			elog.String("finalStatus", targetState.Status.String()))
-		if targetState.Status.IsSuccess() || targetState.Status.IsFailed() {
-			// 不需要下次重试时间
-			execution.Status = targetState.Status
-			execution.NextRetryTime = 0
-			execution.EndTime = time.Now().UnixMilli()
-		}
-		return s.execSvc.UpdateRetryResult(ctx, execution.ID, execution.RetryCount, execution.NextRetryTime, execution.EndTime, execution.Status)
-	default:
-		return fmt.Errorf("重试任务不支持的状态转换：%s → %s", execution.Status.String(), targetState.Status.String())
-	}
+	return true
 }
 
 func (s *Scheduler) InterruptTaskExecution(ctx context.Context, execution *domain.TaskExecution) error {
@@ -843,13 +811,13 @@ func (s *Scheduler) RescheduleNow(ctx context.Context, state domain.ExecutionSta
 		return err
 	}
 	// 更新调度参数
-	err = s.taskSvc.UpdateScheduleParams(ctx, tk.ID, tk.Version, state.RescheduleParams)
+	tk, err = s.taskSvc.UpdateScheduleParams(ctx, tk, state.RescheduleParams)
 	if err != nil {
 		s.logger.Error("更新调度信息失败", elog.FieldErr(err))
 		return err
 	}
+
 	// 立即开始重调度
-	tk.Version++
 	success, err := s.scheduleTask(tk)
 	if err != nil {
 		s.logger.Error("重调度任务失败",

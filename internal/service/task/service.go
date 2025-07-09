@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"fmt"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
@@ -15,17 +16,17 @@ type Service interface {
 	// SchedulableTasks 获取可调度的任务列表，preemptedTimeoutMs 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
 	SchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]domain.Task, error)
 	// Acquire 抢占任务
-	Acquire(ctx context.Context, task domain.Task) error
+	Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// Release 释放任务
-	Release(ctx context.Context, task domain.Task) error
+	Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// Renew 续约任务
-	Renew(ctx context.Context, task domain.Task) error
+	Renew(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// UpdateNextTime 更新任务的下次执行时间
-	UpdateNextTime(ctx context.Context, task domain.Task) error
+	UpdateNextTime(ctx context.Context, task domain.Task) (domain.Task, error)
 	// GetByID 根据ID获取task
 	GetByID(ctx context.Context, id int64) (domain.Task, error)
 	// UpdateScheduleParams 更新调度参数
-	UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error
+	UpdateScheduleParams(ctx context.Context, task domain.Task, params map[string]string) (domain.Task, error)
 }
 
 type service struct {
@@ -41,7 +42,10 @@ func NewService(repo repository.TaskRepository) Service {
 
 func (s *service) Create(ctx context.Context, task domain.Task) (domain.Task, error) {
 	// 计算并设置下次执行时间
-	nextTime := task.CalculateNextTime()
+	nextTime, err := task.CalculateNextTime()
+	if err != nil {
+		return domain.Task{}, fmt.Errorf("%w: %w", errs.ErrInvalidTaskCronExpr, err)
+	}
 	if nextTime.IsZero() {
 		return domain.Task{}, errs.ErrInvalidTaskCronExpr
 	}
@@ -53,33 +57,36 @@ func (s *service) SchedulableTasks(ctx context.Context, preemptedTimeoutMs int64
 	return s.repo.SchedulableTasks(ctx, preemptedTimeoutMs, limit)
 }
 
-func (s *service) Acquire(ctx context.Context, task domain.Task) error {
-	if task.ScheduleNodeID == "" {
-		return errs.ErrInvalidTaskScheduleNodeID
+func (s *service) Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
+	if scheduleNodeID == "" {
+		return domain.Task{}, errs.ErrInvalidTaskScheduleNodeID
 	}
-	return s.repo.Acquire(ctx, task)
+	return s.repo.Acquire(ctx, id, scheduleNodeID)
 }
 
-func (s *service) Release(ctx context.Context, task domain.Task) error {
-	if task.ScheduleNodeID == "" {
-		return errs.ErrInvalidTaskScheduleNodeID
+func (s *service) Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
+	if scheduleNodeID == "" {
+		return domain.Task{}, errs.ErrInvalidTaskScheduleNodeID
 	}
-	return s.repo.Release(ctx, task)
+	return s.repo.Release(ctx, id, scheduleNodeID)
 }
 
-func (s *service) Renew(ctx context.Context, task domain.Task) error {
-	if task.ScheduleNodeID == "" {
-		return errs.ErrInvalidTaskScheduleNodeID
+func (s *service) Renew(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
+	if scheduleNodeID == "" {
+		return domain.Task{}, errs.ErrInvalidTaskScheduleNodeID
 	}
-	return s.repo.Renew(ctx, task)
+	return s.repo.Renew(ctx, id, scheduleNodeID)
 }
 
-func (s *service) UpdateNextTime(ctx context.Context, task domain.Task) error {
+func (s *service) UpdateNextTime(ctx context.Context, task domain.Task) (domain.Task, error) {
 	// 计算并设置下次执行时间
-	nextTime := task.CalculateNextTime()
+	nextTime, err := task.CalculateNextTime()
+	if err != nil {
+		return domain.Task{}, fmt.Errorf("%w: %w", errs.ErrInvalidTaskCronExpr, err)
+	}
 	if nextTime.IsZero() {
 		// 不需要继续执行了
-		return nil
+		return task, nil
 	}
 	task.NextTime = nextTime.UnixMilli()
 	return s.repo.UpdateNextTime(ctx, task.ID, task.Version, task.NextTime)
@@ -89,6 +96,7 @@ func (s *service) GetByID(ctx context.Context, id int64) (domain.Task, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *service) UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) error {
-	return s.repo.UpdateScheduleParams(ctx, id, version, scheduleParams)
+func (s *service) UpdateScheduleParams(ctx context.Context, task domain.Task, params map[string]string) (domain.Task, error) {
+	task.UpdateScheduleParams(params)
+	return s.repo.UpdateScheduleParams(ctx, task.ID, task.Version, task.ScheduleParams)
 }

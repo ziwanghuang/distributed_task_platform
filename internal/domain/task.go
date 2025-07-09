@@ -57,12 +57,36 @@ type Task struct {
 	UTime           int64 // 更新时间戳
 }
 
-func (t *Task) CalculateNextTime() time.Time {
+func (t *Task) CalculateNextTime() (time.Time, error) {
 	p := cron.NewParser(
 		cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 	)
-	s, _ := p.Parse(t.CronExpr)
-	return s.Next(time.Now())
+	s, err := p.Parse(t.CronExpr)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return s.Next(time.Now()), nil
+}
+
+// UpdateScheduleParams 在领域模型上定义了“如何更新调度参数”的业务规则
+func (t *Task) UpdateScheduleParams(params map[string]string) {
+	// 如果传入的 params 是 nil，代表调用者无意进行任何修改。
+	if params == nil {
+		return // 无操作
+	}
+
+	// 如果传入的 params 是一个空的 map，代表业务意图是“重置/清空”。
+	if len(params) == 0 {
+		t.ScheduleParams = make(map[string]string) // 重置为空
+		return
+	}
+	// 否则，执行“智能合并”逻辑。 如果原始参数是 nil，先初始化
+	if t.ScheduleParams == nil {
+		t.ScheduleParams = make(map[string]string)
+	}
+	for k, v := range params {
+		t.ScheduleParams[k] = v
+	}
 }
 
 // RetryConfig 重试配置
