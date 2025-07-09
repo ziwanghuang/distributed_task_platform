@@ -64,7 +64,7 @@ func (r *taskRepository) SchedulableTasks(ctx context.Context, preemptedTimeoutM
 }
 
 func (r *taskRepository) Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
-	task, err := r.dao.Preempt(ctx, id, scheduleNodeID)
+	task, err := r.dao.Acquire(ctx, id, scheduleNodeID)
 	if err != nil {
 		return domain.Task{}, err
 	}

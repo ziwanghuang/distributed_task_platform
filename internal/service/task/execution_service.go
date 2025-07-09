@@ -24,10 +24,10 @@ type ExecutionService interface {
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
 	// SetRunningState 设置任务为运行状态并更新进度、开始时间（从PREPARE状态转换）
 	SetRunningState(ctx context.Context, id int64, progress int32) error
-	// UpdateProgress 更新任务执行进度（仅在RUNNING状态下有效）
-	UpdateProgress(ctx context.Context, id int64, progress int32) error
-	// UpdateStatusAndEndTime 更新任务状态和结束时间（用于终态更新）
-	UpdateStatusAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, endTime int64) error
+	// UpdateRunningProgress 更新任务执行进度（仅在RUNNING状态下有效）
+	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
+	// UpdateStatusAndProgressAndEndTime 更新任务状态、进度和结束时间（用于终态更新）
+	UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error
 }
 
 type executionService struct {
@@ -63,10 +63,10 @@ func (s *executionService) SetRunningState(ctx context.Context, id int64, progre
 	return s.repo.SetRunningState(ctx, id, progress)
 }
 
-func (s *executionService) UpdateProgress(ctx context.Context, id int64, progress int32) error {
-	return s.repo.UpdateProgress(ctx, id, progress)
+func (s *executionService) UpdateRunningProgress(ctx context.Context, id int64, progress int32) error {
+	return s.repo.UpdateRunningProgress(ctx, id, progress)
 }
 
-func (s *executionService) UpdateStatusAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, endTime int64) error {
-	return s.repo.UpdateStatusAndEndTime(ctx, id, status, endTime)
+func (s *executionService) UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error {
+	return s.repo.UpdateStatusAndProgressAndEndTime(ctx, id, status, progress, endTime)
 }

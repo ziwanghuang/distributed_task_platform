@@ -27,10 +27,10 @@ type TaskExecutionRepository interface {
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
 	// SetRunningState 设置任务为运行状态并更新进度、开始时间（从PREPARE状态转换）
 	SetRunningState(ctx context.Context, id int64, progress int32) error
-	// UpdateProgress 更新任务执行进度（仅在RUNNING状态下有效）
-	UpdateProgress(ctx context.Context, id int64, progress int32) error
-	// UpdateStatusAndEndTime 更新任务状态和结束时间（用于终态更新）
-	UpdateStatusAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, endTime int64) error
+	// UpdateRunningProgress 更新任务执行进度（仅在RUNNING状态下有效）
+	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
+	// UpdateStatusAndProgressAndEndTime 更新任务状态、进度和结束时间（用于终态更新）
+	UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error
 }
 
 type taskExecutionRepository struct {
@@ -94,12 +94,12 @@ func (r *taskExecutionRepository) SetRunningState(ctx context.Context, id int64,
 	return r.dao.SetRunningState(ctx, id, progress)
 }
 
-func (r *taskExecutionRepository) UpdateProgress(ctx context.Context, id int64, progress int32) error {
+func (r *taskExecutionRepository) UpdateRunningProgress(ctx context.Context, id int64, progress int32) error {
 	return r.dao.UpdateProgress(ctx, id, progress)
 }
 
-func (r *taskExecutionRepository) UpdateStatusAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, endTime int64) error {
-	return r.dao.UpdateStatusAndEndTime(ctx, id, status.String(), endTime)
+func (r *taskExecutionRepository) UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error {
+	return r.dao.UpdateStatusAndProgressAndEndTime(ctx, id, status.String(), progress, endTime)
 }
 
 // toEntity 将领域模型转换为DAO模型

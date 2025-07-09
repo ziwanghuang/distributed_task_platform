@@ -66,8 +66,8 @@ type TaskExecutionDAO interface {
 	SetRunningState(ctx context.Context, id int64, progress int32) error
 	// UpdateProgress 更新任务执行进度、开始时间（仅在RUNNING状态下有效）
 	UpdateProgress(ctx context.Context, id int64, progress int32) error
-	// UpdateStatusAndEndTime 更新任务状态和结束时间（用于终态更新）
-	UpdateStatusAndEndTime(ctx context.Context, id int64, status string, endTime int64) error
+	// UpdateStatusAndProgressAndEndTime 更新任务状态、进度和结束时间（用于终态更新）
+	UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status string, progress int32, endTime int64) error
 }
 
 type GORMTaskExecutionDAO struct {
@@ -210,14 +210,15 @@ func (g *GORMTaskExecutionDAO) UpdateProgress(ctx context.Context, id int64, pro
 	return nil
 }
 
-func (g *GORMTaskExecutionDAO) UpdateStatusAndEndTime(ctx context.Context, id int64, status string, endTime int64) error {
+func (g *GORMTaskExecutionDAO) UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status string, progress int32, endTime int64) error {
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
 		Where("id = ?", id).
 		Updates(map[string]any{
-			"status": status,
-			"etime":  endTime,
-			"utime":  time.Now().UnixMilli(),
+			"running_progress": progress,
+			"status":           status,
+			"etime":            endTime,
+			"utime":            time.Now().UnixMilli(),
 		})
 	if result.Error != nil {
 		return fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrUpdateExecutionStatusAndEndTimeFailed, result.Error)

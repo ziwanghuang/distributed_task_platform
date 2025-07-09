@@ -127,6 +127,5 @@ func (r *RetryCompensator) retryExecution(ctx context.Context, execution domain.
 		return err
 	}
 	execution.Task = tk
-	_, err = r.scheduler.RetryTaskExecution(execution)
-	return err
+	return r.scheduler.RetryTaskExecution(execution)
 }

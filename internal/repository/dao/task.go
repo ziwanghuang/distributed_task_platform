@@ -50,8 +50,8 @@ type TaskDAO interface {
 	// FindSchedulableTasks 查询可调度的任务列表
 	// preemptedTimeoutMs: PREEMPTED状态任务的超时时间（毫秒），超过此时间未续约的任务可被重新抢占
 	FindSchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]*Task, error)
-	// Preempt 抢占任务
-	Preempt(ctx context.Context, id int64, scheduleNodeID string) (*Task, error)
+	// Acquire 抢占任务
+	Acquire(ctx context.Context, id int64, scheduleNodeID string) (*Task, error)
 	// Renew 续约任务
 	Renew(ctx context.Context, id int64, scheduleNodeID string) (*Task, error)
 	// Release 释放任务，更新状态为ACTIVE
@@ -107,9 +107,7 @@ func (g *GORMTaskDAO) FindSchedulableTasks(ctx context.Context, preemptedTimeout
 	return tasks, nil
 }
 
-func (g *GORMTaskDAO) Preempt(ctx context.Context, id int64, scheduleNodeID string) (*Task, error) {
-	now := time.Now().UnixMilli()
-
+func (g *GORMTaskDAO) Acquire(ctx context.Context, id int64, scheduleNodeID string) (*Task, error) {
 	// 单条SQL完成查找和更新，确保原子性
 	result := g.db.WithContext(ctx).
 		Model(&Task{}).
@@ -118,7 +116,7 @@ func (g *GORMTaskDAO) Preempt(ctx context.Context, id int64, scheduleNodeID stri
 			"status":           StatusPreempted,
 			"schedule_node_id": scheduleNodeID,
 			"version":          gorm.Expr("version + 1"),
-			"utime":            now,
+			"utime":            time.Now().UnixMilli(),
 		})
 
 	if result.Error != nil {
@@ -134,15 +132,13 @@ func (g *GORMTaskDAO) Preempt(ctx context.Context, id int64, scheduleNodeID stri
 }
 
 func (g *GORMTaskDAO) Renew(ctx context.Context, id int64, scheduleNodeID string) (*Task, error) {
-	now := time.Now().UnixMilli()
-
 	// 单条SQL完成查找和更新，确保原子性
 	result := g.db.WithContext(ctx).
 		Model(&Task{}).
 		Where("id = ? AND status = ? AND schedule_node_id = ?", id, StatusPreempted, scheduleNodeID).
 		Updates(map[string]any{
 			"version": gorm.Expr("version + 1"),
-			"utime":   now,
+			"utime":   time.Now().UnixMilli(),
 		})
 
 	if result.Error != nil {
