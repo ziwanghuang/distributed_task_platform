@@ -3,6 +3,7 @@ module gitee.com/flycash/distributed_task_platform
 go 1.24.1
 
 require (
+	github.com/antlr4-go/antlr/v4 v4.13.1
 	github.com/ecodeclub/ekit v0.0.10
 	github.com/ecodeclub/mq-api v0.0.0-20240508035004-fd7de3346cfe
 	github.com/ego-component/eetcd v1.0.0
@@ -11,6 +12,7 @@ require (
 	github.com/google/wire v0.6.0
 	github.com/gotomicro/ego v1.2.4
 	github.com/meoying/dlock-go v0.0.0-20250530125835-af969a8b419d
+	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.11.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.10.0
@@ -69,7 +71,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
 	github.com/prometheus/client_golang v1.20.5 // indirect
@@ -99,7 +100,7 @@ require (
 	go.uber.org/automaxprocs v1.5.1 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
-	golang.org/x/exp v0.0.0-20240112132812-db7319d0e0e3 // indirect
+	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
