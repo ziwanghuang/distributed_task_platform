@@ -12,10 +12,11 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/event"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
+	"gitee.com/flycash/distributed_task_platform/pkg/acquirer"
+	"gitee.com/flycash/distributed_task_platform/pkg/executor"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry/strategy"
-	"gitee.com/flycash/distributed_task_platform/scheduler/executor"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/ecodeclub/mq-api"
 	"github.com/gotomicro/ego/core/constant"
@@ -45,7 +46,7 @@ type Scheduler struct {
 	remoteExecutions syncx.Map[int64, *executionContext] // 正在执行的TaskExecution及其上下文
 	taskSvc          task.Service                        // 任务服务
 	execSvc          task.ExecutionService               // 任务执行服务
-	taskAcquirer     TaskAcquirer                        // 任务抢占器
+	taskAcquirer     acquirer.TaskAcquirer               // 任务抢占器
 	executors        map[string]executor.Executor
 	consumers        map[string]*event.Consumer                      // 消费者
 	grpcClients      *grpc.Clients[executorv1.ExecutorServiceClient] // gRPC客户端池
@@ -74,7 +75,7 @@ func NewScheduler(
 	nodeID string,
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
-	acquirer TaskAcquirer,
+	acquirer acquirer.TaskAcquirer,
 	executors map[string]executor.Executor,
 	consumers map[string]*event.Consumer,
 	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
@@ -182,14 +183,13 @@ func (s *Scheduler) schedule() error {
 	// 开始调度
 	success := 0
 	for i := range tasks {
-		ok, err1 := s.scheduleTask(tasks[i])
+		err1 := s.scheduleTask(tasks[i])
 		if err1 != nil {
 			s.logger.Error("调度任务失败",
 				elog.Int64("taskID", tasks[i].ID),
 				elog.String("taskName", tasks[i].Name),
 				elog.FieldErr(err1))
-		}
-		if ok {
+		} else {
 			success++
 		}
 	}
@@ -199,7 +199,7 @@ func (s *Scheduler) schedule() error {
 	return nil
 }
 
-func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
+func (s *Scheduler) scheduleTask(task domain.Task) error {
 	// 抢令牌和抢占任务
 	acquiredTask, err := s.acquireTokenAndTask(s.ctx, task)
 	if err != nil {
@@ -207,7 +207,7 @@ func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
 			elog.Int64("taskID", task.ID),
 			elog.String("taskName", task.Name),
 			elog.FieldErr(err))
-		return false, err
+		return err
 	}
 
 	// 抢占成功，立即创建TaskExecution记录
@@ -224,12 +224,12 @@ func (s *Scheduler) scheduleTask(task domain.Task) (bool, error) {
 			elog.FieldErr(err))
 		// 创建失败，释放令牌和锁
 		s.releaseTokenAndTask(*acquiredTask)
-		return false, err
+		return err
 	}
 
 	// 抢占和创建都成功，启动异步任务管理
 	go s.handleTaskExecution(execution, s.handleSchedulingTaskExecutionFunc)
-	return true, nil
+	return nil
 }
 
 // acquireTokenAndTask 抢令牌 + 抢占任务
@@ -691,7 +691,7 @@ func (s *Scheduler) consumeExecutionBatchReportEvent(ctx context.Context, messag
 	return nil
 }
 
-// RetryTaskExecution 重试任务执行 - 原始版本
+// RetryTaskExecution 重试任务执行
 func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) error {
 	// 是否有重试配置
 	if execution.Task.RetryConfig == nil {
@@ -833,19 +833,13 @@ func (s *Scheduler) RescheduleNow(ctx context.Context, state domain.ExecutionSta
 		return err
 	}
 	// 立即开始重调度
-	success, err := s.scheduleTask(tk)
+	err = s.scheduleTask(tk)
 	if err != nil {
 		s.logger.Error("重调度任务失败",
 			elog.Int64("taskID", tk.ID),
 			elog.String("taskName", tk.Name),
 			elog.FieldErr(err))
-		return err
-	}
-	if !success {
-		s.logger.Warn("重调度任务失败",
-			elog.Int64("taskID", tk.ID),
-			elog.String("taskName", tk.Name))
-		return errs.ErrRescheduleTaskExecutionFailed
+		return fmt.Errorf("%w: %w", errs.ErrRescheduleTaskExecutionFailed, err)
 	}
 	return nil
 }
