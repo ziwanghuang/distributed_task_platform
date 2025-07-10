@@ -19,14 +19,12 @@ type Service interface {
 	Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// Release 释放任务
 	Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
-	// Renew 续约任务
-	Renew(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
+	// Renew 续约所有抢占到的任务
+	Renew(ctx context.Context, scheduleNodeID string) error
 	// UpdateNextTime 更新任务的下次执行时间
 	UpdateNextTime(ctx context.Context, task domain.Task) (domain.Task, error)
 	// GetByID 根据ID获取task
 	GetByID(ctx context.Context, id int64) (domain.Task, error)
-	// UpdateScheduleParams 更新调度参数
-	UpdateScheduleParams(ctx context.Context, task domain.Task, params map[string]string) (domain.Task, error)
 }
 
 type service struct {
@@ -71,11 +69,11 @@ func (s *service) Release(ctx context.Context, id int64, scheduleNodeID string) 
 	return s.repo.Release(ctx, id, scheduleNodeID)
 }
 
-func (s *service) Renew(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
+func (s *service) Renew(ctx context.Context, scheduleNodeID string) error {
 	if scheduleNodeID == "" {
-		return domain.Task{}, errs.ErrInvalidTaskScheduleNodeID
+		return errs.ErrInvalidTaskScheduleNodeID
 	}
-	return s.repo.Renew(ctx, id, scheduleNodeID)
+	return s.repo.Renew(ctx, scheduleNodeID)
 }
 
 func (s *service) UpdateNextTime(ctx context.Context, task domain.Task) (domain.Task, error) {

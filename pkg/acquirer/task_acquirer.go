@@ -15,8 +15,8 @@ type TaskAcquirer interface {
 	Acquire(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error)
 	// Release 释放指定任务
 	Release(ctx context.Context, taskID int64, scheduleNodeID string) error
-	// Renew 续约指定任务
-	Renew(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error)
+	// Renew 续约所有抢占到的任务
+	Renew(ctx context.Context, scheduleNodeID string) error
 }
 
 // MySQLTaskAcquirer 基于MySQL实现的TaskAcquirer
@@ -47,10 +47,6 @@ func (t *MySQLTaskAcquirer) Release(ctx context.Context, taskID int64, scheduleN
 }
 
 // Renew 续约指定任务，返回续约后的任务信息
-func (t *MySQLTaskAcquirer) Renew(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error) {
-	tk, err := t.taskSvc.Renew(ctx, taskID, scheduleNodeID)
-	if err != nil {
-		return nil, err
-	}
-	return &tk, nil
+func (t *MySQLTaskAcquirer) Renew(ctx context.Context, scheduleNodeID string) error {
+	return t.taskSvc.Renew(ctx, scheduleNodeID)
 }

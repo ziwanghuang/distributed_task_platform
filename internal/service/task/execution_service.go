@@ -21,13 +21,14 @@ type ExecutionService interface {
 	// limit: 查询结果数量限制
 	FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
-	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
-	// SetRunningState 设置任务为运行状态并更新进度、开始时间（从PREPARE状态转换）
+	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
+	// SetRunningState 设置任务为运行状态并更新进度、开始时间
 	SetRunningState(ctx context.Context, id int64, progress int32) error
 	// UpdateRunningProgress 更新任务执行进度（仅在RUNNING状态下有效）
 	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
-	// UpdateStatusAndProgressAndEndTime 更新任务状态、进度和结束时间（用于终态更新）
-	UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error
+	// UpdateScheduleResult 更新调度结果
+	UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
+
 	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (domain.TaskExecution, error)
 }
 
@@ -60,8 +61,8 @@ func (s *executionService) FindRetryableExecutions(ctx context.Context, maxRetry
 	return s.repo.FindRetryableExecutions(ctx, maxRetryCount, prepareTimeoutMs, limit)
 }
 
-func (s *executionService) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error {
-	return s.repo.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, endTime, status)
+func (s *executionService) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error {
+	return s.repo.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, status, progress, endTime, scheduleParams)
 }
 
 func (s *executionService) SetRunningState(ctx context.Context, id int64, progress int32) error {
@@ -72,6 +73,6 @@ func (s *executionService) UpdateRunningProgress(ctx context.Context, id int64, 
 	return s.repo.UpdateRunningProgress(ctx, id, progress)
 }
 
-func (s *executionService) UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error {
-	return s.repo.UpdateStatusAndProgressAndEndTime(ctx, id, status, progress, endTime)
+func (s *executionService) UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error {
+	return s.repo.UpdateScheduleResult(ctx, id, status, progress, endTime, scheduleParams)
 }

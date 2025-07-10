@@ -21,8 +21,8 @@ type TaskRepository interface {
 	Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// Release 释放任务
 	Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
-	// Renew 续约任务
-	Renew(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
+	// Renew 续约所有抢占到的任务
+	Renew(ctx context.Context, scheduleNodeID string) error
 	// UpdateNextTime 更新任务的下次执行时间
 	UpdateNextTime(ctx context.Context, id, version, nextTime int64) (domain.Task, error)
 	// UpdateScheduleParams 更新调度参数
@@ -91,12 +91,8 @@ func (r *taskRepository) Release(ctx context.Context, id int64, scheduleNodeID s
 	return r.toDomain(task), nil
 }
 
-func (r *taskRepository) Renew(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
-	task, err := r.dao.Renew(ctx, id, scheduleNodeID)
-	if err != nil {
-		return domain.Task{}, err
-	}
-	return r.toDomain(task), nil
+func (r *taskRepository) Renew(ctx context.Context, scheduleNodeID string) error {
+	return r.dao.Renew(ctx, scheduleNodeID)
 }
 
 func (r *taskRepository) UpdateNextTime(ctx context.Context, id, version, nextTime int64) (domain.Task, error) {

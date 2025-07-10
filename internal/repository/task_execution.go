@@ -24,13 +24,14 @@ type TaskExecutionRepository interface {
 	// limit: 查询结果数量限制
 	FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
-	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error
+	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
 	// SetRunningState 设置任务为运行状态并更新进度、开始时间（从PREPARE状态转换）
 	SetRunningState(ctx context.Context, id int64, progress int32) error
 	// UpdateRunningProgress 更新任务执行进度（仅在RUNNING状态下有效）
 	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
-	// UpdateStatusAndProgressAndEndTime 更新任务状态、进度和结束时间（用于终态更新）
-	UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error
+	// UpdateScheduleResult 更新调度结果
+	UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
+
 	FindExecutionsByPlanExecID(ctx context.Context, planExecID int64) (map[int64]domain.TaskExecution, error)
 	FindByTaskID(ctx context.Context, taskID int64) ([]domain.TaskExecution, error)
 	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (domain.TaskExecution, error)
@@ -123,8 +124,8 @@ func (r *taskExecutionRepository) FindRetryableExecutions(ctx context.Context, m
 	}), nil
 }
 
-func (r *taskExecutionRepository) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime, endTime int64, status domain.TaskExecutionStatus) error {
-	return r.dao.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, endTime, status.String())
+func (r *taskExecutionRepository) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error {
+	return r.dao.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, status.String(), progress, endTime, scheduleParams)
 }
 
 func (r *taskExecutionRepository) SetRunningState(ctx context.Context, id int64, progress int32) error {
@@ -135,8 +136,8 @@ func (r *taskExecutionRepository) UpdateRunningProgress(ctx context.Context, id 
 	return r.dao.UpdateProgress(ctx, id, progress)
 }
 
-func (r *taskExecutionRepository) UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error {
-	return r.dao.UpdateStatusAndProgressAndEndTime(ctx, id, status.String(), progress, endTime)
+func (r *taskExecutionRepository) UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error {
+	return r.dao.UpdateScheduleResult(ctx, id, status.String(), progress, endTime, scheduleParams)
 }
 
 // toEntity 将领域模型转换为DAO模型

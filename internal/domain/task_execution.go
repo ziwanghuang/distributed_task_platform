@@ -6,13 +6,13 @@ import executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/exe
 type TaskExecutionStatus string
 
 const (
-	TaskExecutionStatusUnknown         TaskExecutionStatus = "UNKNOWN"
-	TaskExecutionStatusPrepare         TaskExecutionStatus = "PREPARE"          // 已创建，准备执行
-	TaskExecutionStatusRunning         TaskExecutionStatus = "RUNNING"          // 正在执行
-	TaskExecutionStatusSuccess         TaskExecutionStatus = "SUCCESS"          // 执行成功
-	TaskExecutionStatusFailed          TaskExecutionStatus = "FAILED"           // 执行失败（不可重试）
-	TaskExecutionStatusFailedRetryable TaskExecutionStatus = "FAILED_RETRYABLE" // 执行失败（可重试）
-	TaskExecutionStatusFailedPreempted TaskExecutionStatus = "FAILED_PREEMPTED" // 因续约失败导致的抢占失败
+	TaskExecutionStatusUnknown           TaskExecutionStatus = "UNKNOWN"
+	TaskExecutionStatusPrepare           TaskExecutionStatus = "PREPARE"            // 已创建，准备执行
+	TaskExecutionStatusRunning           TaskExecutionStatus = "RUNNING"            // 正在执行
+	TaskExecutionStatusSuccess           TaskExecutionStatus = "SUCCESS"            // 执行成功
+	TaskExecutionStatusFailed            TaskExecutionStatus = "FAILED"             // 执行失败（不可重试）
+	TaskExecutionStatusFailedRetryable   TaskExecutionStatus = "FAILED_RETRYABLE"   // 执行失败（可重试）
+	TaskExecutionStatusFailedRescheduled TaskExecutionStatus = "FAILED_RESCHEDULED" // 执行失败（重调度）
 )
 
 func (t TaskExecutionStatus) String() string {
@@ -25,8 +25,7 @@ func (t TaskExecutionStatus) IsValid() bool {
 		TaskExecutionStatusRunning,
 		TaskExecutionStatusSuccess,
 		TaskExecutionStatusFailed,
-		TaskExecutionStatusFailedRetryable,
-		TaskExecutionStatusFailedPreempted:
+		TaskExecutionStatusFailedRetryable:
 		return true
 	default:
 		return false
@@ -53,8 +52,12 @@ func (t TaskExecutionStatus) IsFailedRetryable() bool {
 	return t == TaskExecutionStatusFailedRetryable
 }
 
+func (t TaskExecutionStatus) IsFailedRescheduled() bool {
+	return t == TaskExecutionStatusFailedRescheduled
+}
+
 func (t TaskExecutionStatus) IsTerminalStatus() bool {
-	return t.IsSuccess() || t.IsFailed() || t.IsFailedRetryable()
+	return t.IsSuccess() || t.IsFailed() || t.IsFailedRetryable() || t.IsFailedRescheduled()
 }
 
 func TaskExecutionStatusFromProto(status executorv1.ExecutionStatus) TaskExecutionStatus {
@@ -73,6 +76,9 @@ func TaskExecutionStatusFromProto(status executorv1.ExecutionStatus) TaskExecuti
 }
 
 func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionState {
+	if protoState == nil {
+		return ExecutionState{}
+	}
 	return ExecutionState{
 		ID:                protoState.GetId(),
 		TaskID:            protoState.GetTaskId(),
@@ -101,14 +107,17 @@ type TaskExecution struct {
 	Task       Task
 }
 
-// IsTerminal 判断是否为终态
-func (te *TaskExecution) IsTerminal() bool {
-	switch te.Status {
-	case TaskExecutionStatusSuccess, TaskExecutionStatusFailed,
-		TaskExecutionStatusFailedPreempted:
-		return true
-	default:
-		return false
+func (te *TaskExecution) MergeTaskScheduleParams(scheduleParams map[string]string) {
+	if len(scheduleParams) == 0 {
+		return
+	}
+	if len(te.Task.ScheduleParams) == 0 {
+		te.Task.ScheduleParams = scheduleParams
+	} else {
+		// 覆盖
+		for k, v := range scheduleParams {
+			te.Task.ScheduleParams[k] = v
+		}
 	}
 }
 
@@ -130,7 +139,6 @@ func (te *TaskExecution) GRPCParams() map[string]string {
 			result[k] = v
 		}
 	}
-
 	return result
 }
 

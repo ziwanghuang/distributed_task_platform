@@ -21,11 +21,15 @@ var (
 	ErrInvalidTaskScheduleNodeID  = errors.New("无效的调度节点ID")
 	ErrInvalidTaskExecutionMethod = errors.New("任务执行方式非法")
 
-	ErrSetExecutionStateRunningFailed        = errors.New("设置运行状态失败")
-	ErrUpdateExecutionStatusFailed           = errors.New("更新任务执行记录状态失败")
-	ErrUpdateExecutionStatusAndEndTimeFailed = errors.New("更新任务执行记录状态和结束时间失败")
-	ErrUpdateExecutionRunningProgressFailed  = errors.New("更新任务执行记录的运行状态失败")
-	ErrUpdateExecutionRetryResultFailed      = errors.New("更新任务执行记录的重试结果失败")
+	ErrSetExecutionStateRunningFailed          = errors.New("设置运行状态失败")
+	ErrUpdateExecutionStatusFailed             = errors.New("更新任务执行记录状态失败")
+	ErrUpdateExecutionStatusAndEndTimeFailed   = errors.New("更新任务执行记录状态和结束时间失败")
+	ErrUpdateExecutionRunningProgressFailed    = errors.New("更新任务执行记录的运行状态失败")
+	ErrUpdateExecutionRetryResultFailed        = errors.New("更新任务执行记录的重试结果失败")
+	ErrUpdateExecutionTaskScheduleParamsFailed = errors.New("更新任务执行记录的任务重调度参数失败")
+
+	ErrExecutionMaxRetriesExceeded    = errors.New("超过最大重试次数")
+	ErrExecutionResultHandlerNotFound = errors.New("执行结果处理器未找到")
 
 	ErrInitPlanFailed = errors.New("plan和实际创建的任务不符")
 )

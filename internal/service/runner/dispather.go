@@ -7,7 +7,9 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 )
 
-// dispatch
+var _ Runner = &Dispatcher{}
+
+// Dispatcher
 type Dispatcher struct {
 	planRunner       PlanRunner
 	singleTaskRunner SingleTaskRunner
@@ -27,4 +29,8 @@ func (d *Dispatcher) Run(ctx context.Context, task domain.Task) error {
 // Retry plan暂时不会触发Retry逻辑
 func (d *Dispatcher) Retry(ctx context.Context, execution domain.TaskExecution) error {
 	return d.singleTaskRunner.Retry(ctx, execution)
+}
+
+func (d *Dispatcher) Reschedule(ctx context.Context, execution domain.TaskExecution) error {
+	return d.singleTaskRunner.Reschedule(ctx, execution)
 }
