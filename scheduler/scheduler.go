@@ -254,11 +254,11 @@ func (s *Scheduler) HandleReports(ctx context.Context, reports []*domain.Report)
 }
 
 func (s *Scheduler) handleTaskExecutionState(ctx context.Context, state domain.ExecutionState) error {
-	handleFunc, exists := s.executionStateHandlers.Load(state.ID)
-	if !exists || handleFunc == nil {
-		return errs.ErrExecutionResultHandlerNotFound
+	handler, exists := s.executionStateHandlers.Load(state.ID)
+	if !exists || handler == nil {
+		return errs.ErrExecutionStateHandlerNotFound
 	}
-	return handleFunc(ctx, state)
+	return handler(ctx, state)
 }
 
 // consumeExecutionBatchReportEvent 异步消费 ExecutionBatchReport 事件
@@ -295,11 +295,6 @@ func (s *Scheduler) consumeExecutionBatchReportEvent(ctx context.Context, messag
 		return err
 	}
 	return nil
-}
-
-// RetryTaskExecution 重试任务执行
-func (s *Scheduler) RetryTaskExecution(execution domain.TaskExecution) error {
-	return s.runner.Retry(s.ctx, execution)
 }
 
 // InterruptTaskExecution 中断任务执行

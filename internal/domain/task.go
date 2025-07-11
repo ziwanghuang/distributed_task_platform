@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strconv"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
@@ -58,7 +59,8 @@ type Task struct {
 	RetryConfig     *RetryConfig
 	ScheduleNodeID  string
 	ScheduleParams  map[string]string // 调度参数（如分页偏移量、处理进度等）
-	NextTime        int64             // 下次执行时间戳
+	ShardingRule    *ShardingRule
+	NextTime        int64 // 下次执行时间戳
 	Status          TaskStatus
 	Version         int64 // 版本号，用于乐观锁
 	PlanID          int64
@@ -126,4 +128,26 @@ type GrpcConfig struct {
 type HTTPConfig struct {
 	Endpoint string            `json:"endpoint"`
 	Params   map[string]string `json:"params"`
+}
+
+type ShardingRule struct {
+	Type   string
+	Params map[string]string
+}
+
+func (s *ShardingRule) ToScheduleParams() []map[string]string {
+	// 在后台创建该任务时，应该严格校验下面的参数，此处不要再校验
+	scheduleParams := make([]map[string]string, 0)
+	switch s.Type {
+	case "range":
+		step, _ := strconv.ParseInt(s.Params["step"], 10, 64)
+		totalNums, _ := strconv.ParseInt(s.Params["totalNums"], 10, 64)
+		for i := range totalNums {
+			mp := make(map[string]string)
+			mp["start"] = strconv.FormatInt(i*step, 10)
+			mp["end"] = strconv.FormatInt((i+1)*step, 10)
+			scheduleParams = append(scheduleParams, mp)
+		}
+	}
+	return scheduleParams
 }

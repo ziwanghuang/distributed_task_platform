@@ -138,6 +138,11 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		scheduleParams = sqlx.JsonColumn[map[string]string]{Val: task.ScheduleParams, Valid: true}
 	}
 
+	var shardingRule sqlx.JsonColumn[domain.ShardingRule]
+	if task.ShardingRule != nil {
+		shardingRule = sqlx.JsonColumn[domain.ShardingRule]{Val: *task.ShardingRule, Valid: true}
+	}
+
 	return dao.Task{
 		ID:              task.ID,
 		Name:            task.Name,
@@ -147,6 +152,7 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		HTTPConfig:      httpConfig,
 		RetryConfig:     retryConfig,
 		ScheduleParams:  scheduleParams,
+		ShardingRules:   shardingRule,
 		ScheduleNodeID:  scheduleNodeID,
 		NextTime:        task.NextTime,
 		Status:          task.Status.String(),
@@ -182,6 +188,10 @@ func (r *taskRepository) toDomain(daoTask *dao.Task) domain.Task {
 	if daoTask.ScheduleParams.Valid {
 		scheduleParams = daoTask.ScheduleParams.Val
 	}
+	var shardingRule *domain.ShardingRule
+	if daoTask.ShardingRules.Valid {
+		shardingRule = &daoTask.ShardingRules.Val
+	}
 
 	return domain.Task{
 		ID:              daoTask.ID,
@@ -192,6 +202,7 @@ func (r *taskRepository) toDomain(daoTask *dao.Task) domain.Task {
 		HTTPConfig:      httpConfig,
 		RetryConfig:     retryConfig,
 		ScheduleParams:  scheduleParams,
+		ShardingRule:    shardingRule,
 		ScheduleNodeID:  scheduleNodeID,
 		NextTime:        daoTask.NextTime,
 		Status:          domain.TaskStatus(daoTask.Status),

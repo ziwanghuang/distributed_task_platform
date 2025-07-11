@@ -5,50 +5,41 @@ import (
 	"fmt"
 	"time"
 
-	"gitee.com/flycash/distributed_task_platform/internal/domain"
+	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"gitee.com/flycash/distributed_task_platform/scheduler"
 	"github.com/gotomicro/ego/core/elog"
 )
 
-// RetryCompensatorConfig 重试补偿器配置
-type RetryCompensatorConfig struct {
-	BatchSize              int           // 批次大小
-	MinDuration            time.Duration // 最小等待时间，防止空转
-	MaxRetryCount          int64         // 最大重试次数
-	PrepareTimeoutWindowMs int64         // PREPARE状态超时窗口
-}
-
-// RetryCompensator 重试补偿器
-type RetryCompensator struct {
-	taskSvc   task.Service
-	execSvc   task.ExecutionService
-	scheduler *scheduler.Scheduler
-	config    Config
-	logger    *elog.Component
-}
-
-// Config 重试补偿器配置
-type Config struct {
+// RetryConfig 重试补偿器配置
+type RetryConfig struct {
 	MaxRetryCount          int64         `yaml:"maxRetryCount"`          // 最大重试次数
 	PrepareTimeoutWindowMs int64         `yaml:"prepareTimeoutWindowMs"` // PREPARE状态超时窗口
 	BatchSize              int           `yaml:"batchSize"`              // 批量处理大小
 	MinDuration            time.Duration `yaml:"minDuration"`            // 最小等待时间，防止空转
 }
 
+// RetryCompensator 重试补偿器
+type RetryCompensator struct {
+	taskSvc task.Service
+	execSvc task.ExecutionService
+	runner  runner.Runner
+	config  RetryConfig
+	logger  *elog.Component
+}
+
 // NewRetryCompensator 创建重试补偿器
 func NewRetryCompensator(
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
-	scheduler *scheduler.Scheduler,
-	config Config,
+	runner runner.Runner,
+	config RetryConfig,
 ) *RetryCompensator {
 	return &RetryCompensator{
-		taskSvc:   taskSvc,
-		execSvc:   execSvc,
-		scheduler: scheduler,
-		config:    config,
-		logger:    elog.DefaultLogger.With(elog.FieldComponentName("retry.Compensator")),
+		taskSvc: taskSvc,
+		execSvc: execSvc,
+		runner:  runner,
+		config:  config,
+		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.reschedule")),
 	}
 }
 
@@ -96,7 +87,7 @@ func (r *RetryCompensator) retry(ctx context.Context) error {
 	}
 
 	if len(executions) == 0 {
-		r.logger.Debug("没有找到可重试的任务")
+		r.logger.Info("没有找到可重试的任务")
 		return nil
 	}
 
@@ -104,28 +95,15 @@ func (r *RetryCompensator) retry(ctx context.Context) error {
 
 	// 处理每个可重试的执行
 	for i := range executions {
-		err = r.retryExecution(ctx, executions[i])
+		err = r.runner.Retry(ctx, executions[i])
 		if err != nil {
 			r.logger.Error("重试任务失败",
 				elog.Int64("executionId", executions[i].ID),
 				elog.String("taskName", executions[i].Task.Name),
+				elog.Int64("retryCount", executions[i].RetryCount),
 				elog.FieldErr(err))
 			continue
 		}
 	}
 	return nil
-}
-
-// retryExecution 重试单个执行
-func (r *RetryCompensator) retryExecution(ctx context.Context, execution domain.TaskExecution) error {
-	r.logger.Info("开始重试任务",
-		elog.Int64("executionId", execution.ID),
-		elog.String("taskName", execution.Task.Name),
-		elog.Int64("retryCount", execution.RetryCount))
-	tk, err := r.taskSvc.GetByID(ctx, execution.Task.ID)
-	if err != nil {
-		return err
-	}
-	execution.Task = tk
-	return r.scheduler.RetryTaskExecution(execution)
 }

@@ -14,6 +14,8 @@ import (
 type TaskExecutionRepository interface {
 	// Create 创建任务执行实例
 	Create(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error)
+	// CreateShardingChildren 创建分片子任务执行实例
+	CreateShardingChildren(ctx context.Context, execution domain.TaskExecution, scheduleParams []map[string]string) ([]domain.TaskExecution, error)
 	// UpdateStatus 更新执行状态
 	UpdateStatus(ctx context.Context, id int64, status domain.TaskExecutionStatus) error
 	// GetByID 根据ID获取执行实例
@@ -31,6 +33,8 @@ type TaskExecutionRepository interface {
 	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateScheduleResult 更新调度结果
 	UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
+	// FindReschedulableExecutions 查找所有可以重调度的执行记录
+	FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error)
 
 	FindExecutionsByPlanExecID(ctx context.Context, planExecID int64) (map[int64]domain.TaskExecution, error)
 	FindByTaskID(ctx context.Context, taskID int64) ([]domain.TaskExecution, error)
@@ -102,6 +106,35 @@ func (r *taskExecutionRepository) Create(ctx context.Context, execution domain.T
 	return r.toDomain(created), nil
 }
 
+func (r *taskExecutionRepository) CreateShardingChildren(ctx context.Context, execution domain.TaskExecution, scheduleParams []map[string]string) ([]domain.TaskExecution, error) {
+	// 创建父任务执行记录
+	parent, err := r.Create(ctx, execution)
+	if err != nil {
+		return nil, err
+	}
+	// 填充子任务执行记录信息
+	children := make([]domain.TaskExecution, 0, len(scheduleParams))
+	for i := range scheduleParams {
+		// 值拷贝，复用父任务执行中的信息来创建子任务
+		child := parent
+		child.ID = 0
+		child.ShardingParentID = parent.ID
+		// 覆盖或添加父任务中的基础调度信息
+		child.MergeTaskScheduleParams(scheduleParams[i])
+		children = append(children, child)
+	}
+	// 创建子任务
+	createdExecutions, err := r.dao.BatchCreate(ctx, slice.Map(children, func(_ int, src domain.TaskExecution) dao.TaskExecution {
+		return r.toEntity(src)
+	}))
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(createdExecutions, func(_ int, src dao.TaskExecution) domain.TaskExecution {
+		return r.toDomain(src)
+	}), nil
+}
+
 func (r *taskExecutionRepository) UpdateStatus(ctx context.Context, id int64, status domain.TaskExecutionStatus) error {
 	return r.dao.UpdateStatus(ctx, id, status.String())
 }
@@ -140,6 +173,16 @@ func (r *taskExecutionRepository) UpdateScheduleResult(ctx context.Context, id i
 	return r.dao.UpdateScheduleResult(ctx, id, status.String(), progress, endTime, scheduleParams)
 }
 
+func (r *taskExecutionRepository) FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error) {
+	daoExecutions, err := r.dao.FindReschedulableExecutions(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(daoExecutions, func(_ int, src dao.TaskExecution) domain.TaskExecution {
+		return r.toDomain(src)
+	}), nil
+}
+
 // toEntity 将领域模型转换为DAO模型
 func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.TaskExecution {
 	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
@@ -176,14 +219,15 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 		TaskScheduleNodeID:  execution.Task.ScheduleNodeID,
 		TaskScheduleParams:  taskScheduleParams,
 		// TaskExecution自身字段
-		Stime:           execution.StartTime,
-		Etime:           execution.EndTime,
-		RetryCount:      execution.RetryCount,
-		NextRetryTime:   execution.NextRetryTime,
-		RunningProgress: execution.RunningProgress,
-		Status:          execution.Status.String(),
-		Ctime:           execution.CTime,
-		Utime:           execution.UTime,
+		ShardingParentID: execution.ShardingParentID,
+		Stime:            execution.StartTime,
+		Etime:            execution.EndTime,
+		RetryCount:       execution.RetryCount,
+		NextRetryTime:    execution.NextRetryTime,
+		RunningProgress:  execution.RunningProgress,
+		Status:           execution.Status.String(),
+		Ctime:            execution.CTime,
+		Utime:            execution.UTime,
 	}
 }
 
@@ -223,13 +267,14 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 			ScheduleNodeID:  daoExecution.TaskScheduleNodeID,
 			Version:         daoExecution.TaskVersion,
 		},
-		StartTime:       daoExecution.Stime,
-		EndTime:         daoExecution.Etime,
-		RetryCount:      daoExecution.RetryCount,
-		NextRetryTime:   daoExecution.NextRetryTime,
-		RunningProgress: daoExecution.RunningProgress,
-		Status:          domain.TaskExecutionStatus(daoExecution.Status),
-		CTime:           daoExecution.Ctime,
-		UTime:           daoExecution.Utime,
+		ShardingParentID: daoExecution.ShardingParentID,
+		StartTime:        daoExecution.Stime,
+		EndTime:          daoExecution.Etime,
+		RetryCount:       daoExecution.RetryCount,
+		NextRetryTime:    daoExecution.NextRetryTime,
+		RunningProgress:  daoExecution.RunningProgress,
+		Status:           domain.TaskExecutionStatus(daoExecution.Status),
+		CTime:            daoExecution.Ctime,
+		UTime:            daoExecution.Utime,
 	}
 }

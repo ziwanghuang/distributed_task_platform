@@ -94,14 +94,15 @@ func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionSta
 type TaskExecution struct {
 	ID int64
 	// 执行自身信息
-	StartTime       int64 // 开始时间戳
-	EndTime         int64 // 结束时间戳
-	RetryCount      int64
-	NextRetryTime   int64 // 下次重试时间戳
-	RunningProgress int32 // 执行进度 0-100（RUNNING状态下有效）
-	Status          TaskExecutionStatus
-	CTime           int64 // 创建时间戳
-	UTime           int64 // 更新时间戳
+	ShardingParentID int64
+	StartTime        int64 // 开始时间戳
+	EndTime          int64 // 结束时间戳
+	RetryCount       int64
+	NextRetryTime    int64 // 下次重试时间戳
+	RunningProgress  int32 // 执行进度 0-100（RUNNING状态下有效）
+	Status           TaskExecutionStatus
+	CTime            int64 // 创建时间戳
+	UTime            int64 // 更新时间戳
 	// 创建时刻从Task冗余的信息
 	PlanExecID int64
 	Task       Task

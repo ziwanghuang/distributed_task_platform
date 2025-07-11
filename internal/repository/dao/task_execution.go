@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	TaskExecutionStatusPrepare         = "PREPARE"
-	TaskExecutionStatusRunning         = "RUNNING"
-	TaskExecutionStatusFailedRetryable = "FAILED_RETRYABLE"
+	TaskExecutionStatusPrepare           = "PREPARE"
+	TaskExecutionStatusRunning           = "RUNNING"
+	TaskExecutionStatusFailedRetryable   = "FAILED_RETRYABLE"
+	TaskExecutionStatusFailedRescheduled = "FAILED_RESCHEDULED"
 )
 
 // TaskExecution 任务执行记录表DAO对象
@@ -33,14 +34,15 @@ type TaskExecution struct {
 	TaskScheduleParams  sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
 	PlanExecID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
 	// 下面这些是 TaskExecution 的自身信息
-	Stime           int64  `gorm:"type:bigint;comment:'开始时间'"`
-	Etime           int64  `gorm:"type:bigint;comment:'结束时间'"`
-	RetryCount      int64  `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
-	NextRetryTime   int64  `gorm:"type:bigint;comment:'下次重试时间'"`
-	RunningProgress int32  `gorm:"type:int;default:0;comment:'执行进度0-100，RUNNING状态下有效'"`
-	Status          string `gorm:"type:ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_PREEMPTED', 'FAILED', 'SUCCESS');not null;default:'PREPARE';comment:'执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_PREEMPTED-因续约失败导致的抢占失败， FAILED-失败, SUCCESS-成功'"`
-	Ctime           int64  `gorm:"comment:'创建时间'"`
-	Utime           int64  `gorm:"comment:'更新时间'"`
+	ShardingParentID int64  `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=ID，分片任务的所有子任务的hardingParentID=父任务ID，使用过滤条件 ID != ShardingParentID 来选中非分片任务和分片子任务（即忽略分片父任务）'"`
+	Stime            int64  `gorm:"type:bigint;comment:'开始时间'"`
+	Etime            int64  `gorm:"type:bigint;comment:'结束时间'"`
+	RetryCount       int64  `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
+	NextRetryTime    int64  `gorm:"type:bigint;comment:'下次重试时间'"`
+	RunningProgress  int32  `gorm:"type:int;default:0;comment:'执行进度0-100，RUNNING状态下有效'"`
+	Status           string `gorm:"type:ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS');not null;default:'PREPARE';comment:'执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功'"`
+	Ctime            int64  `gorm:"comment:'创建时间'"`
+	Utime            int64  `gorm:"comment:'更新时间'"`
 }
 
 // TableName 指定表名
@@ -51,6 +53,8 @@ func (TaskExecution) TableName() string {
 type TaskExecutionDAO interface {
 	// Create 创建任务执行记录
 	Create(ctx context.Context, execution TaskExecution) (TaskExecution, error)
+	// BatchCreate 批量创建执行记录
+	BatchCreate(ctx context.Context, executions []TaskExecution) ([]TaskExecution, error)
 	// GetByID 根据ID获取执行记录
 	GetByID(ctx context.Context, id int64) (TaskExecution, error)
 	// UpdateStatus 更新执行状态
@@ -68,7 +72,8 @@ type TaskExecutionDAO interface {
 	UpdateProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateScheduleResult 更新调度结果
 	UpdateScheduleResult(ctx context.Context, id int64, status string, progress int32, endTime int64, scheduleParams map[string]string) error
-
+	// FindReschedulableExecutions 查找所有可以重调度的执行记录
+	FindReschedulableExecutions(ctx context.Context, limit int) ([]TaskExecution, error)
 	// 查找对应planExecID下的所有执行计划
 	FindExecutionByPlanID(ctx context.Context, planExecID int64) (map[int64]TaskExecution, error)
 	FindByTaskID(ctx context.Context, taskID int64) ([]TaskExecution, error)
@@ -132,6 +137,19 @@ func (g *GORMTaskExecutionDAO) Create(ctx context.Context, execution TaskExecuti
 
 	// 返回包含生成ID的实体
 	return execution, nil
+}
+
+func (g *GORMTaskExecutionDAO) BatchCreate(ctx context.Context, executions []TaskExecution) ([]TaskExecution, error) {
+	now := time.Now().UnixMilli()
+	for i := range executions {
+		executions[i].Ctime, executions[i].Utime = now, now
+	}
+	err := g.db.WithContext(ctx).CreateInBatches(executions, len(executions)).Error
+	if err != nil {
+		return nil, fmt.Errorf("创建执行记录失败: %w", err)
+	}
+	// 返回包含生成ID的实体
+	return executions, nil
 }
 
 func (g *GORMTaskExecutionDAO) GetByID(ctx context.Context, id int64) (TaskExecution, error) {
@@ -272,4 +290,15 @@ func (g *GORMTaskExecutionDAO) UpdateScheduleResult(ctx context.Context, id int6
 		return fmt.Errorf("%w: ID=%d", errs.ErrUpdateExecutionStatusAndEndTimeFailed, id)
 	}
 	return nil
+}
+
+func (g *GORMTaskExecutionDAO) FindReschedulableExecutions(ctx context.Context, limit int) ([]TaskExecution, error) {
+	var executions []TaskExecution
+	// 查找可重调度的执行记录
+	err := g.db.WithContext(ctx).
+		Where("status = ?", TaskExecutionStatusFailedRescheduled).
+		Order("utime ASC").
+		Limit(limit).
+		Find(&executions).Error
+	return executions, err
 }

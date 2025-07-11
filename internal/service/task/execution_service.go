@@ -11,6 +11,8 @@ import (
 type ExecutionService interface {
 	// Create 创建任务执行实例
 	Create(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error)
+	// CreateShardingChildren 创建分片子任务执行实例
+	CreateShardingChildren(ctx context.Context, execution domain.TaskExecution, scheduleParams []map[string]string) ([]domain.TaskExecution, error)
 	// GetByID 根据ID获取执行实例
 	GetByID(ctx context.Context, id int64) (domain.TaskExecution, error)
 	// UpdateStatus 更新执行状态
@@ -28,6 +30,8 @@ type ExecutionService interface {
 	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateScheduleResult 更新调度结果
 	UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
+	// FindReschedulableExecutions 查找所有可以重调度的执行记录
+	FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error)
 
 	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (domain.TaskExecution, error)
 }
@@ -47,6 +51,10 @@ func (s *executionService) FindExecutionByTaskIDAndPlanExecID(ctx context.Contex
 
 func (s *executionService) Create(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error) {
 	return s.repo.Create(ctx, execution)
+}
+
+func (s *executionService) CreateShardingChildren(ctx context.Context, execution domain.TaskExecution, scheduleParams []map[string]string) ([]domain.TaskExecution, error) {
+	return s.repo.CreateShardingChildren(ctx, execution, scheduleParams)
 }
 
 func (s *executionService) UpdateStatus(ctx context.Context, id int64, status domain.TaskExecutionStatus) error {
@@ -75,4 +83,8 @@ func (s *executionService) UpdateRunningProgress(ctx context.Context, id int64, 
 
 func (s *executionService) UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error {
 	return s.repo.UpdateScheduleResult(ctx, id, status, progress, endTime, scheduleParams)
+}
+
+func (s *executionService) FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error) {
+	return s.repo.FindReschedulableExecutions(ctx, limit)
 }

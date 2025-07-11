@@ -29,8 +29,7 @@ func NewRemoteExecutor(
 ) *RemoteExecutor {
 	return &RemoteExecutor{
 		grpcClients: grpcClients,
-		// pollInterval: pollInterval,
-		logger: elog.DefaultLogger.With(elog.FieldComponentName("executor.RemoteExecutor")),
+		logger:      elog.DefaultLogger.With(elog.FieldComponentName("executor.RemoteExecutor")),
 	}
 }
 

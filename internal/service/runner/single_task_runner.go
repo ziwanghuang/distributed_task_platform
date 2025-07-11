@@ -56,10 +56,18 @@ func (s *SingleTaskRunner) Run(ctx context.Context, task domain.Task) error {
 			elog.FieldErr(err))
 		return err
 	}
+	// 根据分片规则区分任务类型
+	if acquiredTask.ShardingRule == nil {
+		return s.handleNormalTask(ctx, *acquiredTask)
+	} else {
+		return s.handleShardingTask(ctx, *acquiredTask)
+	}
+}
 
+func (s *SingleTaskRunner) handleNormalTask(ctx context.Context, task domain.Task) error {
 	// 抢占成功，立即创建TaskExecution记录
 	execution, err := s.execSvc.Create(ctx, domain.TaskExecution{
-		Task: *acquiredTask,
+		Task: task,
 		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
 		StartTime: time.Now().UnixMilli(),
 		Status:    domain.TaskExecutionStatusPrepare,
@@ -70,13 +78,12 @@ func (s *SingleTaskRunner) Run(ctx context.Context, task domain.Task) error {
 			elog.String("taskName", task.Name),
 			elog.FieldErr(err))
 		// 释放任务
-		s.releaseTask(ctx, *acquiredTask)
+		s.releaseTask(ctx, task)
 		return err
 	}
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
-		// ResultHandleFunc
 		err1 := s.handleTaskExecution(ctx, execution, s.scheduleExecutionStateHandler)
 		if err1 != nil {
 			s.logger.Error("正常调度任务失败",
@@ -84,6 +91,38 @@ func (s *SingleTaskRunner) Run(ctx context.Context, task domain.Task) error {
 				elog.FieldErr(err1))
 		}
 	}()
+	return nil
+}
+
+func (s *SingleTaskRunner) handleShardingTask(ctx context.Context, task domain.Task) error {
+	// 抢占成功，立即创建子任务执行记录
+	executions, err := s.execSvc.CreateShardingChildren(ctx, domain.TaskExecution{
+		Task: task,
+		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
+		StartTime: time.Now().UnixMilli(),
+		Status:    domain.TaskExecutionStatusPrepare,
+	}, task.ShardingRule.ToScheduleParams())
+	if err != nil {
+		s.logger.Error("创建子任务执行记录失败",
+			elog.Int64("taskID", task.ID),
+			elog.String("taskName", task.Name),
+			elog.FieldErr(err))
+		// 释放任务
+		s.releaseTask(ctx, task)
+		return err
+	}
+
+	// 抢占和创建都成功，异步触发任务
+	for i := range executions {
+		go func() {
+			err1 := s.handleTaskExecution(ctx, executions[i], s.scheduleExecutionStateHandler)
+			if err1 != nil {
+				s.logger.Error("正常调度子任务失败",
+					elog.Any("execution", executions[i]),
+					elog.FieldErr(err1))
+			}
+		}()
+	}
 	return nil
 }
 
@@ -360,7 +399,13 @@ func (s *SingleTaskRunner) updateRetryResult(ctx context.Context, execution doma
 	// 计算出下次重试时间
 	duration, shouldRetry := retryStrategy.NextWithRetries(int32(execution.RetryCount))
 	if shouldRetry {
+		// 当前不是最后一次重试，计算下次重试时间
 		execution.NextRetryTime = time.Now().Add(duration).UnixMilli()
+	} else {
+		// 当前是最后一次重试，只要不是成功状态一律设置为失败
+		if !result.Status.IsSuccess() {
+			result.Status = domain.TaskExecutionStatusFailed
+		}
 	}
 	// 不管是否达到最大重试次数，都要更新状态（主要是重试次数），这样下次重试补偿任务会因其超过最大重试次数而不再重试
 	err := s.execSvc.UpdateRetryResult(ctx,
