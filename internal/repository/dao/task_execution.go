@@ -280,7 +280,7 @@ func (g *GORMTaskExecutionDAO) UpdateScheduleResult(ctx context.Context, id int6
 			"status":               status,
 			"running_progress":     progress,
 			"etime":                endTime,
-			"task_schedule_params": scheduleParams,
+			"task_schedule_params": sqlx.JsonColumn[map[string]string]{Val: scheduleParams, Valid: scheduleParams != nil},
 			"utime":                time.Now().UnixMilli(),
 		})
 	if result.Error != nil {
