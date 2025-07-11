@@ -28,8 +28,8 @@ type SingleTaskRunner struct {
 	execSvc                task.ExecutionService                        // 任务执行服务
 	taskAcquirer           acquirer.TaskAcquirer                        // 任务抢占器
 	executors              map[string]executor.Executor                 // 执行器
-
-	renewInterval time.Duration // 续约间隔
+	producer               event.CompleteProducer                       // 任务完成事件生产者
+	renewInterval          time.Duration                                // 续约间隔
 
 	logger *elog.Component
 }
@@ -41,9 +41,19 @@ func NewSingleTaskRunner(
 	execSvc task.ExecutionService,
 	taskAcquirer acquirer.TaskAcquirer,
 	executors map[string]executor.Executor,
+	producer event.CompleteProducer,
 	renewInterval time.Duration,
 ) *SingleTaskRunner {
-	return &SingleTaskRunner{nodeID: nodeID, executionStateHandlers: executionHandlers, taskSvc: taskSvc, execSvc: execSvc, taskAcquirer: taskAcquirer, executors: executors, renewInterval: renewInterval}
+	return &SingleTaskRunner{
+		nodeID:                 nodeID,
+		executionStateHandlers: executionHandlers,
+		taskSvc:                taskSvc,
+		execSvc:                execSvc,
+		taskAcquirer:           taskAcquirer,
+		executors:              executors,
+		producer:               producer,
+		renewInterval:          renewInterval,
+	}
 }
 
 func (s *SingleTaskRunner) Run(ctx context.Context, task domain.Task) error {
