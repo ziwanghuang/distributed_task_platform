@@ -28,6 +28,7 @@ type ExecutionService interface {
 	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateStatusAndProgressAndEndTime 更新任务状态、进度和结束时间（用于终态更新）
 	UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error
+	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (domain.TaskExecution, error)
 }
 
 type executionService struct {
@@ -37,6 +38,10 @@ type executionService struct {
 // NewExecutionService 创建任务执行服务实例
 func NewExecutionService(repo repository.TaskExecutionRepository) ExecutionService {
 	return &executionService{repo: repo}
+}
+
+func (s *executionService) FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID, planExecID int64) (domain.TaskExecution, error) {
+	return s.repo.FindExecutionByTaskIDAndPlanExecID(ctx, taskID, planExecID)
 }
 
 func (s *executionService) Create(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error) {

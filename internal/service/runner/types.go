@@ -12,21 +12,3 @@ type Runner interface {
 	// Retry 重试任务的一次执行
 	Retry(ctx context.Context, execution domain.TaskExecution) error
 }
-
-type Dispatcher struct {
-	*Base
-}
-
-func NewDispatcher(base *Base) *Dispatcher {
-	return &Dispatcher{Base: base}
-}
-
-func (d *Dispatcher) Run(_ context.Context, _ domain.Task) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (d *Dispatcher) Retry(_ context.Context, _ domain.TaskExecution) error {
-	// TODO implement me
-	panic("implement me")
-}

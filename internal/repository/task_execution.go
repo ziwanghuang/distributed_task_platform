@@ -31,6 +31,9 @@ type TaskExecutionRepository interface {
 	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateStatusAndProgressAndEndTime 更新任务状态、进度和结束时间（用于终态更新）
 	UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64) error
+	FindExecutionsByPlanExecID(ctx context.Context, planExecID int64) (map[int64]domain.TaskExecution, error)
+	FindByTaskID(ctx context.Context, taskID int64) ([]domain.TaskExecution, error)
+	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (domain.TaskExecution, error)
 }
 
 type taskExecutionRepository struct {
@@ -43,6 +46,40 @@ func NewTaskExecutionRepository(executionDAO dao.TaskExecutionDAO, taskRepo Task
 		dao:      executionDAO,
 		taskRepo: taskRepo,
 	}
+}
+
+func (r *taskExecutionRepository) FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID, planExecID int64) (domain.TaskExecution, error) {
+	daoExec, err := r.dao.FindExecutionByTaskIDAndPlanExecID(ctx, taskID, planExecID)
+	if err != nil {
+		return domain.TaskExecution{}, err
+	}
+	return r.toDomain(daoExec), nil
+}
+
+func (r *taskExecutionRepository) FindByTaskID(ctx context.Context, taskID int64) ([]domain.TaskExecution, error) {
+	daoExecutions, err := r.dao.FindByTaskID(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(daoExecutions, func(_ int, src dao.TaskExecution) domain.TaskExecution {
+		return r.toDomain(src)
+	}), nil
+}
+
+func (r *taskExecutionRepository) FindExecutionsByPlanExecID(ctx context.Context, planExecID int64) (map[int64]domain.TaskExecution, error) {
+	daoExecutions, err := r.dao.FindExecutionByPlanID(ctx, planExecID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 将DAO模型转换为领域模型
+	result := make(map[int64]domain.TaskExecution)
+	for taskID := range daoExecutions {
+		daoExecution := daoExecutions[taskID]
+		result[taskID] = r.toDomain(daoExecution)
+	}
+
+	return result, nil
 }
 
 func (r *taskExecutionRepository) Create(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error) {

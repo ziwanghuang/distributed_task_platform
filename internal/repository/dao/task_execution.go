@@ -31,7 +31,7 @@ type TaskExecution struct {
 	TaskVersion         int64                               `gorm:"type:bigint;not null;comment:'创建时Task的版本号'"`
 	TaskScheduleNodeID  string                              `gorm:"type:varchar(255);not null;comment:'创建此执行的调度节点ID'"`
 	TaskScheduleParams  sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
-
+	PlanExecID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
 	// 下面这些是 TaskExecution 的自身信息
 	Stime           int64  `gorm:"type:bigint;comment:'开始时间'"`
 	Etime           int64  `gorm:"type:bigint;comment:'结束时间'"`
@@ -68,10 +68,52 @@ type TaskExecutionDAO interface {
 	UpdateProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateStatusAndProgressAndEndTime 更新任务状态、进度和结束时间（用于终态更新）
 	UpdateStatusAndProgressAndEndTime(ctx context.Context, id int64, status string, progress int32, endTime int64) error
+
+	// 查找对应planExecID下的所有执行计划
+	FindExecutionByPlanID(ctx context.Context, planExecID int64) (map[int64]TaskExecution, error)
+	FindByTaskID(ctx context.Context, taskID int64) ([]TaskExecution, error)
+	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (TaskExecution, error)
 }
 
 type GORMTaskExecutionDAO struct {
 	db *egorm.Component
+}
+
+func (g *GORMTaskExecutionDAO) FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID, planExecID int64) (TaskExecution, error) {
+	var exec TaskExecution
+	err := g.db.WithContext(ctx).Where("task_id = ? AND plan_exec_id = ? ", taskID, planExecID).Order("ctime DESC").First(&exec).Error
+	if err != nil {
+		return TaskExecution{}, fmt.Errorf("查询任务 %d 的执行记录失败: %w", taskID, err)
+	}
+	return exec, nil
+}
+
+func (g *GORMTaskExecutionDAO) FindByTaskID(ctx context.Context, taskID int64) ([]TaskExecution, error) {
+	var executions []TaskExecution
+	err := g.db.WithContext(ctx).Where("task_id = ?", taskID).Order("ctime DESC").Find(&executions).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询任务 %d 的执行记录失败: %w", taskID, err)
+	}
+	return executions, nil
+}
+
+func (g *GORMTaskExecutionDAO) FindExecutionByPlanID(ctx context.Context, planExecID int64) (map[int64]TaskExecution, error) {
+	var executions []TaskExecution
+	err := g.db.WithContext(ctx).
+		Where("plan_exec_id = ? ", planExecID).
+		Order("ctime DESC").
+		Find(&executions).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[int64]TaskExecution)
+	for idx := range executions {
+		execution := executions[idx]
+		result[execution.TaskID] = execution
+	}
+
+	return result, nil
 }
 
 func NewGORMTaskExecutionDAO(db *egorm.Component) TaskExecutionDAO {

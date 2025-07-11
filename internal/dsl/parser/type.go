@@ -1,9 +1,41 @@
 package parser
 
-type AstNode interface {
-	GetNodeName(err error) []string
+import "reflect"
+
+type Node interface {
+	// 根据上一个任务的执行情况返回，下一步需要执行的任务名
+	NodeName(execution Execution) []string
 	Type() NodeType
+	// 用于前置节点校验，获取全部节点
 	AllNodeName() []string
+}
+
+func NodeIsNil(n Node) bool {
+	rv := reflect.ValueOf(n)
+	if rv.Kind() == reflect.Ptr && rv.IsNil() {
+		return true
+	}
+	return false
+}
+
+// Execution 防止循环引用另外定义了一个Execution
+type Execution struct {
+	Status TaskExecutionStatus
+}
+type TaskExecutionStatus string
+
+const (
+	TaskExecutionStatusUnknown         TaskExecutionStatus = "UNKNOWN"
+	TaskExecutionStatusPrepare         TaskExecutionStatus = "PREPARE"          // 已创建，准备执行
+	TaskExecutionStatusRunning         TaskExecutionStatus = "RUNNING"          // 正在执行
+	TaskExecutionStatusSuccess         TaskExecutionStatus = "SUCCESS"          // 执行成功
+	TaskExecutionStatusFailed          TaskExecutionStatus = "FAILED"           // 执行失败（不可重试）
+	TaskExecutionStatusFailedRetryable TaskExecutionStatus = "FAILED_RETRYABLE" // 执行失败（可重试）
+	TaskExecutionStatusFailedPreempted TaskExecutionStatus = "FAILED_PREEMPTED" // 因续约失败导致的抢占失败
+)
+
+func (e TaskExecutionStatus) IsSuccess() bool {
+	return e == TaskExecutionStatusSuccess
 }
 
 type NodeType string
@@ -18,6 +50,6 @@ const (
 )
 
 type TaskPlan interface {
-	AdjoiningNode(name string) PlanNode
+	AdjoiningNode(name string) (PlanNode, bool)
 	RootNode() []PlanNode
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"gitee.com/flycash/distributed_task_platform/internal/event"
+
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
@@ -41,7 +43,8 @@ type Base struct {
 	tokenAcquireTimeout time.Duration // 抢令牌时的超时
 	renewInterval       time.Duration // 续约间隔
 
-	logger *elog.Component
+	logger   *elog.Component
+	producer event.CompleteProducer
 }
 
 func NewBase(
@@ -56,6 +59,37 @@ func NewBase(
 	renewInterval time.Duration,
 ) *Base {
 	return &Base{nodeID: nodeID, tokens: tokens, remoteExecutions: remoteExecutions, taskSvc: taskSvc, execSvc: execSvc, taskAcquirer: taskAcquirer, executors: executors, tokenAcquireTimeout: tokenAcquireTimeout, renewInterval: renewInterval}
+}
+
+func (s *Base) acquireAndCreateExecution(ctx context.Context, task domain.Task, planExecID int64) (domain.Task, domain.TaskExecution, error) {
+	// 抢令牌和抢占任务
+	acquiredTask, err := s.acquireTokenAndTask(ctx, task)
+	if err != nil {
+		s.logger.Error("任务抢占失败",
+			elog.Int64("taskID", task.ID),
+			elog.String("taskName", task.Name),
+			elog.FieldErr(err))
+		return domain.Task{}, domain.TaskExecution{}, err
+	}
+
+	// 抢占成功，立即创建TaskExecution记录
+	execution, err := s.execSvc.Create(ctx, domain.TaskExecution{
+		Task: *acquiredTask,
+		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
+		PlanExecID: planExecID,
+		StartTime:  time.Now().UnixMilli(),
+		Status:     domain.TaskExecutionStatusPrepare,
+	})
+	if err != nil {
+		s.logger.Error("创建任务执行记录失败",
+			elog.Int64("taskID", task.ID),
+			elog.String("taskName", task.Name),
+			elog.FieldErr(err))
+		// 创建失败，释放令牌和锁
+		s.releaseTokenAndTask(ctx, *acquiredTask)
+		return domain.Task{}, domain.TaskExecution{}, err
+	}
+	return *acquiredTask, execution, nil
 }
 
 // acquireTokenAndTask 抢令牌 + 抢占任务

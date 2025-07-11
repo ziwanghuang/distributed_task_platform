@@ -11,9 +11,9 @@ import (
 const number1 = 1
 
 type PlanNode struct {
-	Pre  AstNode
-	Next AstNode
-	AstNode
+	Pre  Node
+	Next Node
+	Node
 }
 
 type conditionTask struct {
@@ -32,11 +32,11 @@ func (a *AstPlan) RootNode() []PlanNode {
 	return a.root
 }
 
-func (a *AstPlan) AdjoiningNode(name string) PlanNode {
+func (a *AstPlan) AdjoiningNode(name string) (PlanNode, bool) {
 	if task, ok := a.tasks.Load(name); ok {
-		return task
+		return task, true
 	}
-	return PlanNode{}
+	return PlanNode{}, false
 }
 
 func (a *AstPlan) Build() error {
@@ -54,13 +54,17 @@ func (a *AstPlan) Build() error {
 	return nil
 }
 
-func NewAstPlan(query string) *AstPlan {
+func NewAstPlan(query string) (*AstPlan, error) {
 	lexer := parser.NewTaskOrchestrationLexer(antlr.NewInputStream(query))
 	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 	p := parser.NewTaskOrchestrationParser(tokens)
 	pro := p.Program()
-
-	return &AstPlan{
+	a := &AstPlan{
 		pro: pro,
 	}
+	err := a.Build()
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
 }

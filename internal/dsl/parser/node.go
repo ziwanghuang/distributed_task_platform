@@ -10,8 +10,12 @@ func NewSimpleTask(name string) SimpleNode {
 	return SimpleNode{name: name}
 }
 
-func (s SimpleNode) GetNodeName(_ error) []string {
-	return []string{s.name}
+func (s SimpleNode) NodeName(execution Execution) []string {
+	// 前一个任务执行成功返回所有任务节点
+	if execution.Status.IsSuccess() {
+		return []string{s.name}
+	}
+	return []string{}
 }
 
 func (s SimpleNode) Type() NodeType {
@@ -19,7 +23,7 @@ func (s SimpleNode) Type() NodeType {
 }
 
 func (s SimpleNode) AllNodeName() []string {
-	return s.GetNodeName(nil)
+	return []string{s.name}
 }
 
 // 简化语法 && || 只能是单体任务不能是组合
@@ -31,10 +35,14 @@ func NewAndTask(tasks ...SimpleNode) AndNode {
 	return AndNode{tasks: tasks}
 }
 
-func (a AndNode) GetNodeName(_ error) []string {
-	return slice.Map(a.tasks, func(_ int, src SimpleNode) string {
-		return src.name
-	})
+func (a AndNode) NodeName(execution Execution) []string {
+	if execution.Status.IsSuccess() {
+		return slice.Map(a.tasks, func(_ int, src SimpleNode) string {
+			return src.name
+		})
+	}
+	// 前一个任务执行失败下面就不执行了
+	return []string{}
 }
 
 func (a AndNode) Type() NodeType {
@@ -42,7 +50,9 @@ func (a AndNode) Type() NodeType {
 }
 
 func (a AndNode) AllNodeName() []string {
-	return a.GetNodeName(nil)
+	return slice.Map(a.tasks, func(_ int, src SimpleNode) string {
+		return src.name
+	})
 }
 
 type OrNode struct {
@@ -53,10 +63,13 @@ func NewOrTask(tasks ...SimpleNode) OrNode {
 	return OrNode{tasks: tasks}
 }
 
-func (o OrNode) GetNodeName(_ error) []string {
-	return slice.Map(o.tasks, func(_ int, src SimpleNode) string {
-		return src.name
-	})
+func (o OrNode) NodeName(execution Execution) []string {
+	if execution.Status.IsSuccess() {
+		return slice.Map(o.tasks, func(_ int, src SimpleNode) string {
+			return src.name
+		})
+	}
+	return []string{}
 }
 
 func (o OrNode) Type() NodeType {
@@ -64,7 +77,9 @@ func (o OrNode) Type() NodeType {
 }
 
 func (o OrNode) AllNodeName() []string {
-	return o.GetNodeName(nil)
+	return slice.Map(o.tasks, func(_ int, src SimpleNode) string {
+		return src.name
+	})
 }
 
 type EndNode struct {
@@ -77,10 +92,13 @@ func NewEndNode(name string) EndNode {
 	}
 }
 
-func (e EndNode) GetNodeName(_ error) []string {
-	return []string{
-		e.name,
+func (e EndNode) NodeName(execution Execution) []string {
+	if execution.Status.IsSuccess() {
+		return []string{
+			e.name,
+		}
 	}
+	return []string{}
 }
 
 func (e EndNode) Type() NodeType {
@@ -88,7 +106,9 @@ func (e EndNode) Type() NodeType {
 }
 
 func (e EndNode) AllNodeName() []string {
-	return e.GetNodeName(nil)
+	return []string{
+		e.name,
+	}
 }
 
 type ConditionNode struct {
@@ -100,11 +120,15 @@ func NewConditionTask(successTask, failureTask SimpleNode) ConditionNode {
 	return ConditionNode{successTask: successTask, failureTask: failureTask}
 }
 
-func (e ConditionNode) GetNodeName(err error) []string {
-	if err != nil {
-		return e.failureTask.GetNodeName(err)
+func (e ConditionNode) NodeName(execution Execution) []string {
+	if execution.Status.IsSuccess() {
+		return []string{
+			e.successTask.name,
+		}
 	}
-	return e.successTask.GetNodeName(nil)
+	return []string{
+		e.failureTask.name,
+	}
 }
 
 func (e ConditionNode) Type() NodeType {
@@ -116,26 +140,4 @@ func (e ConditionNode) AllNodeName() []string {
 		e.successTask.name,
 		e.failureTask.name,
 	}
-}
-
-type LoopNode struct {
-	name string
-}
-
-func NewLoopTask(task string) LoopNode {
-	return LoopNode{
-		name: task,
-	}
-}
-
-func (e LoopNode) GetNodeName(_ error) []string {
-	return []string{e.name}
-}
-
-func (e LoopNode) Type() NodeType {
-	return NodeTypeLoop
-}
-
-func (e LoopNode) AllNodeName() []string {
-	return e.GetNodeName(nil)
 }

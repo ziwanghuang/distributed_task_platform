@@ -33,8 +33,13 @@ type Task struct {
 	NextTime        int64                               `gorm:"type:bigint;not null;index:idx_next_time_status_utime,priority:1;comment:'下次执行时间'"`
 	Status          string                              `gorm:"type:ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE');not null;default:'ACTIVE';index:idx_next_time_status_utime,priority:2;comment:'任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行。处于INACTIVE也可以被再次 ACTIVE'"`
 	Version         int64                               `gorm:"type:bigint;not null;default:1;comment:'版本号，用于乐观锁'"`
-	Ctime           int64                               `gorm:"comment:'创建时间'"`
-	Utime           int64                               `gorm:"index:idx_next_time_status_utime,priority:3;comment:'更新时间'"`
+	// planID >0 就说明是 plan中的任务
+	PlanID int64  `gorm:"type:bigint;not null;default:0;index:idx_plan_id"`
+	Type   string `gorm:"type:ENUM('normal', 'plan');not null;default:'normal';index:idx_type"`
+	// 执行计划
+	ExecExpr string `gorm:"type:varchar(2048);not null;default:'';comment:'执行表达式'"`
+	Ctime    int64  `gorm:"comment:'创建时间'"`
+	Utime    int64  `gorm:"index:idx_next_time_status_utime,priority:3;comment:'更新时间'"`
 }
 
 // TableName 指定表名
@@ -47,6 +52,8 @@ type TaskDAO interface {
 	Create(ctx context.Context, task Task) (*Task, error)
 	// GetByID 根据ID获取任务
 	GetByID(ctx context.Context, id int64) (*Task, error)
+	// FindByPlanID 根据计划ID获取所有子任务
+	FindByPlanID(ctx context.Context, planID int64) ([]*Task, error)
 	// FindSchedulableTasks 查询可调度的任务列表
 	// preemptedTimeoutMs: PREEMPTED状态任务的超时时间（毫秒），超过此时间未续约的任务可被重新抢占
 	FindSchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]*Task, error)
@@ -68,6 +75,15 @@ type GORMTaskDAO struct {
 
 func NewGORMTaskDAO(db *egorm.Component) TaskDAO {
 	return &GORMTaskDAO{db: db}
+}
+
+func (g *GORMTaskDAO) FindByPlanID(ctx context.Context, planID int64) ([]*Task, error) {
+	var tasks []*Task
+	err := g.db.WithContext(ctx).Where("plan_id = ?", planID).Find(&tasks).Error
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
 }
 
 func (g *GORMTaskDAO) Create(ctx context.Context, task Task) (*Task, error) {
@@ -95,8 +111,9 @@ func (g *GORMTaskDAO) FindSchedulableTasks(ctx context.Context, preemptedTimeout
 	// 获取所有可调度的任务
 	// 1. ACTIVE 状态且到了执行时间的任务
 	// 2. PREEMPTED 状态但超时未续约的任务（疑似僵尸任务）
+	// 3. 非plan中的任务
 	err := g.db.WithContext(ctx).
-		Where("next_time <= ? AND (status = ? OR (status = ? AND utime <= ?))",
+		Where("next_time <= ? AND (status = ? OR (status = ? AND utime <= ?)) AND plan_id = 0",
 			now, StatusActive, StatusPreempted, now-preemptedTimeoutMs).
 		Order("next_time ASC").
 		Limit(limit).

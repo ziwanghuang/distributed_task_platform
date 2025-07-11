@@ -23,7 +23,7 @@ task1 -> task2 -> task3
 task1 && task2 && task3
 ```
 
-#### 或执行 (`||`)
+#### 单个依赖 (`||`)
 表示任务的选择执行，任意一个任务成功即可。
 ```
 task1 || task2 || task3
@@ -35,21 +35,15 @@ task1 || task2 || task3
 task1 -> task2 ? task3 : task4
 ```
 
-#### 重复执行 (`*`)
-表示任务可以重复执行。
-```
-task1*
-```
 
 ### 3. 分组操作
 
-#### 并行组 (`[A,B,C]`)
-表示一组任务并行执行。
+#### 这个是 (`[A,B,C]`)
 ```
-task1 -> [task2, task3, task4]
+表示单依赖，等价于(A||B||C),是语法糖
 ```
 
-#### 汇聚组 (`{A,B,C}`)
+#### (`{A,B,C}`)
 表示等待所有任务完成后继续执行。
 ```
 {task1, task2, task3} -> task4
@@ -62,42 +56,17 @@ task1 -> [task2, task3, task4]
 (task1 -> task2) && (task3 -> task4)
 ```
 
-## 操作符优先级
+#### 5.多个语句
+用;分割，或者换行符
 
-从低到高的优先级：
-1. `||` (或)
-2. `&&` (并行)
-3. `->` (顺序)
-4. `? :` (条件)
-5. `*` (重复)
-6. `()` (括号)
 
 ## 示例
 
 ### 简单流程
-```
-start -> validate -> process -> end
-```
+![img.png](img.png)
+上述图对应的表达式如下
+A->B->(C||D); C->(E&&F)->END; D->E->END;
 
-### 并行处理
-```
-start -> [process1, process2, process3] -> merge
-```
-
-### 条件分支
-```
-input -> validate ? success : error
-```
-
-### 复杂组合
-```
-start -> (prepare && setup) ? [process1, process2] : cleanup*
-```
-
-### 错误处理
-```
-start -> process ? success : (retry || fallback)
-```
 
 ## 文件结构
 
@@ -118,3 +87,6 @@ start -> process ? success : (retry || fallback)
 - 支持单行注释 `//`
 - 括号内的表达式优先执行
 - 条件操作符的优先级高于其他操作符 
+- 为了简化代码，这里对部分语句的支持是不完全的
+  - && || 前后只能是单个任务, {}和[] 中也只能是单个任务
+- 整个表达式，有且只有一个结束任务，也就是有且只有一个任务没有后继任务。

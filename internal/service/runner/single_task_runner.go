@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"gitee.com/flycash/distributed_task_platform/internal/event"
+
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry/strategy"
@@ -86,6 +88,8 @@ func (s *SingleTaskRunner) updateStatusAndProgressAndEndTime(ctx context.Context
 		elog.String("status", res.State.Status.String()))
 
 	s.updateTaskState(ctx, res, execution)
+	// 发送完成事件
+	s.sendCompletedEvent(ctx, res, execution)
 	return true
 }
 
@@ -168,5 +172,23 @@ func (s *SingleTaskRunner) updateRetryResult(ctx context.Context, res *Result, e
 	}
 	// 不管是否达到最大重试次数
 	s.updateTaskState(ctx, res, execution)
+	// 发送完成事件
+	s.sendCompletedEvent(ctx, res, execution)
 	return true
+}
+
+func (s *SingleTaskRunner) sendCompletedEvent(ctx context.Context, res *Result, execution *domain.TaskExecution) {
+	switch res.State.Status {
+	case domain.TaskExecutionStatusSuccess, domain.TaskExecutionStatusFailed:
+		err := s.producer.Produce(ctx, event.Event{
+			PlanID: execution.Task.PlanID,
+			TaskID: execution.Task.ID,
+			Type:   domain.NormalTaskType,
+		})
+		if err != nil {
+			s.logger.Error("发送完成事件失败", elog.Int64("taskID", execution.Task.ID), elog.FieldErr(err))
+		}
+	default:
+		// 其他状态不用做处理
+	}
 }

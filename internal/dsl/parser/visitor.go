@@ -3,7 +3,6 @@ package parser
 
 import (
 	"errors"
-	"reflect"
 
 	"gitee.com/flycash/distributed_task_platform/internal/dsl/ast/parser"
 	"github.com/antlr4-go/antlr/v4"
@@ -101,7 +100,7 @@ func (v *TaskOrchestrationVisitor) getAllNode(plans [][]*PlanNode) map[string]Pl
 			if task.Type() == NodeTypeLoop {
 				if len(task.AllNodeName()) > 0 {
 					taskMap[task.AllNodeName()[0]] = PlanNode{
-						AstNode: task.AstNode,
+						Node: task.Node,
 					}
 				}
 				continue
@@ -109,7 +108,7 @@ func (v *TaskOrchestrationVisitor) getAllNode(plans [][]*PlanNode) map[string]Pl
 			for kdx := range task.AllNodeName() {
 				taskName := task.AllNodeName()[kdx]
 				taskMap[taskName] = PlanNode{
-					AstNode: NewSimpleTask(taskName),
+					Node: NewSimpleTask(taskName),
 				}
 			}
 		}
@@ -117,14 +116,14 @@ func (v *TaskOrchestrationVisitor) getAllNode(plans [][]*PlanNode) map[string]Pl
 	return taskMap
 }
 
-func (v *TaskOrchestrationVisitor) setAstNode(plans [][]*PlanNode) (*mapx.TreeMap[[]string, AstNode], error) {
-	treeMap, err := mapx.NewTreeMap[[]string, AstNode](CompareStrList)
+func (v *TaskOrchestrationVisitor) setAstNode(plans [][]*PlanNode) (*mapx.TreeMap[[]string, Node], error) {
+	treeMap, err := mapx.NewTreeMap[[]string, Node](CompareStrList)
 	if err != nil {
 		return nil, err
 	}
 	for _, plan := range plans {
 		for _, task := range plan {
-			err = treeMap.Put(task.AllNodeName(), task.AstNode)
+			err = treeMap.Put(task.AllNodeName(), task.Node)
 			if err != nil {
 				return nil, err
 			}
@@ -141,21 +140,21 @@ func (v *TaskOrchestrationVisitor) setEndNode(taskMap map[string]PlanNode, endLi
 		if len(endPlanNode.AllNodeName()) > 1 {
 			return errors.New("结束任务必须是单一任务")
 		}
-		if endPlanNode.AstNode.Type() == NodeTypeLoop {
+		if endPlanNode.Node.Type() == NodeTypeLoop {
 			return nil
 		}
 		endNodeName := endPlanNode.AllNodeName()[0]
 		// 重新设置结束任务
 		// 如果是简单任务就设置为 结束节点
 		// 如果是循环任务就返回，循环任务也可以认为是一个结束节点
-		endPlanNode.AstNode = NewEndNode(endNodeName)
+		endPlanNode.Node = NewEndNode(endNodeName)
 		taskMap[endPlanNode.AllNodeName()[0]] = endPlanNode
 		for name, task := range taskMap {
 			if v.checkIsEndNode(task.Pre, endNodeName) {
-				task.Pre = endPlanNode.AstNode
+				task.Pre = endPlanNode.Node
 			}
 			if v.checkIsEndNode(task.Next, endNodeName) {
-				task.Next = endPlanNode.AstNode
+				task.Next = endPlanNode.Node
 			}
 			taskMap[name] = task
 		}
@@ -163,7 +162,7 @@ func (v *TaskOrchestrationVisitor) setEndNode(taskMap map[string]PlanNode, endLi
 	return nil
 }
 
-func (v *TaskOrchestrationVisitor) checkIsEndNode(no AstNode, endNodeName string) bool {
+func (v *TaskOrchestrationVisitor) checkIsEndNode(no Node, endNodeName string) bool {
 	if no != nil {
 		return slice.Contains[string](no.AllNodeName(), endNodeName)
 	}
@@ -171,7 +170,7 @@ func (v *TaskOrchestrationVisitor) checkIsEndNode(no AstNode, endNodeName string
 }
 
 //nolint:nilnil //这里就要他返回nil
-func (v *TaskOrchestrationVisitor) getPreAndNextTask(tm *mapx.TreeMap[[]string, AstNode], names []string) (AstNode, error) {
+func (v *TaskOrchestrationVisitor) getPreAndNextTask(tm *mapx.TreeMap[[]string, Node], names []string) (Node, error) {
 	if len(names) == 1 {
 		return NewSimpleTask(names[0]), nil
 	}
@@ -190,7 +189,7 @@ func (v *TaskOrchestrationVisitor) getPreAndNext(plans [][]*PlanNode, taskName s
 	nextSet := set.NewMapSet[string](defaultTreeLen)
 	for _, plan := range plans {
 		for _, task := range plan {
-			if slice.Contains[string](task.AstNode.AllNodeName(), taskName) {
+			if slice.Contains[string](task.Node.AllNodeName(), taskName) {
 				v.setPreAndNext(preSet, task.Pre)
 				v.setPreAndNext(nextSet, task.Next)
 			}
@@ -199,16 +198,12 @@ func (v *TaskOrchestrationVisitor) getPreAndNext(plans [][]*PlanNode, taskName s
 	return preSet.Keys(), nextSet.Keys()
 }
 
-func (v *TaskOrchestrationVisitor) setPreAndNext(st *set.MapSet[string], task AstNode) {
-	if task != nil {
-		// 进一步判断底层指针
-		rv := reflect.ValueOf(task)
-		if rv.Kind() == reflect.Ptr && rv.IsNil() {
-			return
-		}
-		for idx := range task.AllNodeName() {
-			st.Add(task.AllNodeName()[idx])
-		}
+func (v *TaskOrchestrationVisitor) setPreAndNext(st *set.MapSet[string], task Node) {
+	if NodeIsNil(task) {
+		return
+	}
+	for idx := range task.AllNodeName() {
+		st.Add(task.AllNodeName()[idx])
 	}
 }
 
@@ -290,13 +285,13 @@ func (v *TaskOrchestrationVisitor) VisitSequenceExpression(ctx *parser.SequenceE
 			switch ta := ans.(type) {
 			case *conditionTask:
 				prePlanTask := &PlanNode{
-					AstNode: ta.Pre,
-					Pre:     pre,
-					Next:    ta.Next,
+					Node: ta.Pre,
+					Pre:  pre,
+					Next: ta.Next,
 				}
 				conTask := &PlanNode{
-					AstNode: ta.Next,
-					Pre:     prePlanTask,
+					Node: ta.Next,
+					Pre:  prePlanTask,
 				}
 				if pre != nil {
 					pre.Next = prePlanTask
@@ -309,10 +304,10 @@ func (v *TaskOrchestrationVisitor) VisitSequenceExpression(ctx *parser.SequenceE
 				plan = append(plan, ta...)
 				pre = ta[len(ta)-1]
 
-			case AstNode:
+			case Node:
 				t := &PlanNode{
-					Pre:     pre,
-					AstNode: ta,
+					Pre:  pre,
+					Node: ta,
 				}
 				plan = append(plan, t)
 				if pre != nil {
@@ -341,7 +336,7 @@ func (v *TaskOrchestrationVisitor) VisitConditionalExpression(ctx *parser.Condit
 		if ok1 && ok2 && ok3 {
 			return &conditionTask{
 				Pre:  preTask,
-				Next: NewConditionTask(successTask[0].AstNode.(SimpleNode), failTask[0].AstNode.(SimpleNode)),
+				Next: NewConditionTask(successTask[0].Node.(SimpleNode), failTask[0].Node.(SimpleNode)),
 			}
 		}
 	}
@@ -350,13 +345,7 @@ func (v *TaskOrchestrationVisitor) VisitConditionalExpression(ctx *parser.Condit
 
 func (v *TaskOrchestrationVisitor) VisitRepetitionExpression(ctx *parser.RepetitionExpressionContext) interface{} {
 	if ctx.PrimaryExpression() != nil {
-		res := v.VisitPrimaryExpression(ctx.PrimaryExpression().(*parser.PrimaryExpressionContext))
-		if ctx.STAR() != nil {
-			if node, ok := res.(SimpleNode); ok {
-				return NewLoopTask(node.name)
-			}
-		}
-		return res
+		return v.VisitPrimaryExpression(ctx.PrimaryExpression().(*parser.PrimaryExpressionContext))
 	}
 	return nil
 }
@@ -385,7 +374,7 @@ func (v *TaskOrchestrationVisitor) VisitOrExpression(ctx *parser.OrExpressionCon
 			ans := v.VisitAndExpression(expressions[idx].(*parser.AndExpressionContext))
 			if ts, ok := ans.([]*PlanNode); ok {
 				if len(ts) > 0 {
-					orTask = append(orTask, ts[0].AstNode.(SimpleNode))
+					orTask = append(orTask, ts[0].Node.(SimpleNode))
 				}
 			}
 		}
@@ -402,7 +391,7 @@ func (v *TaskOrchestrationVisitor) VisitAndExpression(ctx *parser.AndExpressionC
 			ans := v.VisitSequenceExpression(expressions[idx].(*parser.SequenceExpressionContext))
 			if ts, ok := ans.([]*PlanNode); ok {
 				if len(ts) > 0 {
-					orTask = append(orTask, ts[0].AstNode.(SimpleNode))
+					orTask = append(orTask, ts[0].Node.(SimpleNode))
 				}
 			}
 		}

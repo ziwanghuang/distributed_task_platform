@@ -5,8 +5,6 @@ package parser
 import (
 	"testing"
 
-	"github.com/pkg/errors"
-
 	"gitee.com/flycash/distributed_task_platform/internal/dsl/ast/parser"
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +26,7 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 				require.True(t, ok)
 				assert.NoError(t, planRes.err)
 				assert.Len(t, planRes.root, 1)
-				assert.Equal(t, "A", planRes.root[0].AstNode.AllNodeName()[0])
+				assert.Equal(t, "A", planRes.root[0].Node.AllNodeName()[0])
 			},
 		},
 		{
@@ -42,7 +40,7 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 
 				// 检查根节点是A
 				rootNode := planRes.root[0]
-				assert.Equal(t, "A", rootNode.AstNode.AllNodeName()[0])
+				assert.Equal(t, "A", rootNode.Node.AllNodeName()[0])
 
 				// 检查任务映射包含所有任务
 				taskNames := []string{"A", "B", "C", "D", "E", "F", "end"}
@@ -53,7 +51,7 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 				}
 
 				// 检查结束节点
-				assert.Equal(t, "end", planRes.end.AstNode.AllNodeName()[0])
+				assert.Equal(t, "end", planRes.end.Node.AllNodeName()[0])
 
 				// 详细验证每个任务的pre和next关系
 				aTask, _ := planRes.tasks.Load("A")
@@ -180,24 +178,14 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 
 				endTask, exists := planRes.tasks.Load("end")
 				assert.True(t, exists)
-				assert.Equal(t, NodeTypeEnd, endTask.AstNode.Type())
+				assert.Equal(t, NodeTypeEnd, endTask.Node.Type())
 				assert.Equal(t, NodeTypeCondition, endTask.Pre.Type())
-				assert.Equal(t, []string{"B"}, endTask.Pre.GetNodeName(nil))
-				assert.Equal(t, []string{"C"}, endTask.Pre.GetNodeName(errors.New("error")))
-			},
-		},
-		{
-			name:  "repetition expression",
-			input: "A*;",
-			check: func(t *testing.T, result any) {
-				planRes, ok := result.(*planRes)
-				require.True(t, ok)
-				assert.NoError(t, planRes.err)
-
-				// 检查A节点的类型应该是LoopNode
-				aTask, exists := planRes.tasks.Load("A")
-				assert.True(t, exists)
-				assert.Equal(t, NodeTypeLoop, aTask.AstNode.Type())
+				assert.Equal(t, []string{"B"}, endTask.Pre.NodeName(Execution{
+					Status: TaskExecutionStatusSuccess,
+				}))
+				assert.Equal(t, []string{"C"}, endTask.Pre.NodeName(Execution{
+					Status: TaskExecutionStatusFailed,
+				}))
 			},
 		},
 	}

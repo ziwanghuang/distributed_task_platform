@@ -27,6 +27,8 @@ type TaskRepository interface {
 	UpdateNextTime(ctx context.Context, id, version, nextTime int64) (domain.Task, error)
 	// UpdateScheduleParams 更新调度参数
 	UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) (domain.Task, error)
+	// FindByPlanID 根据计划ID获取所有子任务
+	FindByPlanID(ctx context.Context, planID int64) ([]domain.Task, error)
 }
 
 type taskRepository struct {
@@ -35,6 +37,16 @@ type taskRepository struct {
 
 func NewTaskRepository(taskDAO dao.TaskDAO) TaskRepository {
 	return &taskRepository{dao: taskDAO}
+}
+
+func (r *taskRepository) FindByPlanID(ctx context.Context, planID int64) ([]domain.Task, error) {
+	daoTasks, err := r.dao.FindByPlanID(ctx, planID)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(daoTasks, func(_ int, src *dao.Task) domain.Task {
+		return r.toDomain(src)
+	}), nil
 }
 
 func (r *taskRepository) Create(ctx context.Context, task domain.Task) (domain.Task, error) {

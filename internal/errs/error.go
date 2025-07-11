@@ -26,4 +26,6 @@ var (
 	ErrUpdateExecutionStatusAndEndTimeFailed = errors.New("更新任务执行记录状态和结束时间失败")
 	ErrUpdateExecutionRunningProgressFailed  = errors.New("更新任务执行记录的运行状态失败")
 	ErrUpdateExecutionRetryResultFailed      = errors.New("更新任务执行记录的重试结果失败")
+
+	ErrInitPlanFailed = errors.New("plan和实际创建的任务不符")
 )

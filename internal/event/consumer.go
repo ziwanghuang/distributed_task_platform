@@ -65,7 +65,6 @@ func (c *Consumer) consume(ctx context.Context, partition int, mqChan <-chan *mq
 	c.logger.Info("消费者已启动",
 		elog.String("step", c.step(partition)),
 	)
-
 	for {
 		select {
 		case <-c.ctx.Done():
