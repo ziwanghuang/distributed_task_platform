@@ -25,10 +25,10 @@ type PlanRunner struct {
 	*SingleTaskRunner
 }
 
-func NewPlanRunner(planService task.PlanService, singerRunner *SingleTaskRunner) *PlanRunner {
+func NewPlanRunner(planService task.PlanService, singleRunner *SingleTaskRunner) *PlanRunner {
 	return &PlanRunner{
-		planService: planService,
-		SingleTaskRunner: singerRunner,
+		planService:      planService,
+		SingleTaskRunner: singleRunner,
 	}
 }
 
@@ -37,10 +37,10 @@ func (p *PlanRunner) Retry(_ context.Context, _ domain.TaskExecution) error {
 	panic("implement me")
 }
 
-func (p *PlanRunner) acquireTask(ctx context.Context, task domain.Task) (*domain.Task, error) {
+func (p *PlanRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
 	acquiredTask, err := p.taskAcquirer.Acquire(ctx, task.ID, p.nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("任务抢占失败: %w", err)
+		return domain.Task{}, fmt.Errorf("任务抢占失败: %w", err)
 	}
 	return acquiredTask, nil
 }
@@ -62,12 +62,12 @@ func (p *PlanRunner) Run(ctx context.Context, task domain.Task) error {
 	}
 	// 抢占成功，立即创建TaskExecution记录
 	exec, err := p.execSvc.Create(ctx, domain.TaskExecution{
-		Task:      *ta,
+		Task:      ta,
 		StartTime: time.Now().UnixMilli(),
 		Status:    domain.TaskExecutionStatusRunning,
 	})
 	if err != nil {
-		p.releaseTask(ctx, *ta)
+		p.releaseTask(ctx, ta)
 		return err
 	}
 	plan, err := p.planService.GetPlan(ctx, task.ID)
@@ -79,7 +79,7 @@ func (p *PlanRunner) Run(ctx context.Context, task domain.Task) error {
 	for idx := range rootTasks {
 		rootTask := rootTasks[idx]
 		rootTask.PlanExecID = exec.ID
-		go p.runLoop(ctx, rootTask.Task)
+		go p.run(ctx, rootTask.Task)
 	}
 	return nil
 }
@@ -114,16 +114,16 @@ func (p *PlanRunner) NextStep(ctx context.Context, task domain.Task) error {
 	for idx := range tasks {
 		nextPlanTask := tasks[idx]
 		// 所有前驱任务都完成了就可以运行
+		nextPlanTask.PlanExecID = plan.Execution.ID
 		if nextPlanTask.CheckPre() {
-			go p.runLoop(ctx, nextPlanTask.Task)
+			go p.run(ctx, nextPlanTask.Task)
 		}
 	}
 	return nil
 }
 
 // 单个任务的逻辑：不断抢占，直至抢占成功或者被其他节点抢占。
-func (p *PlanRunner) runLoop(ctx context.Context, task domain.Task) {
-
+func (p *PlanRunner) run(ctx context.Context, task domain.Task) {
 	for {
 		err := p.SingleTaskRunner.Run(ctx, task)
 		if err != nil && !errors.Is(err, errs.ErrTaskPreemptFailed) {

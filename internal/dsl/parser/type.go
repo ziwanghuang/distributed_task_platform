@@ -11,6 +11,9 @@ type Node interface {
 }
 
 func NodeIsNil(n Node) bool {
+	if n == nil {
+		return true
+	}
 	rv := reflect.ValueOf(n)
 	if rv.Kind() == reflect.Ptr && rv.IsNil() {
 		return true

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gitee.com/flycash/distributed_task_platform/pkg/acquirer"
+	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
@@ -27,11 +27,16 @@ type Consumer struct {
 	taskSvc tasksvc.Service
 	acquire acquirer.TaskAcquirer
 }
-func NewConsumer(planRunner *runner.PlanRunner,execSvc tasksvc.ExecutionService, taskSvc tasksvc.Service) *Consumer {
+
+func NewConsumer(planRunner *runner.PlanRunner, execSvc tasksvc.ExecutionService,
+	taskSvc tasksvc.Service,
+	acquirer acquirer.TaskAcquirer,
+) *Consumer {
 	return &Consumer{
 		planRunner: planRunner,
 		taskSvc:    taskSvc,
 		execSvc:    execSvc,
+		acquire:    acquirer,
 	}
 }
 
@@ -41,6 +46,7 @@ func (c *Consumer) Consume(ctx context.Context, message *mq.Message) error {
 	if err != nil {
 		return fmt.Errorf("序列化失败 %w", err)
 	}
+
 	return c.handle(ctx, evt)
 }
 
@@ -48,6 +54,7 @@ func (c *Consumer) handlePlanTask(ctx context.Context, evt event.Event) error {
 	return c.planRunner.NextStep(ctx, domain.Task{
 		ID:     evt.TaskID,
 		PlanID: evt.PlanID,
+		Name:   evt.Name,
 	})
 }
 
@@ -59,17 +66,14 @@ func (c *Consumer) handleTask(_ context.Context, _ event.Event) error {
 func (c *Consumer) handlePlan(ctx context.Context, evt event.Event) error {
 	var err error
 	if evt.ExecStatus.IsSuccess() {
-		err = c.execSvc.UpdateScheduleResult(ctx, evt.ExecID, domain.TaskExecutionStatusFailed, number0, time.Now().UnixMilli(), nil)
+		err = c.execSvc.UpdateScheduleResult(ctx, evt.ExecID, domain.TaskExecutionStatusSuccess, number0, time.Now().UnixMilli(), nil)
 	} else {
-		err = c.execSvc.UpdateScheduleResult(ctx, evt.ExecID, domain.TaskExecutionStatusSuccess, number100, time.Now().UnixMilli(), nil)
+		err = c.execSvc.UpdateScheduleResult(ctx, evt.ExecID, domain.TaskExecutionStatusFailed, number100, time.Now().UnixMilli(), nil)
 	}
 	if err != nil {
 		return err
 	}
-	_, err = c.taskSvc.UpdateNextTime(ctx, domain.Task{
-		ID:      evt.TaskID,
-		Version: evt.Version,
-	})
+	_, err = c.taskSvc.UpdateNextTime(ctx, evt.TaskID)
 	if err != nil {
 		return err
 	}

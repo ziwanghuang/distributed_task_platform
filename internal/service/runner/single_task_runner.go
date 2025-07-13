@@ -3,6 +3,8 @@ package runner
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
+	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/event"
@@ -10,49 +12,43 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"gitee.com/flycash/distributed_task_platform/pkg/acquirer"
-	"gitee.com/flycash/distributed_task_platform/pkg/executor"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry/strategy"
-	"github.com/ecodeclub/ekit/syncx"
 	"github.com/gotomicro/ego/core/elog"
-	"go.uber.org/multierr"
 )
 
 var _ Runner = &SingleTaskRunner{}
 
 type SingleTaskRunner struct {
-	nodeID                 string                                       // 当前调度节点ID
-	executionStateHandlers *syncx.Map[int64, TaskExecutionStateHandler] // 正在执行任务的结果处理器
-	taskSvc                task.Service                                 // 任务服务
-	execSvc                task.ExecutionService                        // 任务执行服务
-	taskAcquirer           acquirer.TaskAcquirer                        // 任务抢占器
-	executors              map[string]executor.Executor                 // 执行器
-	producer               event.CompleteProducer                       // 任务完成事件生产者
-	renewInterval          time.Duration                                // 续约间隔
+	nodeID        string                 // 当前调度节点ID
+	taskSvc       task.Service           // 任务服务
+	execSvc       task.ExecutionService  // 任务执行服务
+	taskAcquirer  acquirer.TaskAcquirer  // 任务抢占器
+	invoker       invoker.Invoker        // 这里一般来说就是 invoker.Dispatcher
+	producer      event.CompleteProducer // 任务完成事件生产者
+	renewInterval time.Duration          // 续约间隔
 
 	logger *elog.Component
 }
 
 func NewSingleTaskRunner(
 	nodeID string,
-	executionHandlers *syncx.Map[int64, TaskExecutionStateHandler],
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	taskAcquirer acquirer.TaskAcquirer,
-	executors map[string]executor.Executor,
+	invoker invoker.Invoker,
 	producer event.CompleteProducer,
 	renewInterval time.Duration,
 ) *SingleTaskRunner {
 	return &SingleTaskRunner{
-		nodeID:                 nodeID,
-		executionStateHandlers: executionHandlers,
-		taskSvc:                taskSvc,
-		execSvc:                execSvc,
-		taskAcquirer:           taskAcquirer,
-		executors:              executors,
-		producer:               producer,
-		renewInterval:          renewInterval,
+		nodeID:        nodeID,
+		taskSvc:       taskSvc,
+		execSvc:       execSvc,
+		taskAcquirer:  taskAcquirer,
+		invoker:       invoker,
+		producer:      producer,
+		renewInterval: renewInterval,
+		logger:        elog.DefaultLogger,
 	}
 }
 
@@ -66,11 +62,13 @@ func (s *SingleTaskRunner) Run(ctx context.Context, task domain.Task) error {
 			elog.FieldErr(err))
 		return err
 	}
+	// 这里使用传入的execid，因为execid还没有入库。
+	acquiredTask.PlanExecID = task.PlanExecID
 	// 根据分片规则区分任务类型
 	if acquiredTask.ShardingRule == nil {
-		return s.handleNormalTask(ctx, *acquiredTask)
+		return s.handleNormalTask(ctx, acquiredTask)
 	} else {
-		return s.handleShardingTask(ctx, *acquiredTask)
+		return s.handleShardingTask(ctx, acquiredTask)
 	}
 }
 
@@ -79,6 +77,7 @@ func (s *SingleTaskRunner) handleNormalTask(ctx context.Context, task domain.Tas
 	execution, err := s.execSvc.Create(ctx, domain.TaskExecution{
 		Task: task,
 		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
+
 		StartTime: time.Now().UnixMilli(),
 		Status:    domain.TaskExecutionStatusPrepare,
 	})
@@ -94,7 +93,13 @@ func (s *SingleTaskRunner) handleNormalTask(ctx context.Context, task domain.Tas
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
-		err1 := s.handleTaskExecution(ctx, execution, s.scheduleExecutionStateHandler)
+		// 执行任务
+		result, err1 := s.invoker.Run(ctx, execution)
+		if err1 != nil {
+			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
+			return
+		}
+		err1 = s.execSvc.HandleState(ctx, result)
 		if err1 != nil {
 			s.logger.Error("正常调度任务失败",
 				elog.Any("execution", execution),
@@ -124,11 +129,19 @@ func (s *SingleTaskRunner) handleShardingTask(ctx context.Context, task domain.T
 
 	// 抢占和创建都成功，异步触发任务
 	for i := range executions {
+		execution := executions[i]
 		go func() {
-			err1 := s.handleTaskExecution(ctx, executions[i], s.scheduleExecutionStateHandler)
+
+			// 执行任务
+			result, err1 := s.invoker.Run(ctx, execution)
+			if err1 != nil {
+				s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
+				return
+			}
+			err1 = s.execSvc.HandleState(ctx, result)
 			if err1 != nil {
 				s.logger.Error("正常调度子任务失败",
-					elog.Any("execution", executions[i]),
+					elog.Any("execution", execution),
 					elog.FieldErr(err1))
 			}
 		}()
@@ -137,11 +150,11 @@ func (s *SingleTaskRunner) handleShardingTask(ctx context.Context, task domain.T
 }
 
 // acquireTask 抢占任务
-func (s *SingleTaskRunner) acquireTask(ctx context.Context, task domain.Task) (*domain.Task, error) {
+func (s *SingleTaskRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
 	// 抢占任务
 	acquiredTask, err := s.taskAcquirer.Acquire(ctx, task.ID, s.nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("任务抢占失败: %w", err)
+		return domain.Task{}, fmt.Errorf("任务抢占失败: %w", err)
 	}
 	// 抢占成功，，返回最新的 Task 对象指针
 	return acquiredTask, nil
@@ -154,83 +167,6 @@ func (s *SingleTaskRunner) releaseTask(ctx context.Context, task domain.Task) {
 			elog.Int64("taskID", task.ID),
 			elog.String("taskName", task.Name),
 			elog.FieldErr(err))
-	}
-}
-
-func (s *SingleTaskRunner) handleTaskExecution(ctx context.Context, execution domain.TaskExecution, handleResultFunc TaskExecutionStateHandler) (err error) {
-	s.logger.Info("开始处理任务",
-		elog.Int64("taskID", execution.Task.ID),
-		elog.String("taskName", execution.Task.Name))
-
-	// 注册结果处理器
-	s.executionStateHandlers.Store(execution.ID, handleResultFunc)
-
-	// 选中执行器
-	selectedExecutor, ok := s.executors[execution.Task.ExecutionMethod.String()]
-	if !ok {
-		err := fmt.Errorf("%w: %s", errs.ErrInvalidTaskExecutionMethod, execution.Task.ExecutionMethod)
-		s.logger.Error("未找到任务执行器",
-			elog.Int64("taskID", execution.Task.ID),
-			elog.String("taskName", execution.Task.Name),
-			elog.String("executionMethod", execution.Task.ExecutionMethod.String()),
-			elog.FieldErr(err))
-		return err
-	}
-
-	// 执行任务
-	result, err := selectedExecutor.Run(ctx, execution)
-	if err != nil {
-		s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
-		return err
-	}
-
-	// 处理结果
-	err = handleResultFunc(ctx, result)
-	if err != nil {
-		s.logger.Error("处理任务执行结果失败", elog.FieldErr(err))
-		return err
-	}
-	return nil
-}
-
-// scheduleExecutionStateHandler 调度流程的状态机处理器
-func (s *SingleTaskRunner) scheduleExecutionStateHandler(ctx context.Context, state domain.ExecutionState) error {
-	execution, err := s.execSvc.GetByID(ctx, state.ID)
-	if err != nil {
-		return errs.ErrExecutionNotFound
-	}
-	switch {
-	case execution.Status.IsPrepare() && state.Status.IsRunning():
-		return s.setRunningState(ctx, state)
-	case execution.Status.IsRunning() && state.Status.IsRunning():
-		return s.updateRunningProgress(ctx, state)
-	case (execution.Status.IsPrepare() || execution.Status.IsRunning()) && state.Status.IsTerminalStatus():
-		defer func() {
-			// 删除注册的状态处理器
-			s.executionStateHandlers.Delete(execution.ID)
-			// 释放任务
-			s.releaseTask(ctx, execution.Task)
-		}()
-
-		// 发送完成事件
-		s.sendCompletedEvent(ctx, state, execution)
-
-		var err1 error
-		if err2 := s.updateScheduleResult(ctx, execution, state); err2 != nil {
-			err1 = multierr.Append(err1, fmt.Errorf("更新任务执行记录的调度结果失败：%w", err2))
-		}
-		// 不管本次调度是否成功，都要更新task的下一次执行时间
-		if err3 := s.updateTaskNextTime(ctx, execution.Task.ID); err3 != nil {
-			err1 = multierr.Append(err1, fmt.Errorf("更新任务下次更新时间失败：%w", err3))
-		}
-		return err1
-	default:
-		s.logger.Info("正常调度不支持的状态转换",
-			elog.Int64("taskID", execution.Task.ID),
-			elog.String("taskName", execution.Task.Name),
-			elog.String("currentStatus", execution.Status.String()),
-			elog.String("finalStatus", state.Status.String()))
-		return errs.ErrInvalidTaskExecutionStatus
 	}
 }
 
@@ -290,18 +226,11 @@ func (s *SingleTaskRunner) updateScheduleResult(ctx context.Context, execution d
 }
 
 func (s *SingleTaskRunner) updateTaskNextTime(ctx context.Context, taskID int64) error {
-	tk, err := s.taskSvc.GetByID(ctx, taskID)
-	if err != nil {
-		s.logger.Error("获取任务失败",
-			elog.FieldErr(err))
-		return err
-	}
 	// 更新任务执行时间
-	_, err = s.taskSvc.UpdateNextTime(ctx, tk)
+	_, err := s.taskSvc.UpdateNextTime(ctx, taskID)
 	if err != nil {
 		s.logger.Error("更新任务下次执行时间失败",
-			elog.Int64("taskID", tk.ID),
-			elog.String("taskName", tk.Name),
+			elog.Int64("taskID", taskID),
 			elog.FieldErr(err))
 		return err
 	}
@@ -347,13 +276,18 @@ func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 			elog.FieldErr(err))
 		return err
 	}
-	execution.Task = *acquiredTask
+	execution.Task = acquiredTask
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
-		err1 := s.handleTaskExecution(ctx, execution, func(ctx context.Context, state domain.ExecutionState) error {
-			return s.retryExecutionStateHandler(ctx, state, retryStrategy)
-		})
+
+		// 执行任务
+		result, err1 := s.invoker.Run(ctx, execution)
+		if err1 != nil {
+			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
+			return
+		}
+		err1 = s.retryExecutionStateHandler(ctx, result, retryStrategy)
 		if err1 != nil {
 			s.logger.Error("正常调度任务失败",
 				elog.Any("execution", execution),
@@ -376,8 +310,6 @@ func (s *SingleTaskRunner) retryExecutionStateHandler(ctx context.Context, state
 		return s.updateRunningProgress(ctx, state)
 	case (execution.Status.IsFailedRetryable() || execution.Status.IsRunning()) && state.Status.IsTerminalStatus():
 		defer func() {
-			// 删除注册的状态处理器
-			s.executionStateHandlers.Delete(execution.ID)
 			// 释放任务
 			s.releaseTask(ctx, execution.Task)
 		}()
@@ -453,11 +385,17 @@ func (s *SingleTaskRunner) Reschedule(ctx context.Context, execution domain.Task
 			elog.FieldErr(err))
 		return err
 	}
-	execution.Task = *acquiredTask
+	execution.Task = acquiredTask
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
-		err1 := s.handleTaskExecution(ctx, execution, s.rescheduleExecutionStateHandler)
+		// 执行任务
+		result, err1 := s.invoker.Run(ctx, execution)
+		if err1 != nil {
+			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
+			return
+		}
+		err1 = s.rescheduleExecutionStateHandler(ctx, result)
 		if err1 != nil {
 			s.logger.Error("正常调度任务失败",
 				elog.Any("execution", execution),
@@ -480,8 +418,6 @@ func (s *SingleTaskRunner) rescheduleExecutionStateHandler(ctx context.Context, 
 		return s.updateRunningProgress(ctx, state)
 	case (execution.Status.IsFailedRescheduled() || execution.Status.IsRunning()) && state.Status.IsTerminalStatus():
 		defer func() {
-			// 删除注册的状态处理器
-			s.executionStateHandlers.Delete(execution.ID)
 			// 释放任务
 			s.releaseTask(ctx, execution.Task)
 		}()
@@ -504,6 +440,7 @@ func (s *SingleTaskRunner) sendCompletedEvent(ctx context.Context, state domain.
 		err := s.producer.Produce(ctx, event.Event{
 			PlanID: execution.Task.PlanID,
 			TaskID: execution.Task.ID,
+			Name:   execution.Task.Name,
 			Type:   domain.NormalTaskType,
 		})
 		if err != nil {

@@ -36,7 +36,7 @@ func (p *PlanTask) SetPre(tasks map[string]*PlanTask) error {
 func (p *PlanTask) SetNext(tasks map[string]*PlanTask) error {
 	planNode := p.AstPlanNode
 	if planNode.Next != nil {
-		nodes := planNode.Pre.NodeName(newAstExecution(p.TaskExecution))
+		nodes := planNode.Next.NodeName(newAstExecution(p.TaskExecution))
 		for jdx := range nodes {
 			if v, ok := tasks[nodes[jdx]]; ok {
 				p.NextTask = append(p.NextTask, v)

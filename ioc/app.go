@@ -2,8 +2,8 @@ package ioc
 
 import (
 	"context"
+	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 
-	"gitee.com/flycash/distributed_task_platform/scheduler"
 	"github.com/gotomicro/ego/server/egrpc"
 )
 

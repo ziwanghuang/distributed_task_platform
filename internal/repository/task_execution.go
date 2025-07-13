@@ -98,6 +98,7 @@ func (r *taskExecutionRepository) Create(ctx context.Context, execution domain.T
 		return domain.TaskExecution{}, fmt.Errorf("获取Task信息失败: %w", err)
 	}
 	// 创建TaskExecution
+	completeTask.PlanExecID = execution.Task.PlanExecID
 	execution.Task = completeTask
 	created, err := r.dao.Create(ctx, r.toEntity(execution))
 	if err != nil {
@@ -218,6 +219,8 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 		TaskVersion:         execution.Task.Version,
 		TaskScheduleNodeID:  execution.Task.ScheduleNodeID,
 		TaskScheduleParams:  taskScheduleParams,
+		TaskPlanExecID:      execution.Task.PlanExecID,
+		TaskPlanID:          execution.Task.PlanID,
 		// TaskExecution自身字段
 		ShardingParentID: execution.ShardingParentID,
 		Stime:            execution.StartTime,
@@ -266,6 +269,7 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 			ScheduleParams:  taskScheduleParams,
 			ScheduleNodeID:  daoExecution.TaskScheduleNodeID,
 			Version:         daoExecution.TaskVersion,
+			PlanID:          daoExecution.TaskPlanID,
 		},
 		ShardingParentID: daoExecution.ShardingParentID,
 		StartTime:        daoExecution.Stime,

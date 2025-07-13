@@ -2,8 +2,8 @@ package ioc
 
 import (
 	"gitee.com/flycash/distributed_task_platform/internal/compensator"
+	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"gitee.com/flycash/distributed_task_platform/scheduler"
 	"github.com/gotomicro/ego/core/econf"
 )
 

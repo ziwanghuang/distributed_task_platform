@@ -10,41 +10,43 @@ import (
 	"context"
 	"gitee.com/flycash/distributed_task_platform/internal/repository"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
+	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
+	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/internal/test/ioc"
-	"gitee.com/flycash/distributed_task_platform/pkg/executor"
-	"gitee.com/flycash/distributed_task_platform/scheduler"
 	"github.com/google/wire"
 )
 
 // Injectors from wire.go:
 
-func InitSchedulerApp(execFunc map[string]executor.LocalExecuteFunc) *SchedulerApp {
+func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerApp {
 	string2 := InitNodeID()
 	v := ioc.InitDBAndTables()
 	taskDAO := dao.NewGORMTaskDAO(v)
 	taskRepository := repository.NewTaskRepository(taskDAO)
 	service := task.NewService(taskRepository)
-	taskAcquirer := InitMySQLTaskAcquirer(service)
+	taskAcquirer := InitMySQLTaskAcquirer(taskRepository)
 	taskExecutionDAO := dao.NewGORMTaskExecutionDAO(v)
 	taskExecutionRepository := repository.NewTaskExecutionRepository(taskExecutionDAO, taskRepository)
-	executionService := task.NewExecutionService(taskExecutionRepository)
-	v2 := NewExecutors(execFunc)
 	mq := ioc.InitMQ()
 	completeProducer := InitCompleteProducer(mq)
-	singleTaskRunner := InitSingleRunner(string2, service, executionService, taskAcquirer, v2, completeProducer)
+	executionService := task.NewExecutionService(taskExecutionRepository, taskAcquirer, service, string2, completeProducer)
+	localInvoker := NewExecutors(execFunc)
+	invokerInvoker := initDispatcherExecutor(localInvoker)
+	singleTaskRunner := InitSingleRunner(string2, service, executionService, taskAcquirer, invokerInvoker, completeProducer)
 	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
 	planRunner := InitPlanRunner(planService, singleTaskRunner)
 	runner := InitDispatchRunner(string2, singleTaskRunner, planRunner)
-	v3 := InitConsumers(mq, string2)
-	scheduler := InitScheduler(string2, service, taskAcquirer, runner, v3)
+	scheduler := InitScheduler(string2, service, taskAcquirer, runner)
+	completeConsumer := InitCompleteConsumer(mq, planRunner, service, executionService, taskAcquirer, string2)
 	retryCompensator := InitRetryCompensator(service, executionService, runner)
-	v4 := InitTasks(retryCompensator)
+	v2 := InitTasks(retryCompensator)
 	schedulerApp := &SchedulerApp{
 		Scheduler:    scheduler,
 		TaskSvc:      service,
 		ExecutionSvc: executionService,
-		Tasks:        v4,
+		Consumer:     completeConsumer,
+		Tasks:        v2,
 	}
 	return schedulerApp
 }
@@ -58,14 +60,14 @@ var (
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
 
-	taskExecutionSet = wire.NewSet(dao.NewGORMTaskExecutionDAO, repository.NewTaskExecutionRepository, task.NewExecutionService)
+	taskExecutionSet = wire.NewSet(dao.NewGORMTaskExecutionDAO, repository.NewTaskExecutionRepository, InitCompleteProducer, task.NewExecutionService)
 
 	planSet = wire.NewSet(task.NewPlanService)
 
 	schedulerSet = wire.NewSet(
 		NewExecutors,
 		InitMySQLTaskAcquirer,
-		InitCompleteProducer,
+		initDispatcherExecutor,
 		InitSingleRunner,
 		InitPlanRunner,
 		InitDispatchRunner,
@@ -77,6 +79,10 @@ var (
 	)
 )
 
+func initDispatcherExecutor(localExecutor *invoker.LocalInvoker) invoker.Invoker {
+	return invoker.NewDispatcher(nil, nil, localExecutor)
+}
+
 type Task interface {
 	Start(ctx context.Context)
 }
@@ -85,6 +91,7 @@ type SchedulerApp struct {
 	Scheduler    *scheduler.Scheduler
 	TaskSvc      task.Service
 	ExecutionSvc task.ExecutionService
+	Consumer     *CompleteConsumer
 	Tasks        []Task
 }
 

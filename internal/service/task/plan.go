@@ -44,7 +44,7 @@ func (p planService) CreateTask(ctx context.Context, planID int64, task domain.T
 
 // getPlanData 并发获取 Plan 相关的所有数据
 func (p planService) getPlanData(ctx context.Context, planID int64) (plan domain.Task, planExection domain.TaskExecution, planTasks []domain.Task, planTaskExecs map[int64]domain.TaskExecution, err error) {
-	g, ctx := errgroup.WithContext(ctx)
+	var g errgroup.Group
 	// 并发获取 Plan 基本信息
 	g.Go(func() error {
 		var eerr error
@@ -96,6 +96,7 @@ func (p planService) taskToPlan(ta domain.Task, exec domain.TaskExecution, tasks
 		CronExpr:       ta.CronExpr,
 		ExecExpr:       ta.ExecExpr,
 		Execution:      exec,
+		ScheduleNodeID: ta.ScheduleNodeID,
 		Status:         ta.Status,
 		ScheduleParams: ta.ScheduleParams,
 		NextTime:       ta.NextTime,
@@ -130,6 +131,7 @@ func (p planService) taskToPlan(ta domain.Task, exec domain.TaskExecution, tasks
 		planTasks = append(planTasks, planTask)
 		taskMap[task.Name] = planTask
 	}
+	//
 	// 设置前驱后继
 	for idx := range planTasks {
 		planTask := planTasks[idx]

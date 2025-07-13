@@ -11,4 +11,5 @@ type Event struct {
 	ScheduleNodeID string                     `json:"scheduleNodeId"`
 	Type           domain.TaskType            `json:"type"`
 	ExecStatus     domain.TaskExecutionStatus `json:"execStatus"`
+	Name           string                     `json:"name"`
 }

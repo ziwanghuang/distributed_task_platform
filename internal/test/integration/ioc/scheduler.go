@@ -2,17 +2,16 @@ package ioc
 
 import (
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
-	"gitee.com/flycash/distributed_task_platform/internal/event"
+	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
+	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"gitee.com/flycash/distributed_task_platform/pkg/acquirer"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
-	"gitee.com/flycash/distributed_task_platform/scheduler"
-	"github.com/ecodeclub/ekit/syncx"
 	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/pborman/uuid"
 	"time"
 )
+
 func InitNodeID() string {
 	return uuid.New()
 }
@@ -21,7 +20,6 @@ func InitScheduler(
 	taskSvc task.Service,
 	acquirer acquirer.TaskAcquirer,
 	execRunner runner.Runner,
-	consumers map[string]*event.Consumer,
 ) *scheduler.Scheduler {
 	conf := scheduler.Config{
 		BatchTimeout:     30 * time.Second,
@@ -35,11 +33,9 @@ func InitScheduler(
 	})
 	return scheduler.NewScheduler(
 		nodeID,
-		&syncx.Map[int64, runner.TaskExecutionStateHandler]{},
 		execRunner,
 		taskSvc,
 		acquirer,
-		consumers,
 		grpcClients,
 		conf,
 	)

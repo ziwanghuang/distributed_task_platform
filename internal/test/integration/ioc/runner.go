@@ -1,14 +1,11 @@
 package ioc
 
 import (
-	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/event"
+	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
+	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"gitee.com/flycash/distributed_task_platform/pkg/acquirer"
-	"gitee.com/flycash/distributed_task_platform/pkg/executor"
-	"github.com/ecodeclub/ekit/syncx"
-	"github.com/gotomicro/ego/core/econf"
 	"time"
 )
 
@@ -23,7 +20,6 @@ func InitDispatchRunner(nodeID string,
 	singerRunner *runner.SingleTaskRunner,
 	planRunner *runner.PlanRunner,
 ) runner.Runner {
-
 	return runner.NewDispatcherRunner(planRunner, singerRunner)
 }
 
@@ -31,25 +27,20 @@ func InitSingleRunner(nodeID string,
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	acquirer acquirer.TaskAcquirer,
-	executors map[string]executor.Executor,
+	invoker invoker.Invoker,
 	producer event.CompleteProducer,
 ) *runner.SingleTaskRunner {
 	return runner.NewSingleTaskRunner(
 		nodeID,
-		&syncx.Map[int64, runner.TaskExecutionStateHandler]{},
 		taskSvc,
 		execSvc,
 		acquirer,
-		executors,
+		invoker,
 		producer,
 		3*time.Second,
 	)
 }
 
-func NewExecutors(execFunc map[string] executor.LocalExecuteFunc) map[string]executor.Executor {
-	econf.Set("executor.RemoteExecutor", "test")
-	executors := map[string]executor.Executor{
-		domain.TaskExecutionMethodLocal.String(): executor.NewLocalExecutor(execFunc),
-	}
-	return executors
+func NewExecutors(execFunc map[string]invoker.LocalExecuteFunc) *invoker.LocalInvoker {
+	return invoker.NewLocalExecutor(execFunc)
 }

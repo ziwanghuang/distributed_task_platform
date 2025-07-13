@@ -3,7 +3,6 @@ package parser
 
 import (
 	"errors"
-
 	"gitee.com/flycash/distributed_task_platform/internal/dsl/ast/parser"
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/ecodeclub/ekit/mapx"
@@ -286,32 +285,33 @@ func (v *TaskOrchestrationVisitor) VisitSequenceExpression(ctx *parser.SequenceE
 			case *conditionTask:
 				prePlanTask := &PlanNode{
 					Node: ta.Pre,
-					Pre:  pre,
 					Next: ta.Next,
+				}
+				if pre != nil {
+					prePlanTask.Pre = pre.Node
 				}
 				conTask := &PlanNode{
 					Node: ta.Next,
-					Pre:  prePlanTask,
+					Pre:  ta.Pre,
 				}
 				if pre != nil {
 					pre.Next = prePlanTask
 				}
 				plan = append(plan, prePlanTask, conTask)
 			case []*PlanNode:
-				if pre != nil {
-					pre.Next = plan[0]
-				}
+				wa := ta[len(ta)-1]
+				pre = wa
 				plan = append(plan, ta...)
-				pre = ta[len(ta)-1]
 
 			case Node:
 				t := &PlanNode{
-					Pre:  pre,
 					Node: ta,
 				}
+
 				plan = append(plan, t)
 				if pre != nil {
-					pre.Next = t
+					t.Pre = pre.Node
+					pre.Next = t.Node
 				}
 				pre = t
 			}
