@@ -21,19 +21,19 @@ type TaskAcquirer interface {
 
 // MySQLTaskAcquirer 基于MySQL实现的TaskAcquirer
 type MySQLTaskAcquirer struct {
-	taskSvc repository.TaskRepository // 依赖task.Service接口
+	taskRepo repository.TaskRepository // 依赖task.Service接口
 }
 
 // NewTaskAcquirer 创建TaskAcquirer实例
 func NewTaskAcquirer(taskSvc repository.TaskRepository) *MySQLTaskAcquirer {
 	return &MySQLTaskAcquirer{
-		taskSvc: taskSvc,
+		taskRepo: taskSvc,
 	}
 }
 
 // Acquire 抢占指定任务，返回抢占后的任务信息
 func (t *MySQLTaskAcquirer) Acquire(ctx context.Context, taskID int64, scheduleNodeID string) (domain.Task, error) {
-	tk, err := t.taskSvc.Acquire(ctx, taskID, scheduleNodeID)
+	tk, err := t.taskRepo.Acquire(ctx, taskID, scheduleNodeID)
 	if err != nil {
 		return domain.Task{}, err
 	}
@@ -42,11 +42,11 @@ func (t *MySQLTaskAcquirer) Acquire(ctx context.Context, taskID int64, scheduleN
 
 // Release 释放指定任务
 func (t *MySQLTaskAcquirer) Release(ctx context.Context, taskID int64, scheduleNodeID string) error {
-	_, err := t.taskSvc.Release(ctx, taskID, scheduleNodeID)
+	_, err := t.taskRepo.Release(ctx, taskID, scheduleNodeID)
 	return err
 }
 
 // Renew 续约指定任务，返回续约后的任务信息
 func (t *MySQLTaskAcquirer) Renew(ctx context.Context, scheduleNodeID string) error {
-	return t.taskSvc.Renew(ctx, scheduleNodeID)
+	return t.taskRepo.Renew(ctx, scheduleNodeID)
 }
