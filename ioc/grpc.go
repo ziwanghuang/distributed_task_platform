@@ -3,7 +3,7 @@ package ioc
 import (
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	reporterv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/reporter/v1"
-	grpcapi "gitee.com/flycash/distributed_task_platform/internal/service/scheduler/grpc"
+	grpcapi "gitee.com/flycash/distributed_task_platform/internal/grpc"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 	"github.com/ego-component/eetcd"
 	"github.com/ego-component/eetcd/registry"
