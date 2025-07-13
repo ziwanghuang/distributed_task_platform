@@ -52,7 +52,8 @@ type Task struct {
 	CronExpr string
 	ExecExpr string
 
-	Type            TaskType
+	Type TaskType
+	// 为了方便测试，这里额外引入了一种本地运行的任务
 	ExecutionMethod TaskExecutionMethod
 	GrpcConfig      *GrpcConfig
 	HTTPConfig      *HTTPConfig

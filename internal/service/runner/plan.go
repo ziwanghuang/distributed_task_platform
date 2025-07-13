@@ -29,10 +29,10 @@ func (p *PlanRunner) Retry(_ context.Context, _ domain.TaskExecution) error {
 	panic("implement me")
 }
 
-func (p *PlanRunner) acquireTask(ctx context.Context, task domain.Task) (*domain.Task, error) {
+func (p *PlanRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
 	acquiredTask, err := p.taskAcquirer.Acquire(ctx, task.ID, p.nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("任务抢占失败: %w", err)
+		return domain.Task{}, fmt.Errorf("任务抢占失败: %w", err)
 	}
 	return acquiredTask, nil
 }
@@ -54,12 +54,12 @@ func (p *PlanRunner) Run(ctx context.Context, task domain.Task) error {
 	}
 	// 抢占成功，立即创建TaskExecution记录
 	exec, err := p.execSvc.Create(ctx, domain.TaskExecution{
-		Task:      *ta,
+		Task:      ta,
 		StartTime: time.Now().UnixMilli(),
 		Status:    domain.TaskExecutionStatusRunning,
 	})
 	if err != nil {
-		p.releaseTask(ctx, *ta)
+		p.releaseTask(ctx, ta)
 		return err
 	}
 	plan, err := p.planService.GetPlan(ctx, task.ID)
@@ -114,16 +114,16 @@ func (p *PlanRunner) NextStep(ctx context.Context, task domain.Task) error {
 
 // 单个任务的逻辑：不断抢占，直至抢占成功或者被其他节点抢占。
 func (p *PlanRunner) run(ctx context.Context, task domain.Task, planExecID int64) {
-	exec, err := p.acquireLoop(ctx, task, planExecID)
-	if err != nil {
-		if errors.Is(err, errTaskHasAcquired) {
-			// 说明其他节点已经运行不用返回报错了
-			return
-		}
-		p.logger.Error("抢占失败", elog.Int64("taskID", task.ID), elog.FieldErr(err))
-		return
-	}
-	p.handleTaskExecution(ctx, exec, p.handleSchedulingTaskExecutionFunc)
+	//exec, err := p.acquireLoop(ctx, task, planExecID)
+	//if err != nil {
+	//	if errors.Is(err, errTaskHasAcquired) {
+	//说明其他节点已经运行不用返回报错了
+	//return
+	//}
+	//p.logger.Error("抢占失败", elog.Int64("taskID", task.ID), elog.FieldErr(err))
+	//return
+	//}
+	//p.handleTaskExecution(ctx, exec, p.handleSchedulingTaskExecutionFunc)
 }
 
 // 不断抢占直至成功
@@ -133,13 +133,13 @@ func (p *PlanRunner) acquireLoop(ctx context.Context, task domain.Task, planExec
 			return domain.TaskExecution{}, ctx.Err()
 		}
 		nctx, cancel := context.WithTimeout(ctx, defaultTimeout)
-		_, exec, err := p.acquireAndCreateExecution(nctx, task, planExecID)
-		if err == nil {
-			cancel()
-			return exec, nil
-		}
+		//_, exec, err := p.acquireAndCreateExecution(nctx, task, planExecID)
+		//if err == nil {
+		//	cancel()
+		//	return exec, nil
+		//}
 		// 没抢到，查看有没有被其他节点抢走了
-		_, err = p.execSvc.FindExecutionByTaskIDAndPlanExecID(nctx, task.ID, task.PlanID)
+		_, err := p.execSvc.FindExecutionByTaskIDAndPlanExecID(nctx, task.ID, task.PlanID)
 		if err == nil {
 			cancel()
 			// 任务已被抢占不用执行了

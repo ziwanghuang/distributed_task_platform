@@ -57,10 +57,7 @@ func (c *Consumer) handlePlan(ctx context.Context, evt event.Event) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.taskSvc.UpdateNextTime(ctx, domain.Task{
-		ID:      evt.TaskID,
-		Version: evt.Version,
-	})
+	_, err = c.taskSvc.UpdateNextTime(ctx, evt.TaskID)
 	if err != nil {
 		return err
 	}

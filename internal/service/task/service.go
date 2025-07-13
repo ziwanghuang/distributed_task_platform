@@ -22,7 +22,7 @@ type Service interface {
 	// Renew 续约所有抢占到的任务
 	Renew(ctx context.Context, scheduleNodeID string) error
 	// UpdateNextTime 更新任务的下次执行时间
-	UpdateNextTime(ctx context.Context, task domain.Task) (domain.Task, error)
+	UpdateNextTime(ctx context.Context, id int64) (domain.Task, error)
 	// GetByID 根据ID获取task
 	GetByID(ctx context.Context, id int64) (domain.Task, error)
 }
@@ -76,7 +76,11 @@ func (s *service) Renew(ctx context.Context, scheduleNodeID string) error {
 	return s.repo.Renew(ctx, scheduleNodeID)
 }
 
-func (s *service) UpdateNextTime(ctx context.Context, task domain.Task) (domain.Task, error) {
+func (s *service) UpdateNextTime(ctx context.Context, id int64) (domain.Task, error) {
+	task, err := s.GetByID(ctx, id)
+	if err != nil {
+		return domain.Task{}, err
+	}
 	// 计算并设置下次执行时间
 	nextTime, err := task.CalculateNextTime()
 	if err != nil {

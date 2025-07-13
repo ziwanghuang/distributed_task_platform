@@ -2,9 +2,9 @@ package acquirer
 
 import (
 	"context"
+	"gitee.com/flycash/distributed_task_platform/internal/repository"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
-	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 )
 
 var _ TaskAcquirer = &MySQLTaskAcquirer{}
@@ -12,7 +12,7 @@ var _ TaskAcquirer = &MySQLTaskAcquirer{}
 // TaskAcquirer 任务抢占接口
 type TaskAcquirer interface {
 	// Acquire 抢占指定任务
-	Acquire(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error)
+	Acquire(ctx context.Context, taskID int64, scheduleNodeID string) (domain.Task, error)
 	// Release 释放指定任务
 	Release(ctx context.Context, taskID int64, scheduleNodeID string) error
 	// Renew 续约所有抢占到的任务
@@ -21,23 +21,23 @@ type TaskAcquirer interface {
 
 // MySQLTaskAcquirer 基于MySQL实现的TaskAcquirer
 type MySQLTaskAcquirer struct {
-	taskSvc task.Service // 依赖task.Service接口
+	taskSvc repository.TaskRepository // 依赖task.Service接口
 }
 
 // NewTaskAcquirer 创建TaskAcquirer实例
-func NewTaskAcquirer(taskSvc task.Service) *MySQLTaskAcquirer {
+func NewTaskAcquirer(taskSvc repository.TaskRepository) *MySQLTaskAcquirer {
 	return &MySQLTaskAcquirer{
 		taskSvc: taskSvc,
 	}
 }
 
 // Acquire 抢占指定任务，返回抢占后的任务信息
-func (t *MySQLTaskAcquirer) Acquire(ctx context.Context, taskID int64, scheduleNodeID string) (*domain.Task, error) {
+func (t *MySQLTaskAcquirer) Acquire(ctx context.Context, taskID int64, scheduleNodeID string) (domain.Task, error) {
 	tk, err := t.taskSvc.Acquire(ctx, taskID, scheduleNodeID)
 	if err != nil {
-		return nil, err
+		return domain.Task{}, err
 	}
-	return &tk, nil
+	return tk, nil
 }
 
 // Release 释放指定任务
