@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
@@ -22,6 +23,13 @@ const (
 type PlanRunner struct {
 	planService task.PlanService
 	*SingleTaskRunner
+}
+
+func NewPlanRunner(planService task.PlanService, singerRunner *SingleTaskRunner) *PlanRunner {
+	return &PlanRunner{
+		planService: planService,
+		SingleTaskRunner: singerRunner,
+	}
 }
 
 func (p *PlanRunner) Retry(_ context.Context, _ domain.TaskExecution) error {
@@ -70,7 +78,8 @@ func (p *PlanRunner) Run(ctx context.Context, task domain.Task) error {
 	rootTasks := plan.RootTask()
 	for idx := range rootTasks {
 		rootTask := rootTasks[idx]
-		go p.run(ctx, rootTask.Task, exec.ID)
+		rootTask.PlanExecID = exec.ID
+		go p.runLoop(ctx, rootTask.Task)
 	}
 	return nil
 }
@@ -106,46 +115,22 @@ func (p *PlanRunner) NextStep(ctx context.Context, task domain.Task) error {
 		nextPlanTask := tasks[idx]
 		// 所有前驱任务都完成了就可以运行
 		if nextPlanTask.CheckPre() {
-			go p.run(ctx, nextPlanTask.Task, plan.Execution.ID)
+			go p.runLoop(ctx, nextPlanTask.Task)
 		}
 	}
 	return nil
 }
 
 // 单个任务的逻辑：不断抢占，直至抢占成功或者被其他节点抢占。
-func (p *PlanRunner) run(ctx context.Context, task domain.Task, planExecID int64) {
-	exec, err := p.acquireLoop(ctx, task, planExecID)
-	if err != nil {
-		if errors.Is(err, errTaskHasAcquired) {
-			// 说明其他节点已经运行不用返回报错了
-			return
-		}
-		p.logger.Error("抢占失败", elog.Int64("taskID", task.ID), elog.FieldErr(err))
-		return
-	}
-	p.handleTaskExecution(ctx, exec, p.handleSchedulingTaskExecutionFunc)
-}
+func (p *PlanRunner) runLoop(ctx context.Context, task domain.Task) {
 
-// 不断抢占直至成功
-func (p *PlanRunner) acquireLoop(ctx context.Context, task domain.Task, planExecID int64) (domain.TaskExecution, error) {
 	for {
-		if ctx.Err() != nil {
-			return domain.TaskExecution{}, ctx.Err()
+		err := p.SingleTaskRunner.Run(ctx, task)
+		if err != nil && !errors.Is(err, errs.ErrTaskPreemptFailed) {
+			p.logger.Error("运行任务失败", elog.FieldErr(err))
+			time.Sleep(defaultRetrySleepTime)
+			continue
 		}
-		nctx, cancel := context.WithTimeout(ctx, defaultTimeout)
-		_, exec, err := p.acquireAndCreateExecution(nctx, task, planExecID)
-		if err == nil {
-			cancel()
-			return exec, nil
-		}
-		// 没抢到，查看有没有被其他节点抢走了
-		_, err = p.execSvc.FindExecutionByTaskIDAndPlanExecID(nctx, task.ID, task.PlanID)
-		if err == nil {
-			cancel()
-			// 任务已被抢占不用执行了
-			return domain.TaskExecution{}, errTaskHasAcquired
-		}
-		cancel()
-		time.Sleep(defaultRetrySleepTime)
+		return
 	}
 }

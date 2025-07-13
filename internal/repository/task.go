@@ -147,6 +147,7 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		ID:              task.ID,
 		Name:            task.Name,
 		CronExpr:        task.CronExpr,
+		PlanID:          task.PlanID,
 		ExecutionMethod: task.ExecutionMethod.String(),
 		GrpcConfig:      grpcConfig,
 		HTTPConfig:      httpConfig,

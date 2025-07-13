@@ -32,7 +32,7 @@ type TaskExecution struct {
 	TaskVersion         int64                               `gorm:"type:bigint;not null;comment:'创建时Task的版本号'"`
 	TaskScheduleNodeID  string                              `gorm:"type:varchar(255);not null;comment:'创建此执行的调度节点ID'"`
 	TaskScheduleParams  sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
-	PlanExecID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
+	TaskPlanExecID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
 	// 下面这些是 TaskExecution 的自身信息
 	ShardingParentID int64  `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=ID，分片任务的所有子任务的hardingParentID=父任务ID，使用过滤条件 ID != ShardingParentID 来选中非分片任务和分片子任务（即忽略分片父任务）'"`
 	Stime            int64  `gorm:"type:bigint;comment:'开始时间'"`

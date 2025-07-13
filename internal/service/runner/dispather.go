@@ -11,8 +11,14 @@ var _ Runner = &Dispatcher{}
 
 // Dispatcher
 type Dispatcher struct {
-	planRunner       PlanRunner
-	singleTaskRunner SingleTaskRunner
+	planRunner       Runner
+	singleTaskRunner Runner
+}
+func NewDispatcherRunner(planRunner,singleRunner Runner)Runner{
+	return &Dispatcher{
+		planRunner: planRunner,
+		singleTaskRunner: singleRunner,
+	}
 }
 
 func (d *Dispatcher) Run(ctx context.Context, task domain.Task) error {

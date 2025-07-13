@@ -33,6 +33,10 @@ const (
 	PlanTaskType              TaskType            = "plan"
 )
 
+func (t TaskType) String() string {
+	return string(t)
+}
+
 func (t TaskExecutionMethod) String() string {
 	return string(t)
 }
@@ -47,11 +51,10 @@ func (t TaskExecutionMethod) IsLocal() bool {
 
 // Task 任务领域模型
 type Task struct {
-	ID       int64
-	Name     string
-	CronExpr string
-	ExecExpr string
-
+	ID              int64
+	Name            string
+	CronExpr        string
+	ExecExpr        string
 	Type            TaskType
 	ExecutionMethod TaskExecutionMethod
 	GrpcConfig      *GrpcConfig
@@ -64,6 +67,7 @@ type Task struct {
 	Status          TaskStatus
 	Version         int64 // 版本号，用于乐观锁
 	PlanID          int64
+	PlanExecID      int64
 	CTime           int64 // 创建时间戳
 	UTime           int64 // 更新时间戳
 }

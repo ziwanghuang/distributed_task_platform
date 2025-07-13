@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gitee.com/flycash/distributed_task_platform/pkg/acquirer"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
@@ -24,6 +25,14 @@ type Consumer struct {
 	// 更新
 	execSvc tasksvc.ExecutionService
 	taskSvc tasksvc.Service
+	acquire acquirer.TaskAcquirer
+}
+func NewConsumer(planRunner *runner.PlanRunner,execSvc tasksvc.ExecutionService, taskSvc tasksvc.Service) *Consumer {
+	return &Consumer{
+		planRunner: planRunner,
+		taskSvc:    taskSvc,
+		execSvc:    execSvc,
+	}
 }
 
 func (c *Consumer) Consume(ctx context.Context, message *mq.Message) error {
@@ -65,7 +74,7 @@ func (c *Consumer) handlePlan(ctx context.Context, evt event.Event) error {
 		return err
 	}
 	// 释放plan
-	_, err = c.taskSvc.Release(ctx, evt.TaskID, evt.ScheduleNodeID)
+	err = c.acquire.Release(ctx, evt.TaskID, evt.ScheduleNodeID)
 	return err
 }
 
