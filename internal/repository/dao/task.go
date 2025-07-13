@@ -113,9 +113,8 @@ func (g *GORMTaskDAO) FindSchedulableTasks(ctx context.Context, preemptedTimeout
 	// 获取所有可调度的任务
 	// 1. ACTIVE 状态且到了执行时间的任务
 	// 2. PREEMPTED 状态但超时未续约的任务（疑似僵尸任务）
-	// 3. 非plan中的任务
 	err := g.db.WithContext(ctx).
-		Where("next_time <= ? AND (status = ? OR (status = ? AND utime <= ?)) AND plan_id = 0",
+		Where("next_time <= ? AND (status = ? OR (status = ? AND utime <= ?))",
 			now, StatusActive, StatusPreempted, now-preemptedTimeoutMs).
 		Order("next_time ASC").
 		Limit(limit).

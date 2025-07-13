@@ -3,9 +3,9 @@
 package ioc
 
 import (
+	grpcapi "gitee.com/flycash/distributed_task_platform/internal/grpc"
 	"gitee.com/flycash/distributed_task_platform/internal/repository"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
-	grpcapi "gitee.com/flycash/distributed_task_platform/internal/service/scheduler/grpc"
 	tasksvc "gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/ioc"
 	"github.com/google/wire"
