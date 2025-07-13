@@ -3,9 +3,10 @@ package runner
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
-	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/event"
 
@@ -131,7 +132,6 @@ func (s *SingleTaskRunner) handleShardingTask(ctx context.Context, task domain.T
 	for i := range executions {
 		execution := executions[i]
 		go func() {
-
 			// 执行任务
 			result, err1 := s.invoker.Run(ctx, execution)
 			if err1 != nil {
@@ -280,7 +280,6 @@ func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
-
 		// 执行任务
 		result, err1 := s.invoker.Run(ctx, execution)
 		if err1 != nil {

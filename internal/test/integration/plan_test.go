@@ -4,14 +4,13 @@ package integration
 
 import (
 	"context"
+	"strings"
+	"testing"
+	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
 	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
 	"github.com/stretchr/testify/assert"
-
-	"strings"
-	"testing"
-	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"github.com/ecodeclub/ekit/list"
@@ -60,7 +59,6 @@ func (s *PlanSuite) SetupSuite() {
 }
 
 func (s *PlanSuite) setUpTasks() int64 {
-
 	now := time.Now()
 	// 创建主计划任务
 	plan := dao.Task{

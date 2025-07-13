@@ -14,9 +14,10 @@ type Dispatcher struct {
 	planRunner       Runner
 	singleTaskRunner Runner
 }
-func NewDispatcherRunner(planRunner,singleRunner Runner)Runner{
+
+func NewDispatcherRunner(planRunner, singleRunner Runner) Runner {
 	return &Dispatcher{
-		planRunner: planRunner,
+		planRunner:       planRunner,
 		singleTaskRunner: singleRunner,
 	}
 }

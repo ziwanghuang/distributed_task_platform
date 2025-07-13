@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"time"
+
+	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/event"

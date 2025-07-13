@@ -32,6 +32,7 @@ const (
 	NormalTaskType            TaskType            = "normal"
 	PlanTaskType              TaskType            = "plan"
 )
+
 func (t TaskType) String() string {
 	return string(t)
 }
@@ -68,7 +69,7 @@ type Task struct {
 	Status          TaskStatus
 	Version         int64 // 版本号，用于乐观锁
 	PlanID          int64
-	PlanExecID     	int64
+	PlanExecID      int64
 	CTime           int64 // 创建时间戳
 	UTime           int64 // 更新时间戳
 }

@@ -104,7 +104,7 @@ type TaskExecution struct {
 	CTime            int64 // 创建时间戳
 	UTime            int64 // 更新时间戳
 	// 创建时刻从Task冗余的信息
-	Task       Task
+	Task Task
 }
 
 func (te *TaskExecution) MergeTaskScheduleParams(scheduleParams map[string]string) {

@@ -3,6 +3,7 @@ package ioc
 import (
 	"context"
 	"fmt"
+
 	"gitee.com/flycash/distributed_task_platform/internal/event/complete"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
@@ -11,19 +12,18 @@ import (
 	"github.com/ecodeclub/mq-api"
 )
 
-
 func InitCompleteConsumer(q mq.MQ,
 	planRunner *runner.PlanRunner,
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	acquire acquirer.TaskAcquirer,
 	nodeID string,
-) *CompleteConsumer{
+) *CompleteConsumer {
 	topic := "complete_topic"
 	con := mqx.NewConsumer(name(topic, nodeID), q, topic)
-	comConsumer := complete.NewConsumer(planRunner, execSvc, taskSvc,acquire)
+	comConsumer := complete.NewConsumer(planRunner, execSvc, taskSvc, acquire)
 	return &CompleteConsumer{
-		com: con,
+		com:      con,
 		Consumer: comConsumer,
 	}
 }
@@ -33,12 +33,13 @@ type CompleteConsumer struct {
 	com *mqx.Consumer
 }
 
-func (c *CompleteConsumer) Start()  {
+func (c *CompleteConsumer) Start() {
 	err := c.com.Start(context.Background(), c.Consume)
 	if err != nil {
 		panic(err)
 	}
 }
+
 func InitConsumers(q mq.MQ, nodeID string) map[string]*mqx.Consumer {
 	return map[string]*mqx.Consumer{
 		"executionReportEvent":      initPushMessageConsumer(q, nodeID),

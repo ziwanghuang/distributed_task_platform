@@ -1,10 +1,11 @@
 package ioc
 
 import (
+	"time"
+
 	"gitee.com/flycash/distributed_task_platform/internal/compensator"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"time"
 )
 
 func InitRetryCompensator(

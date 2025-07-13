@@ -3,12 +3,13 @@ package task
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/event"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"github.com/gotomicro/ego/core/elog"
 	"go.uber.org/multierr"
-	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/repository"
@@ -61,13 +62,17 @@ func NewExecutionService(repo repository.TaskExecutionRepository,
 	taskAcquirer acquirer.TaskAcquirer,
 	taskSvc Service,
 	nodeID string,
-	producer event.CompleteProducer) ExecutionService {
-	return &executionService{repo: repo, producer: producer,
+	producer event.CompleteProducer,
+) ExecutionService {
+	return &executionService{
+		repo: repo, producer: producer,
 		taskSvc:      taskSvc,
 		taskAcquirer: taskAcquirer,
 		nodeID:       nodeID,
-		logger:       elog.DefaultLogger}
+		logger:       elog.DefaultLogger,
+	}
 }
+
 func (s *executionService) HandleReports(ctx context.Context, reports []*domain.Report) error {
 	if len(reports) == 0 {
 		return nil

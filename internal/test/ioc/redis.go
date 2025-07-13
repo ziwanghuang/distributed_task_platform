@@ -4,7 +4,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-
 var rdb redis.Cmdable
 
 func InitRedis() redis.Cmdable {

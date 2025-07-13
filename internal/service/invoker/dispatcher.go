@@ -16,6 +16,7 @@ package invoker
 
 import (
 	"context"
+
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 )
 
@@ -24,11 +25,12 @@ type Dispatcher struct {
 	grpc  *GRPCInvoker
 	local *LocalInvoker
 }
+
 func NewDispatcher(
-		httpInvoker *HTTPInvoker,
-		grpcInvoker *GRPCInvoker,
-		local *LocalInvoker,
-	)*Dispatcher{
+	httpInvoker *HTTPInvoker,
+	grpcInvoker *GRPCInvoker,
+	local *LocalInvoker,
+) *Dispatcher {
 	return &Dispatcher{
 		http:  httpInvoker,
 		grpc:  grpcInvoker,
@@ -36,7 +38,7 @@ func NewDispatcher(
 	}
 }
 
-func  (r *Dispatcher)Name() string{
+func (r *Dispatcher) Name() string {
 	return "dispatcher"
 }
 

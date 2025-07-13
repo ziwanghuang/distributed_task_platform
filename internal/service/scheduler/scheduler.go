@@ -4,8 +4,9 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"time"
+
+	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	"gitee.com/flycash/distributed_task_platform/internal/domain"

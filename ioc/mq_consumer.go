@@ -2,6 +2,7 @@ package ioc
 
 import (
 	"fmt"
+
 	"gitee.com/flycash/distributed_task_platform/pkg/mqx"
 
 	"github.com/ecodeclub/mq-api"

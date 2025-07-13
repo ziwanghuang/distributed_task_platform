@@ -8,4 +8,3 @@ func InitTasks(t1 *compensator.RetryCompensator,
 		t1,
 	}
 }
-

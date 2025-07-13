@@ -18,12 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gitee.com/flycash/distributed_task_platform/internal/domain"
-	"github.com/gotomicro/ego/core/elog"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"gitee.com/flycash/distributed_task_platform/internal/domain"
+	"github.com/gotomicro/ego/core/elog"
 )
 
 type HTTPInvoker struct {
@@ -43,7 +44,7 @@ func NewHTTPInvoker() *HTTPInvoker {
 }
 
 func (i *HTTPInvoker) Name() string {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

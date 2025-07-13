@@ -2,6 +2,7 @@ package acquirer
 
 import (
 	"context"
+
 	"gitee.com/flycash/distributed_task_platform/internal/repository"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"

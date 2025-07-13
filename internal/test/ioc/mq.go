@@ -63,5 +63,3 @@ func initMQ() (mq.MQ, error) {
 	}
 	return qq, nil
 }
-
-

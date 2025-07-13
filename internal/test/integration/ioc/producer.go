@@ -5,8 +5,8 @@ import (
 	"github.com/ecodeclub/mq-api"
 )
 
-func InitCompleteProducer(testmq mq.MQ)event.CompleteProducer{
-	pro,err := testmq.Producer("complete_topic")
+func InitCompleteProducer(testmq mq.MQ) event.CompleteProducer {
+	pro, err := testmq.Producer("complete_topic")
 	if err != nil {
 		panic(err)
 	}

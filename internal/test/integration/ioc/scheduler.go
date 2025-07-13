@@ -1,6 +1,8 @@
 package ioc
 
 import (
+	"time"
+
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
@@ -9,12 +11,12 @@ import (
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/pborman/uuid"
-	"time"
 )
 
 func InitNodeID() string {
 	return uuid.New()
 }
+
 func InitScheduler(
 	nodeID string,
 	taskSvc task.Service,
@@ -39,5 +41,4 @@ func InitScheduler(
 		grpcClients,
 		conf,
 	)
-
 }

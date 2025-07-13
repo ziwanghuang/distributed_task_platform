@@ -3,6 +3,8 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/distributed_task_platform/internal/service/task"
+
 	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 
 	reporterv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/reporter/v1"
@@ -16,8 +18,9 @@ import (
 // ReporterServer ReporterService gRPC服务实现
 type ReporterServer struct {
 	reporterv1.UnimplementedReporterServiceServer
-	scheduler *scheduler.Scheduler
-	logger    *elog.Component
+	scheduler   *scheduler.Scheduler
+	execService task.ExecutionService
+	logger      *elog.Component
 }
 
 // NewReporterServer 创建 ReporterServer 实例
@@ -71,7 +74,7 @@ func (s *ReporterServer) toDomainReports(reqs []*reporterv1.ReportRequest) []*do
 // handleReports 处理报告
 func (s *ReporterServer) handleReports(ctx context.Context, reports []*domain.Report) error {
 	s.logger.Debug("处理执行状态上报", elog.Int("count", len(reports)))
-	return s.scheduler.HandleReports(ctx, reports)
+	return s.execService.HandleReports(ctx, reports)
 }
 
 // BatchReport 批量上报进度
