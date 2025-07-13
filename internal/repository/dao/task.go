@@ -3,7 +3,6 @@ package dao
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -29,9 +28,9 @@ type Task struct {
 	GrpcConfig      sqlx.JsonColumn[domain.GrpcConfig]   `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
 	HTTPConfig      sqlx.JsonColumn[domain.HTTPConfig]   `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
 	RetryConfig     sqlx.JsonColumn[domain.RetryConfig]  `gorm:"type:json;comment:'重试配置'"`
-	ScheduleParams  sqlx.JsonColumn[map[string]string]   `gorm:"type:json;comment:'每次执行要用到的基础调度参数'"`
-	ShardingRules   sqlx.JsonColumn[domain.ShardingRule] `gorm:"type:json;comment:'分片任务需要使用的分片规则'"`
-	ScheduleNodeID  sql.NullString                       `gorm:"type:varchar(255);index:idx_schedule_node_id_status,priority:1;comment:'当前抢占的调度节点ID'"`
+	ScheduleParams sqlx.JsonColumn[map[string]string]   `gorm:"type:json;comment:'每次执行要用到的基础调度参数'"`
+	ShardingRule   sqlx.JsonColumn[domain.ShardingRule] `gorm:"type:json;comment:'分片任务需要使用的分片规则'"`
+	ScheduleNodeID sql.NullString                       `gorm:"type:varchar(255);index:idx_schedule_node_id_status,priority:1;comment:'当前抢占的调度节点ID'"`
 	NextTime        int64                                `gorm:"type:bigint;not null;index:idx_next_time_status_utime,priority:1;comment:'下次执行时间'"`
 	Status          string                               `gorm:"type:ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE');not null;default:'ACTIVE';index:idx_next_time_status_utime,priority:2;index:idx_schedule_node_id_status,priority:2;comment:'任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行。处于INACTIVE也可以被再次 ACTIVE'"`
 	Version         int64                                `gorm:"type:bigint;not null;default:1;comment:'版本号，用于乐观锁'"`
@@ -154,11 +153,7 @@ func (g *GORMTaskDAO) Acquire(ctx context.Context, id int64, scheduleNodeID stri
 		return nil // 提交事务
 	})
 	if err != nil {
-		// 根据事务中返回的错误类型，包装成对上层友好的业务错误
-		if errors.Is(err, errs.ErrTaskPreemptFailed) {
-			return nil, fmt.Errorf("%w: 任务不存在、状态不正确或已被抢占", err)
-		}
-		return nil, fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrTaskPreemptFailed, err)
+		return nil, err
 	}
 	return acquiredTask, nil
 }
@@ -203,10 +198,7 @@ func (g *GORMTaskDAO) Release(ctx context.Context, id int64, scheduleNodeID stri
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, errs.ErrTaskReleaseFailed) {
-			return nil, fmt.Errorf("%w: 任务不存在、状态不正确或节点不匹配", err)
-		}
-		return nil, fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrTaskReleaseFailed, err)
+		return nil, err
 	}
 	return releasedTask, nil
 }
@@ -235,10 +227,7 @@ func (g *GORMTaskDAO) UpdateNextTime(ctx context.Context, id, version, nextTime 
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, errs.ErrTaskUpdateNextTimeFailed) {
-			return nil, fmt.Errorf("%w: 版本不匹配或任务不存在", err)
-		}
-		return nil, fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrTaskUpdateNextTimeFailed, err)
+		return nil, err
 	}
 	return updatedTask, nil
 }
@@ -267,10 +256,7 @@ func (g *GORMTaskDAO) UpdateScheduleParams(ctx context.Context, id, version int6
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, errs.ErrTaskUpdateScheduleParamsFailed) {
-			return nil, fmt.Errorf("%w: 版本不匹配或任务不存在", err)
-		}
-		return nil, fmt.Errorf("%w: 数据库操作失败: %w", errs.ErrTaskUpdateScheduleParamsFailed, err)
+		return nil, err
 	}
 	return updatedTask, nil
 }

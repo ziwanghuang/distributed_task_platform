@@ -153,7 +153,7 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		HTTPConfig:      httpConfig,
 		RetryConfig:     retryConfig,
 		ScheduleParams:  scheduleParams,
-		ShardingRules:   shardingRule,
+		ShardingRule:    shardingRule,
 		ScheduleNodeID:  scheduleNodeID,
 		NextTime:        task.NextTime,
 		Status:          task.Status.String(),
@@ -190,8 +190,8 @@ func (r *taskRepository) toDomain(daoTask *dao.Task) domain.Task {
 		scheduleParams = daoTask.ScheduleParams.Val
 	}
 	var shardingRule *domain.ShardingRule
-	if daoTask.ShardingRules.Valid {
-		shardingRule = &daoTask.ShardingRules.Val
+	if daoTask.ShardingRule.Valid {
+		shardingRule = &daoTask.ShardingRule.Val
 	}
 
 	return domain.Task{

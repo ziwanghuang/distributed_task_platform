@@ -185,18 +185,18 @@ func (g *GORMTaskExecutionDAO) FindRetryableExecutions(ctx context.Context, maxR
 	prepareTimeoutThreshold := now - prepareTimeoutMs
 
 	// 复杂查询：查找可重试的执行记录
-	// 场景1：PREPARE状态超时 - 调度失败需要重试
-	// 场景2：FAILED_RETRYABLE状态 - 执行失败但可重试
 	err := g.db.WithContext(ctx).
+		// 过滤掉已达最大重试次数的记录
 		Where("retry_count < ?", maxRetryCount).
+		// 过滤掉分片父任务
+		Where("sharding_parent_id IS NULL OR id != sharding_parent_id").
+		// PREPARE状态超时 - 调度失败需要重试
+		// FAILED_RETRYABLE状态 - 执行失败但可重试
 		Where(`
-			(status = 'PREPARE' 
-			 AND ctime <= ? 
-			 AND (next_retry_time IS NULL OR next_retry_time <= ?))
-			OR 
-			(status = 'FAILED_RETRYABLE' 
-			 AND (next_retry_time IS NULL OR next_retry_time <= ?))
-		`, prepareTimeoutThreshold, now, now).
+			(status = ? AND ctime <= ?) OR (status = ?)
+		`, TaskExecutionStatusPrepare, prepareTimeoutThreshold, TaskExecutionStatusFailedRetryable).
+		// 确保到了可以执行的时间
+		Where("next_retry_time IS NULL OR next_retry_time <= ?", now).
 		Order(`
 			CASE 
 				WHEN status = 'PREPARE' THEN ctime 
@@ -297,7 +297,7 @@ func (g *GORMTaskExecutionDAO) FindReschedulableExecutions(ctx context.Context, 
 	var executions []TaskExecution
 	// 查找可重调度的执行记录
 	err := g.db.WithContext(ctx).
-		Where("status = ?", TaskExecutionStatusFailedRescheduled).
+		Where("status = ? AND (sharding_parent_id IS NULL OR id != sharding_parent_id) ", TaskExecutionStatusFailedRescheduled).
 		Order("utime ASC").
 		Limit(limit).
 		Find(&executions).Error
