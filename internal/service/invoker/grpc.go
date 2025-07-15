@@ -14,13 +14,13 @@ var _ Invoker = &GRPCInvoker{}
 
 // GRPCInvoker 远程执行器
 type GRPCInvoker struct {
-	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient] // gRPC客户端池
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池
 	logger      *elog.Component
 }
 
 // NewGRPCInvoker 创建 GRPCInvoker 实例
 func NewGRPCInvoker(
-	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient],
 ) *GRPCInvoker {
 	return &GRPCInvoker{
 		grpcClients: grpcClients,

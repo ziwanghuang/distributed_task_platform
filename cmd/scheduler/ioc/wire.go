@@ -19,6 +19,7 @@ var (
 		ioc.InitMQ,
 		ioc.InitRunner,
 		ioc.InitInvoker,
+		ioc.InitRegistry,
 	)
 
 	taskSet = wire.NewSet(

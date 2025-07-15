@@ -97,7 +97,7 @@ type ExecutionState struct {
 	// 你后续重调度到 B 节点上，
 	// 传递给 B 节点的 ExecuteRequest 的 params 里面就包含 offset, limit
 	RescheduledParams map[string]string `protobuf:"bytes,7,rep,name=rescheduled_params,json=rescheduledParams,proto3" json:"rescheduled_params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// 执行当前任务的执行节点ID
+	// 执行节点的 nodeID，用于记录是哪个节点处理了任务
 	ExecutorNodeId string `protobuf:"bytes,8,opt,name=executor_node_id,json=executorNodeId,proto3" json:"executor_node_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache

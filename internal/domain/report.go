@@ -19,6 +19,8 @@ type ExecutionState struct {
 	// 执行节点请求调度节点执行重调度，调度节点无需调interrupt，调度节点可以直接重调度，因为此时执行节点必然已经停止了
 	RequestReschedule bool              `json:"requestReschedule"`
 	RescheduleParams  map[string]string `json:"rescheduleParams"`
+	// 执行节点的 nodeID，用于记录是哪个节点处理了任务
+	ExecutorNodeID string `json:"executorNodeId"`
 
 	// 它将从 scheduler_context 中解析而来
 	Type ExecutionType `json:"type"`
@@ -36,6 +38,7 @@ func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionSta
 		RunningProgress:   protoState.GetRunningProgress(),
 		RequestReschedule: protoState.GetRequestReschedule(),
 		RescheduleParams:  protoState.GetRescheduledParams(),
+		ExecutorNodeID:    protoState.GetExecutorNodeId(),
 	}
 }
 
@@ -53,6 +56,7 @@ func ExecutionStateFromReportRequestProto(req *reporterv1.ReportRequest) Executi
 		RunningProgress:   protoState.GetRunningProgress(),
 		RequestReschedule: protoState.GetRequestReschedule(),
 		RescheduleParams:  protoState.GetRescheduledParams(),
+		ExecutorNodeID:    protoState.GetExecutorNodeId(),
 	}
 
 	// 解析 scheduler_context，并填充 Type 字段

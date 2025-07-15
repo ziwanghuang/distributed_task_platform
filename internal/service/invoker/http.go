@@ -30,8 +30,7 @@ func NewHTTPInvoker() *HTTPInvoker {
 }
 
 func (i *HTTPInvoker) Name() string {
-	// TODO implement me
-	panic("implement me")
+	return "HTTP"
 }
 
 func (i *HTTPInvoker) Run(ctx context.Context, exec domain.TaskExecution) (domain.ExecutionState, error) {

@@ -31,6 +31,8 @@ message ExecutionState {
   // 你后续重调度到 B 节点上，
   // 传递给 B 节点的 ExecuteRequest 的 params 里面就包含 offset, limit
   map<string, string> rescheduled_params = 7;
+  // 执行节点的 nodeID，用于记录是哪个节点处理了任务
+  string executor_node_id = 8;
 }
 
 // ExecutorService 执行节点需要实现的接口，以便调度节点可以通知执行节点执行任务、中断任务及查询任务执行状态。

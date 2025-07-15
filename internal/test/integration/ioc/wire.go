@@ -4,6 +4,7 @@ package ioc
 
 import (
 	"context"
+
 	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
 
 	"gitee.com/flycash/distributed_task_platform/internal/repository"
@@ -22,6 +23,7 @@ var (
 		ioc.InitMQ,
 		InitNodeID,
 		InitConsumers,
+		InitRegistry,
 	)
 
 	taskSet = wire.NewSet(

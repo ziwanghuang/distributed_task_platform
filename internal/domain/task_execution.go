@@ -87,22 +87,25 @@ func (e ExecutionType) String() string {
 	return string(e)
 }
 
-// TaskExecution 任务执行实例领域模型
+// TaskExecution 任务执行记录
 type TaskExecution struct {
 	ID int64
-	// 执行自身信息
+	// ShardingParentID 分片任务的父任务ID：
+	// 非分片任务的ShardingParentID=nil，
+	// 分片任务的父任务的ShardingParentID=0，
+	// 分片任务的所有子任务的ShardingParentID=父任务ID
 	ShardingParentID *int64
-	StartTime        int64 // 开始时间戳
-	EndTime          int64 // 结束时间戳
-	RetryCount       int64
-	NextRetryTime    int64 // 下次重试时间戳
-	RunningProgress  int32 // 执行进度 0-100（RUNNING状态下有效）
-	Status           TaskExecutionStatus
-	CTime            int64 // 创建时间戳
-	UTime            int64 // 更新时间戳
+	ExecutorNodeID   string              // 执行节点的 nodeID，用于记录是哪个节点处理了任务
+	StartTime        int64               // 开始时间
+	EndTime          int64               // 结束时间
+	RetryCount       int64               // 已重试次数
+	NextRetryTime    int64               // 下次重试时间
+	RunningProgress  int32               // 进度 0-100，RUNNING 状态才有意义
+	Status           TaskExecutionStatus // 执行状态
+	CTime            int64               // 创建时间
+	UTime            int64               // 更新时间
 
-	// 创建时刻从Task冗余的信息
-	Task Task
+	Task Task // 创建时刻从Task冗余的信息
 }
 
 func (te *TaskExecution) MergeTaskScheduleParams(scheduleParams map[string]string) {

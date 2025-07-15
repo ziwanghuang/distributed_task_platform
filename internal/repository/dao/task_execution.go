@@ -36,15 +36,16 @@ type TaskExecution struct {
 	TaskPlanExecID      int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
 	TaskPlanID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的ID'"`
 	// 下面这些是 TaskExecution 的自身信息
-	ShardingParentID sql.NullInt64 `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的hardingParentID=父任务ID'"`
-	Stime            int64         `gorm:"type:bigint;comment:'开始时间'"`
-	Etime            int64         `gorm:"type:bigint;comment:'结束时间'"`
-	RetryCount       int64         `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
-	NextRetryTime    int64         `gorm:"type:bigint;comment:'下次重试时间'"`
-	RunningProgress  int32         `gorm:"type:int;default:0;comment:'执行进度0-100，RUNNING状态下有效'"`
-	Status           string        `gorm:"type:ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS');not null;default:'PREPARE';comment:'执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功'"`
-	Ctime            int64         `gorm:"comment:'创建时间'"`
-	Utime            int64         `gorm:"comment:'更新时间'"`
+	ShardingParentID sql.NullInt64  `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的hardingParentID=父任务ID'"`
+	ExecutorNodeID   sql.NullString `gorm:"type:varchar(255);comment:'执行节点的 nodeID，用于记录是哪个节点处理了任务'"`
+	Stime            int64          `gorm:"type:bigint;comment:'开始时间'"`
+	Etime            int64          `gorm:"type:bigint;comment:'结束时间'"`
+	RetryCount       int64          `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
+	NextRetryTime    int64          `gorm:"type:bigint;comment:'下次重试时间'"`
+	RunningProgress  int32          `gorm:"type:int;default:0;comment:'执行进度0-100，RUNNING状态下有效'"`
+	Status           string         `gorm:"type:ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS');not null;default:'PREPARE';comment:'执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功'"`
+	Ctime            int64          `gorm:"comment:'创建时间'"`
+	Utime            int64          `gorm:"comment:'更新时间'"`
 }
 
 // TableName 指定表名
@@ -73,13 +74,13 @@ type TaskExecutionDAO interface {
 	// FindShardingChildren 查找分片子任务
 	FindShardingChildren(ctx context.Context, parentID int64) ([]TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
-	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status string, progress int32, endTime int64, scheduleParams map[string]string) error
+	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status string, progress int32, endTime int64, scheduleParams map[string]string, executorNodeID string) error
 	// SetRunningState 设置任务为运行状态并更新进度
-	SetRunningState(ctx context.Context, id int64, progress int32) error
+	SetRunningState(ctx context.Context, id int64, progress int32, executorNodeID string) error
 	// UpdateProgress 更新任务执行进度、开始时间（仅在RUNNING状态下有效）
 	UpdateProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateScheduleResult 更新调度结果
-	UpdateScheduleResult(ctx context.Context, id int64, status string, progress int32, endTime int64, scheduleParams map[string]string) error
+	UpdateScheduleResult(ctx context.Context, id int64, status string, progress int32, endTime int64, scheduleParams map[string]string, executorNodeID string) error
 	// FindReschedulableExecutions 查找所有可以重调度的执行记录
 	FindReschedulableExecutions(ctx context.Context, limit int) ([]TaskExecution, error)
 	// 查找对应planExecID下的所有执行计划
@@ -256,7 +257,7 @@ func (g *GORMTaskExecutionDAO) FindShardingChildren(ctx context.Context, parentI
 	return executions, err
 }
 
-func (g *GORMTaskExecutionDAO) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status string, progress int32, endTime int64, scheduleParams map[string]string) error {
+func (g *GORMTaskExecutionDAO) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status string, progress int32, endTime int64, scheduleParams map[string]string, executorNodeID string) error {
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
 		Where("id = ?", id).
@@ -267,6 +268,7 @@ func (g *GORMTaskExecutionDAO) UpdateRetryResult(ctx context.Context, id, retryC
 			"running_progress":     progress,
 			"etime":                endTime,
 			"task_schedule_params": scheduleParams,
+			"executor_node_id":     sql.NullString{String: executorNodeID, Valid: executorNodeID != ""},
 			"utime":                time.Now().UnixMilli(),
 		})
 
@@ -279,7 +281,7 @@ func (g *GORMTaskExecutionDAO) UpdateRetryResult(ctx context.Context, id, retryC
 	return nil
 }
 
-func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, progress int32) error {
+func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, progress int32, executorNodeID string) error {
 	now := time.Now().UnixMilli()
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
@@ -290,6 +292,7 @@ func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, pr
 			"running_progress": progress,
 			"stime":            now,
 			"utime":            now,
+			"executor_node_id": sql.NullString{String: executorNodeID, Valid: executorNodeID != ""},
 		})
 
 	if result.Error != nil {
@@ -319,7 +322,7 @@ func (g *GORMTaskExecutionDAO) UpdateProgress(ctx context.Context, id int64, pro
 	return nil
 }
 
-func (g *GORMTaskExecutionDAO) UpdateScheduleResult(ctx context.Context, id int64, status string, progress int32, endTime int64, scheduleParams map[string]string) error {
+func (g *GORMTaskExecutionDAO) UpdateScheduleResult(ctx context.Context, id int64, status string, progress int32, endTime int64, scheduleParams map[string]string, executorNodeID string) error {
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
 		Where("id = ?", id).
@@ -328,6 +331,7 @@ func (g *GORMTaskExecutionDAO) UpdateScheduleResult(ctx context.Context, id int6
 			"running_progress":     progress,
 			"etime":                endTime,
 			"task_schedule_params": sqlx.JsonColumn[map[string]string]{Val: scheduleParams, Valid: scheduleParams != nil},
+			"executor_node_id":     sql.NullString{String: executorNodeID, Valid: executorNodeID != ""},
 			"utime":                time.Now().UnixMilli(),
 		})
 	if result.Error != nil {

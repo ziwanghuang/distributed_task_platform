@@ -21,7 +21,7 @@ func InitScheduler(
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	acquirer acquirer.TaskAcquirer,
-	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient],
 ) *scheduler.Scheduler {
 	var cfg scheduler.Config
 	err := econf.UnmarshalKey("scheduler", &cfg)

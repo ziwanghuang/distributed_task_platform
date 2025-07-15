@@ -7,6 +7,7 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
+	"gitee.com/flycash/distributed_task_platform/pkg/grpc/balancer"
 
 	"gitee.com/flycash/distributed_task_platform/internal/event"
 
@@ -139,6 +140,12 @@ func (s *SingleTaskRunner) handleShardingTask(ctx context.Context, task domain.T
 				s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
 				return
 			}
+
+			// 执行任务，并传入上下文
+			// result, err1 := s.invoker.Run(ctx, execution, map[string]string{
+			// 	"type": domain.ExecutionTypeNormal.String(),
+			// })
+
 			err1 = s.execSvc.HandleState(ctx, result)
 			if err1 != nil {
 				s.logger.Error("正常调度子任务失败",
@@ -182,7 +189,8 @@ func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 			domain.TaskExecutionStatusFailed,
 			execution.RunningProgress,
 			time.Now().UnixMilli(),
-			execution.Task.ScheduleParams)
+			execution.Task.ScheduleParams,
+			execution.ExecutorNodeID)
 		return fmt.Errorf("任务重试配置为空")
 	}
 
@@ -197,7 +205,8 @@ func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 			domain.TaskExecutionStatusFailed,
 			execution.RunningProgress,
 			time.Now().UnixMilli(),
-			execution.Task.ScheduleParams)
+			execution.Task.ScheduleParams,
+			execution.ExecutorNodeID)
 		return fmt.Errorf("创建重试策略失败: %w", err)
 	}
 
@@ -214,15 +223,15 @@ func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
-		// 执行任务
-		result, err1 := s.invoker.Run(ctx, execution)
+		// 执行任务，并在 context 中设置要排除的执行节点 ID，避免重调度到同一个节点
+		result, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution)
 		if err1 != nil {
 			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
 			return
 		}
 
 		// 执行任务，并传入上下文
-		// result, err1 := s.invoker.Run(ctx, execution, map[string]string{
+		// result, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution, map[string]string{
 		// 	"type": domain.ExecutionTypeRetry.String(),
 		// })
 
@@ -233,7 +242,7 @@ func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 				elog.FieldErr(err1))
 		}
 
-		// err1 = s.retryExecutionStateHandler(ctx, result, retryStrategy)
+		// err1 = s.retryExecutionStateHandler(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), result, retryStrategy)
 		// if err1 != nil {
 		// 	s.logger.Error("重试任务失败",
 		// 		elog.Any("execution", execution),
@@ -241,6 +250,13 @@ func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 		// }
 	}()
 	return nil
+}
+
+func (s *SingleTaskRunner) WithExcludedNodeIDContext(ctx context.Context, executorNodeID string) context.Context {
+	if executorNodeID != "" {
+		return balancer.WithExcludedNodeID(ctx, executorNodeID)
+	}
+	return ctx
 }
 
 func (s *SingleTaskRunner) Reschedule(ctx context.Context, execution domain.TaskExecution) error {
@@ -257,15 +273,15 @@ func (s *SingleTaskRunner) Reschedule(ctx context.Context, execution domain.Task
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
-		// 执行任务
-		result, err1 := s.invoker.Run(ctx, execution)
+		// 执行任务，并在 context 中设置要排除的执行节点 ID，避免重调度到同一个节点
+		result, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution)
 		if err1 != nil {
 			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
 			return
 		}
 
 		// 执行任务，并传入上下文
-		// result, err1 := s.invoker.Run(ctx, execution, map[string]string{
+		// result, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution, map[string]string{
 		// 	"type": domain.ExecutionTypeReschedule.String(),
 		// })
 
@@ -275,13 +291,6 @@ func (s *SingleTaskRunner) Reschedule(ctx context.Context, execution domain.Task
 				elog.Any("execution", execution),
 				elog.FieldErr(err1))
 		}
-
-		// err1 = s.rescheduleExecutionStateHandler(ctx, result)
-		// if err1 != nil {
-		// 	s.logger.Error("正常调度任务失败",
-		// 		elog.Any("execution", execution),
-		// 		elog.FieldErr(err1))
-		// }
 	}()
 	return nil
 }

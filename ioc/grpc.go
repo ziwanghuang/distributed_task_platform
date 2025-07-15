@@ -1,15 +1,22 @@
 package ioc
 
 import (
+	"time"
+
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	reporterv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/reporter/v1"
 	grpcapi "gitee.com/flycash/distributed_task_platform/internal/grpc"
-	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
+	grpcpkg "gitee.com/flycash/distributed_task_platform/pkg/grpc"
+
+	balancerRegistry "gitee.com/flycash/distributed_task_platform/pkg/grpc/registry/etcd"
+
+	// 导入自定义负载均衡器包，确保其初始化函数被调用
+	_ "gitee.com/flycash/distributed_task_platform/pkg/grpc/balancer"
 	"github.com/ego-component/eetcd"
 	"github.com/ego-component/eetcd/registry"
-	egrpc2 "github.com/gotomicro/ego/client/egrpc"
 	"github.com/gotomicro/ego/client/egrpc/resolver"
 	"github.com/gotomicro/ego/server/egrpc"
+	"google.golang.org/grpc"
 )
 
 func InitSchedulerNodeGRPCServer(rs *grpcapi.ReporterServer, etcdClient *eetcd.Component) *egrpc.Component {
@@ -21,8 +28,12 @@ func InitSchedulerNodeGRPCServer(rs *grpcapi.ReporterServer, etcdClient *eetcd.C
 	return server
 }
 
-func InitExecutorServiceGRPCClients() *grpc.Clients[executorv1.ExecutorServiceClient] {
-	return grpc.NewClients(func(conn *egrpc2.Component) executorv1.ExecutorServiceClient {
-		return executorv1.NewExecutorServiceClient(conn)
-	})
+func InitExecutorServiceGRPCClients(registry *balancerRegistry.Registry) *grpcpkg.ClientsV2[executorv1.ExecutorServiceClient] {
+	const defaultTimeout = time.Second
+	return grpcpkg.NewClientsV2(
+		registry,
+		defaultTimeout,
+		func(conn *grpc.ClientConn) executorv1.ExecutorServiceClient {
+			return executorv1.NewExecutorServiceClient(conn)
+		})
 }

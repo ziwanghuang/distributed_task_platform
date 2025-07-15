@@ -37,13 +37,13 @@ type ExecutionService interface {
 	// FindShardingChildren 查找分片子任务
 	FindShardingChildren(ctx context.Context, parentID int64) ([]domain.TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
-	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
+	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string, executorNodeID string) error
 	// SetRunningState 设置任务为运行状态并更新进度
-	SetRunningState(ctx context.Context, id int64, progress int32) error
+	SetRunningState(ctx context.Context, id int64, progress int32, executorNodeID string) error
 	// UpdateRunningProgress 更新任务执行进度（仅在RUNNING状态下有效）
 	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
 	// UpdateScheduleResult 更新调度结果
-	UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
+	UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string, executorNodeID string) error
 	// FindReschedulableExecutions 查找所有可以重调度的执行记录
 	FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error)
 
@@ -127,7 +127,7 @@ func (s *executionService) HandleState(ctx context.Context, state domain.Executi
 	// 这个代码会毫无防备地尝试去执行 SetRunningState，这直接破坏了状态机的基本规则
 	switch {
 	case state.Status.IsRunning():
-		return s.SetRunningState(ctx, state.ID, state.RunningProgress)
+		return s.setRunningState(ctx, state)
 	case state.Status.IsTerminalStatus():
 		defer func() {
 			// 释放任务
@@ -177,7 +177,7 @@ func (s *executionService) HandleStateV1(ctx context.Context, state domain.Execu
 		// 发送完成事件
 		s.sendCompletedEvent(ctx, state, execution)
 		// 重试后立即到达终态
-		err := s.updateRetryResult(ctx, execution, state)
+		err = s.updateRetryResult(ctx, execution, state)
 		if err != nil {
 			s.logger.Error("更新任务执行记录的重试结果失败",
 				elog.Int64("taskID", state.TaskID),
@@ -289,7 +289,7 @@ func (s *executionService) handleScheduleExecutionState(ctx context.Context, exe
 }
 
 func (s *executionService) setRunningState(ctx context.Context, state domain.ExecutionState) error {
-	err := s.SetRunningState(ctx, state.ID, state.RunningProgress)
+	err := s.SetRunningState(ctx, state.ID, state.RunningProgress, state.ExecutorNodeID)
 	if err != nil {
 		s.logger.Error("更新为运行状态失败",
 			elog.Int64("taskID", state.TaskID),
@@ -323,7 +323,8 @@ func (s *executionService) updateScheduleResult(ctx context.Context, execution d
 		result.Status,
 		result.RunningProgress,
 		time.Now().UnixMilli(),
-		execution.Task.ScheduleParams)
+		execution.Task.ScheduleParams,
+		result.ExecutorNodeID)
 	if err != nil {
 		s.logger.Error("更新调度结果失败",
 			elog.Int64("taskID", execution.Task.ID),
@@ -404,7 +405,8 @@ func (s *executionService) updateRetryResult(ctx context.Context, execution doma
 		state.Status,
 		state.RunningProgress,
 		time.Now().UnixMilli(),
-		execution.Task.ScheduleParams)
+		execution.Task.ScheduleParams,
+		state.ExecutorNodeID)
 	if err != nil {
 		s.logger.Error("更新执行计划重试结果失败",
 			elog.Int64("taskID", execution.Task.ID),
@@ -480,20 +482,20 @@ func (s *executionService) FindShardingChildren(ctx context.Context, parentID in
 	return s.repo.FindShardingChildren(ctx, parentID)
 }
 
-func (s *executionService) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error {
-	return s.repo.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, status, progress, endTime, scheduleParams)
+func (s *executionService) UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string, executorNodeID string) error {
+	return s.repo.UpdateRetryResult(ctx, id, retryCount, nextRetryTime, status, progress, endTime, scheduleParams, executorNodeID)
 }
 
-func (s *executionService) SetRunningState(ctx context.Context, id int64, progress int32) error {
-	return s.repo.SetRunningState(ctx, id, progress)
+func (s *executionService) SetRunningState(ctx context.Context, id int64, progress int32, executorNodeID string) error {
+	return s.repo.SetRunningState(ctx, id, progress, executorNodeID)
 }
 
 func (s *executionService) UpdateRunningProgress(ctx context.Context, id int64, progress int32) error {
 	return s.repo.UpdateRunningProgress(ctx, id, progress)
 }
 
-func (s *executionService) UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error {
-	return s.repo.UpdateScheduleResult(ctx, id, status, progress, endTime, scheduleParams)
+func (s *executionService) UpdateScheduleResult(ctx context.Context, id int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string, executorNodeID string) error {
+	return s.repo.UpdateScheduleResult(ctx, id, status, progress, endTime, scheduleParams, executorNodeID)
 }
 
 func (s *executionService) FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error) {

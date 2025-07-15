@@ -8,9 +8,10 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
-	"github.com/gotomicro/ego/client/egrpc"
+	grpcpkg "gitee.com/flycash/distributed_task_platform/pkg/grpc"
+	registry "gitee.com/flycash/distributed_task_platform/pkg/grpc/registry/etcd"
 	"github.com/pborman/uuid"
+	"google.golang.org/grpc"
 )
 
 func InitNodeID() string {
@@ -23,6 +24,7 @@ func InitScheduler(
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	acquirer acquirer.TaskAcquirer,
+	registry *registry.Registry,
 ) *scheduler.Scheduler {
 	const batchTimeout = 30 * time.Second
 	const batchSize = 10
@@ -36,7 +38,7 @@ func InitScheduler(
 		ScheduleInterval: scheduleInterval,
 		RenewInterval:    renewInterval,
 	}
-	grpcClients := grpc.NewClients(func(conn *egrpc.Component) executorv1.ExecutorServiceClient {
+	grpcClients := grpcpkg.NewClientsV2(registry, time.Second, func(conn *grpc.ClientConn) executorv1.ExecutorServiceClient {
 		return executorv1.NewExecutorServiceClient(conn)
 	})
 	return scheduler.NewScheduler(

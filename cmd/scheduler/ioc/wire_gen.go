@@ -33,10 +33,11 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	component := ioc.InitEtcdClient()
 	egrpcComponent := ioc.InitSchedulerNodeGRPCServer(reporterServer, component)
 	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
-	clients := ioc.InitExecutorServiceGRPCClients()
-	invoker := ioc.InitInvoker(clients)
+	registry := ioc.InitRegistry(component)
+	clientsV2 := ioc.InitExecutorServiceGRPCClients(registry)
+	invoker := ioc.InitInvoker(clientsV2)
 	runner := ioc.InitRunner(string2, service, executionService, planService, taskAcquirer, invoker, completeProducer)
-	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clients)
+	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clientsV2)
 	retryCompensator := ioc.InitRetryCompensator(runner, executionService)
 	rescheduleCompensator := ioc.InitRescheduleCompensator(runner, executionService)
 	shardingCompensator := ioc.InitShardingCompensator(string2, service, executionService, taskAcquirer)
@@ -54,7 +55,7 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 // wire.go:
 
 var (
-	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker)
+	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker, ioc.InitRegistry)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
 

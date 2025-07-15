@@ -26,9 +26,9 @@ type Scheduler struct {
 	runner      runner.Runner // Runner 分发器
 	taskSvc     task.Service  // 任务服务
 	execSvc     task.ExecutionService
-	acquirer    acquirer.TaskAcquirer                           // 任务抢占、续约、释放器
-	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient] // gRPC客户端池
-	config      Config                                          // 配置
+	acquirer    acquirer.TaskAcquirer                             // 任务抢占、续约、释放器
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池
+	config      Config                                            // 配置
 	ctx         context.Context
 	cancel      context.CancelFunc
 	logger      *elog.Component
@@ -50,7 +50,7 @@ func NewScheduler(
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	acquirer acquirer.TaskAcquirer,
-	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient],
 	config Config,
 ) *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())

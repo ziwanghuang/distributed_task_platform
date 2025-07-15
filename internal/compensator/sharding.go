@@ -105,7 +105,7 @@ func (r *ShardingCompensator) handle(ctx context.Context, parent domain.TaskExec
 		if _, err := r.taskSvc.UpdateNextTime(ctx, parent.Task.ID); err != nil {
 			errs = multierr.Append(errs, fmt.Errorf("更新任务下次更新时间失败：%w", err))
 		}
-		err = r.execSvc.UpdateScheduleResult(ctx, parent.ID, domain.TaskExecutionStatusFailed, 0, time.Now().UnixMilli(), nil)
+		err = r.execSvc.UpdateScheduleResult(ctx, parent.ID, domain.TaskExecutionStatusFailed, 0, time.Now().UnixMilli(), nil, "")
 		if err != nil {
 			errs = multierr.Append(errs, fmt.Errorf("更新父任务最终状态失败: %w", err))
 		}
@@ -143,7 +143,7 @@ func (r *ShardingCompensator) handle(ctx context.Context, parent domain.TaskExec
 	}
 	const unit = 100
 	progress := int32((successCount * unit) / len(children))
-	err = r.execSvc.UpdateScheduleResult(ctx, parent.ID, finalStatus, progress, time.Now().UnixMilli(), nil)
+	err = r.execSvc.UpdateScheduleResult(ctx, parent.ID, finalStatus, progress, time.Now().UnixMilli(), nil, "")
 	if err != nil {
 		errs = multierr.Append(errs, fmt.Errorf("更新父任务最终状态失败: %w", err))
 	}

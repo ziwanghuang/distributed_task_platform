@@ -67,9 +67,9 @@ func (c *Consumer) handleTask(_ context.Context, _ event.Event) error {
 func (c *Consumer) handlePlan(ctx context.Context, evt event.Event) error {
 	var err error
 	if evt.ExecStatus.IsSuccess() {
-		err = c.execSvc.UpdateScheduleResult(ctx, evt.ExecID, domain.TaskExecutionStatusSuccess, number0, time.Now().UnixMilli(), nil)
+		err = c.execSvc.UpdateScheduleResult(ctx, evt.ExecID, domain.TaskExecutionStatusSuccess, number100, time.Now().UnixMilli(), nil, "")
 	} else {
-		err = c.execSvc.UpdateScheduleResult(ctx, evt.ExecID, domain.TaskExecutionStatusFailed, number100, time.Now().UnixMilli(), nil)
+		err = c.execSvc.UpdateScheduleResult(ctx, evt.ExecID, domain.TaskExecutionStatusFailed, number0, time.Now().UnixMilli(), nil, "")
 	}
 	if err != nil {
 		return err

@@ -37,7 +37,9 @@ func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerAp
 	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
 	planRunner := InitPlanRunner(planService, singleTaskRunner)
 	runner := InitDispatchRunner(singleTaskRunner, planRunner)
-	scheduler := InitScheduler(string2, runner, service, executionService, taskAcquirer)
+	component := ioc.InitEtcdClient()
+	registry := InitRegistry(component)
+	scheduler := InitScheduler(string2, runner, service, executionService, taskAcquirer, registry)
 	completeConsumer := InitCompleteConsumer(mq, planRunner, service, executionService, taskAcquirer, string2)
 	retryCompensator := InitRetryCompensator(executionService, runner)
 	v2 := InitTasks(retryCompensator)
@@ -56,6 +58,7 @@ func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerAp
 var (
 	BaseSet = wire.NewSet(ioc.InitDBAndTables, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, InitNodeID,
 		InitConsumers,
+		InitRegistry,
 	)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
