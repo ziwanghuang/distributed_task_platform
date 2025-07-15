@@ -18,7 +18,7 @@ type LocalInvoker struct {
 	fns map[string]LocalExecuteFunc
 }
 
-func NewLocalExecutor(fns map[string]LocalExecuteFunc) *LocalInvoker {
+func NewLocalInvoker(fns map[string]LocalExecuteFunc) *LocalInvoker {
 	return &LocalInvoker{fns: fns}
 }
 

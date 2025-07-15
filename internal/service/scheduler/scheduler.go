@@ -1,4 +1,3 @@
-//nolint:contextcheck // 忽略
 package scheduler
 
 import (
@@ -49,6 +48,7 @@ func NewScheduler(
 	nodeID string,
 	runner runner.Runner,
 	taskSvc task.Service,
+	execSvc task.ExecutionService,
 	acquirer acquirer.TaskAcquirer,
 	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
 	config Config,
@@ -58,6 +58,7 @@ func NewScheduler(
 		nodeID:      nodeID,
 		runner:      runner,
 		taskSvc:     taskSvc,
+		execSvc:     execSvc,
 		acquirer:    acquirer,
 		grpcClients: grpcClients,
 		config:      config,
@@ -183,7 +184,7 @@ func (s *Scheduler) Stop() error {
 	return nil
 }
 
-func (s *Scheduler) GracefulStop(ctx context.Context) error {
+func (s *Scheduler) GracefulStop(_ context.Context) error {
 	s.logger.Info("停止分布式任务调度器", elog.String("nodeID", s.nodeID))
 	s.cancel()
 	return nil

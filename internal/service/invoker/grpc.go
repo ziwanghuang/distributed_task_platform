@@ -18,8 +18,8 @@ type GRPCInvoker struct {
 	logger      *elog.Component
 }
 
-// NewRemoteExecutor 创建 GRPCInvoker 实例
-func NewRemoteExecutor(
+// NewGRPCInvoker 创建 GRPCInvoker 实例
+func NewGRPCInvoker(
 	grpcClients *grpc.Clients[executorv1.ExecutorServiceClient],
 ) *GRPCInvoker {
 	return &GRPCInvoker{

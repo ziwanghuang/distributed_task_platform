@@ -1,8 +1,6 @@
 package ioc
 
 import (
-	"time"
-
 	"gitee.com/flycash/distributed_task_platform/internal/event"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
@@ -17,7 +15,7 @@ func InitPlanRunner(
 	return runner.NewPlanRunner(planSvc, singerRunner)
 }
 
-func InitDispatchRunner(nodeID string,
+func InitDispatchRunner(
 	singerRunner *runner.SingleTaskRunner,
 	planRunner *runner.PlanRunner,
 ) runner.Runner {
@@ -38,10 +36,9 @@ func InitSingleRunner(nodeID string,
 		acquirer,
 		invoker,
 		producer,
-		3*time.Second,
 	)
 }
 
 func NewExecutors(execFunc map[string]invoker.LocalExecuteFunc) *invoker.LocalInvoker {
-	return invoker.NewLocalExecutor(execFunc)
+	return invoker.NewLocalInvoker(execFunc)
 }

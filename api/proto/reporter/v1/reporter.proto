@@ -17,6 +17,9 @@ service ReporterService {
 // 异步 Kafka 消息定义参考这个
 message ReportRequest {
   executor.v1.ExecutionState execution_state = 1;
+
+  // 从 ExecuteRequest 中收到的、原样返回的调度器上下文
+  map<string, string> scheduler_context = 2;
 }
 
 message ReportResponse {}

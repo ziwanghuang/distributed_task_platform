@@ -24,16 +24,18 @@ func NewReportEventConsumer(name string, mq mq.MQ, topic string) *ReportEventCon
 	}
 }
 
-func (c *ReportEventConsumer) Start(ctx context.Context) error {
-	return c.consumer.Start(ctx, c.consumeExecutionReportEvent)
+func (c *ReportEventConsumer) Start(ctx context.Context) {
+	if err := c.consumer.Start(ctx, c.consumeExecutionReportEvent); err != nil {
+		panic(err)
+	}
 }
 
-// consumeExecutionReportEvent 异步消费 ExecutionReport 事件
-func (s *ReportEventConsumer) consumeExecutionReportEvent(ctx context.Context, message *mq.Message) error {
+// consumeExecutionReportEvent 异步消费 ExecutionReportEvent 事件
+func (c *ReportEventConsumer) consumeExecutionReportEvent(ctx context.Context, message *mq.Message) error {
 	report := &domain.Report{}
 	err := json.Unmarshal(message.Value, report)
 	if err != nil {
-		s.logger.Error("反序列化MQ消息体失败",
+		c.logger.Error("反序列化MQ消息体失败",
 			elog.String("step", "consumeExecutionReportEvent"),
 			elog.String("MQ消息体", string(message.Value)),
 			elog.FieldErr(err),
@@ -43,7 +45,7 @@ func (s *ReportEventConsumer) consumeExecutionReportEvent(ctx context.Context, m
 
 	if !report.ExecutionState.Status.IsValid() {
 		err = errs.ErrInvalidTaskExecutionStatus
-		s.logger.Error("执行记录状态非法",
+		c.logger.Error("执行记录状态非法",
 			elog.String("step", "consumeExecutionReportEvent"),
 			elog.String("MQ消息体", string(message.Value)),
 			elog.FieldErr(err),
@@ -51,9 +53,9 @@ func (s *ReportEventConsumer) consumeExecutionReportEvent(ctx context.Context, m
 		return err
 	}
 
-	err = s.svc.HandleReports(ctx, []*domain.Report{report})
+	err = c.svc.HandleReports(ctx, []*domain.Report{report})
 	if err != nil {
-		s.logger.Error("处理异步上报失败",
+		c.logger.Error("处理异步上报失败",
 			elog.String("step", "consumeExecutionReportEvent"),
 			elog.Any("report", report),
 			elog.FieldErr(err))

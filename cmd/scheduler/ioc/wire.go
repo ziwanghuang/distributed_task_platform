@@ -17,7 +17,8 @@ var (
 		ioc.InitDistributedLock,
 		ioc.InitEtcdClient,
 		ioc.InitMQ,
-		ioc.InitConsumers,
+		ioc.InitRunner,
+		ioc.InitInvoker,
 	)
 
 	taskSet = wire.NewSet(
@@ -32,16 +33,30 @@ var (
 		tasksvc.NewExecutionService,
 	)
 
+	planSet = wire.NewSet(
+		tasksvc.NewPlanService,
+	)
+
 	schedulerSet = wire.NewSet(
 		ioc.InitNodeID,
 		ioc.InitScheduler,
-		ioc.InitExecutors,
-		ioc.InitLocalExecuteFuncs,
 		ioc.InitMySQLTaskAcquirer,
 		ioc.InitExecutorServiceGRPCClients,
 	)
+
 	compensatorSet = wire.NewSet(
 		ioc.InitRetryCompensator,
+		ioc.InitRescheduleCompensator,
+		ioc.InitShardingCompensator,
+	)
+
+	producerSet = wire.NewSet(
+		ioc.InitCompleteProducer,
+	)
+
+	consumerSet = wire.NewSet(
+		ioc.InitExecutionReportEventConsumer,
+		ioc.InitExecutionBatchReportEventConsumer,
 	)
 )
 
@@ -52,8 +67,11 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 
 		taskSet,
 		taskExecutionSet,
+		planSet,
 		schedulerSet,
 		compensatorSet,
+		consumerSet,
+		producerSet,
 
 		// GRPC服务器
 		grpcapi.NewReporterServer,

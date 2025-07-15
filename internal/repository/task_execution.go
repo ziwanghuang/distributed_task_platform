@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
+	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/ecodeclub/ekit/sqlx"
@@ -15,7 +17,7 @@ type TaskExecutionRepository interface {
 	// Create 创建任务执行实例
 	Create(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error)
 	// CreateShardingChildren 创建分片子任务执行实例
-	CreateShardingChildren(ctx context.Context, execution domain.TaskExecution, scheduleParams []map[string]string) ([]domain.TaskExecution, error)
+	CreateShardingChildren(ctx context.Context, parent domain.TaskExecution) ([]domain.TaskExecution, error)
 	// UpdateStatus 更新执行状态
 	UpdateStatus(ctx context.Context, id int64, status domain.TaskExecutionStatus) error
 	// GetByID 根据ID获取执行实例
@@ -25,9 +27,13 @@ type TaskExecutionRepository interface {
 	// prepareTimeoutMs: PREPARE状态超时时间（毫秒），超过此时间未执行视为超时
 	// limit: 查询结果数量限制
 	FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
+	// FindShardingParents 查找分片父任务
+	FindShardingParents(ctx context.Context, batchSize int) ([]domain.TaskExecution, error)
+	// FindShardingChildren 查找分片子任务
+	FindShardingChildren(ctx context.Context, parentID int64) ([]domain.TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status domain.TaskExecutionStatus, progress int32, endTime int64, scheduleParams map[string]string) error
-	// SetRunningState 设置任务为运行状态并更新进度、开始时间（从PREPARE状态转换）
+	// SetRunningState 设置任务为运行状态并更新进度
 	SetRunningState(ctx context.Context, id int64, progress int32) error
 	// UpdateRunningProgress 更新任务执行进度（仅在RUNNING状态下有效）
 	UpdateRunningProgress(ctx context.Context, id int64, progress int32) error
@@ -107,19 +113,37 @@ func (r *taskExecutionRepository) Create(ctx context.Context, execution domain.T
 	return r.toDomain(created), nil
 }
 
-func (r *taskExecutionRepository) CreateShardingChildren(ctx context.Context, execution domain.TaskExecution, scheduleParams []map[string]string) ([]domain.TaskExecution, error) {
+func (r *taskExecutionRepository) CreateShardingChildren(ctx context.Context, parent domain.TaskExecution) ([]domain.TaskExecution, error) {
+	if parent.Task.ID == 0 {
+		return nil, errors.New("Task.ID不能为空")
+	}
+
+	if parent.Task.ShardingRule == nil {
+		return nil, errs.ErrTaskShardingRuleNotFound
+	}
+	// 计算分片任务需要的分片调度参数
+	scheduleParams := parent.Task.ShardingRule.ToScheduleParams()
+	if len(scheduleParams) == 0 {
+		return nil, errs.ErrInvalidTaskShardingRule
+	}
+	parent.Status = domain.TaskExecutionStatusRunning
 	// 创建父任务执行记录
-	parent, err := r.Create(ctx, execution)
+	p, err := r.dao.CreateShardingParent(ctx, r.toEntity(parent))
 	if err != nil {
 		return nil, err
 	}
+	createdParent := r.toDomain(p)
 	// 填充子任务执行记录信息
 	children := make([]domain.TaskExecution, 0, len(scheduleParams))
 	for i := range scheduleParams {
 		// 值拷贝，复用父任务执行中的信息来创建子任务
-		child := parent
+		child := createdParent
 		child.ID = 0
-		child.ShardingParentID = parent.ID
+		// 子任务要保持预备状态
+		child.Status = domain.TaskExecutionStatusPrepare
+		// 必须为每个子任务设置其父任务的ID
+		parentID := createdParent.ID
+		child.ShardingParentID = &parentID
 		// 覆盖或添加父任务中的基础调度信息
 		child.MergeTaskScheduleParams(scheduleParams[i])
 		children = append(children, child)
@@ -184,6 +208,26 @@ func (r *taskExecutionRepository) FindReschedulableExecutions(ctx context.Contex
 	}), nil
 }
 
+func (r *taskExecutionRepository) FindShardingParents(ctx context.Context, batchSize int) ([]domain.TaskExecution, error) {
+	daoExecutions, err := r.dao.FindShardingParents(ctx, batchSize)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(daoExecutions, func(_ int, src dao.TaskExecution) domain.TaskExecution {
+		return r.toDomain(src)
+	}), nil
+}
+
+func (r *taskExecutionRepository) FindShardingChildren(ctx context.Context, parentID int64) ([]domain.TaskExecution, error) {
+	daoExecutions, err := r.dao.FindShardingChildren(ctx, parentID)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(daoExecutions, func(_ int, src dao.TaskExecution) domain.TaskExecution {
+		return r.toDomain(src)
+	}), nil
+}
+
 // toEntity 将领域模型转换为DAO模型
 func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.TaskExecution {
 	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
@@ -206,6 +250,12 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 		taskScheduleParams = sqlx.JsonColumn[map[string]string]{Val: execution.Task.ScheduleParams, Valid: true}
 	}
 
+	var shardingParentID sql.NullInt64
+	if execution.ShardingParentID != nil {
+		// 指针非nil，说明DB中应有值
+		shardingParentID = sql.NullInt64{Int64: *execution.ShardingParentID, Valid: true}
+	}
+
 	return dao.TaskExecution{
 		ID: execution.ID,
 		// 从Task展开的冗余字段
@@ -222,7 +272,7 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 		TaskPlanExecID:      execution.Task.PlanExecID,
 		TaskPlanID:          execution.Task.PlanID,
 		// TaskExecution自身字段
-		ShardingParentID: execution.ShardingParentID,
+		ShardingParentID: shardingParentID,
 		Stime:            execution.StartTime,
 		Etime:            execution.EndTime,
 		RetryCount:       execution.RetryCount,
@@ -256,6 +306,12 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 		taskScheduleParams = daoExecution.TaskScheduleParams.Val
 	}
 
+	var shardingParentID *int64
+	if daoExecution.ShardingParentID.Valid {
+		val := daoExecution.ShardingParentID.Int64
+		shardingParentID = &val
+	}
+
 	return domain.TaskExecution{
 		ID: daoExecution.ID,
 		Task: domain.Task{
@@ -271,7 +327,7 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 			Version:         daoExecution.TaskVersion,
 			PlanID:          daoExecution.TaskPlanID,
 		},
-		ShardingParentID: daoExecution.ShardingParentID,
+		ShardingParentID: shardingParentID,
 		StartTime:        daoExecution.Stime,
 		EndTime:          daoExecution.Etime,
 		RetryCount:       daoExecution.RetryCount,

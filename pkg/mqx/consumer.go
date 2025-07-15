@@ -2,7 +2,6 @@ package mqx
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ecodeclub/mq-api"
 	"github.com/gotomicro/ego/core/elog"
@@ -82,10 +81,6 @@ func (c *Consumer) consume(ctx context.Context, mqChan <-chan *mq.Message, consu
 
 func (c *Consumer) Name() string {
 	return c.name
-}
-
-func (c *Consumer) step(partition int) string {
-	return fmt.Sprintf("%s-%d", c.name, partition)
 }
 
 func (c *Consumer) Stop() error {

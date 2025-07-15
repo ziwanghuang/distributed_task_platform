@@ -8,6 +8,7 @@ import (
 )
 
 func TestShardingRule(t *testing.T) {
+	t.Parallel()
 	sr := domain.ShardingRule{
 		Type: "range",
 		Params: map[string]string{

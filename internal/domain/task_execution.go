@@ -75,26 +75,23 @@ func TaskExecutionStatusFromProto(status executorv1.ExecutionStatus) TaskExecuti
 	}
 }
 
-func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionState {
-	if protoState == nil {
-		return ExecutionState{}
-	}
-	return ExecutionState{
-		ID:                protoState.GetId(),
-		TaskID:            protoState.GetTaskId(),
-		TaskName:          protoState.GetTaskName(),
-		Status:            TaskExecutionStatusFromProto(protoState.GetStatus()),
-		RunningProgress:   protoState.GetRunningProgress(),
-		RequestReschedule: protoState.GetRequestReschedule(),
-		RescheduleParams:  protoState.GetRescheduledParams(),
-	}
+type ExecutionType string
+
+const (
+	ExecutionTypeNormal     ExecutionType = "NORMAL"
+	ExecutionTypeRetry      ExecutionType = "RETRY"
+	ExecutionTypeReschedule ExecutionType = "RESCHEDULE"
+)
+
+func (e ExecutionType) String() string {
+	return string(e)
 }
 
 // TaskExecution 任务执行实例领域模型
 type TaskExecution struct {
 	ID int64
 	// 执行自身信息
-	ShardingParentID int64
+	ShardingParentID *int64
 	StartTime        int64 // 开始时间戳
 	EndTime          int64 // 结束时间戳
 	RetryCount       int64
@@ -103,6 +100,7 @@ type TaskExecution struct {
 	Status           TaskExecutionStatus
 	CTime            int64 // 创建时间戳
 	UTime            int64 // 更新时间戳
+
 	// 创建时刻从Task冗余的信息
 	Task Task
 }

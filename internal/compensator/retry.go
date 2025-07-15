@@ -20,26 +20,23 @@ type RetryConfig struct {
 
 // RetryCompensator 重试补偿器
 type RetryCompensator struct {
-	taskSvc task.Service
-	execSvc task.ExecutionService
 	runner  runner.Runner
+	execSvc task.ExecutionService
 	config  RetryConfig
 	logger  *elog.Component
 }
 
 // NewRetryCompensator 创建重试补偿器
 func NewRetryCompensator(
-	taskSvc task.Service,
-	execSvc task.ExecutionService,
 	runner runner.Runner,
+	execSvc task.ExecutionService,
 	config RetryConfig,
 ) *RetryCompensator {
 	return &RetryCompensator{
-		taskSvc: taskSvc,
-		execSvc: execSvc,
 		runner:  runner,
+		execSvc: execSvc,
 		config:  config,
-		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.reschedule")),
+		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.handle")),
 	}
 }
 

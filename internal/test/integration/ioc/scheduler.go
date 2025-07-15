@@ -19,16 +19,22 @@ func InitNodeID() string {
 
 func InitScheduler(
 	nodeID string,
-	taskSvc task.Service,
-	acquirer acquirer.TaskAcquirer,
 	execRunner runner.Runner,
+	taskSvc task.Service,
+	execSvc task.ExecutionService,
+	acquirer acquirer.TaskAcquirer,
 ) *scheduler.Scheduler {
+	const batchTimeout = 30 * time.Second
+	const batchSize = 10
+	const preemptedTimeout = 10 * time.Second
+	const scheduleInterval = 10 * time.Second
+	const renewInterval = 3 * time.Second
 	conf := scheduler.Config{
-		BatchTimeout:     30 * time.Second,
-		BatchSize:        10,
-		PreemptedTimeout: 10 * time.Second,
-		ScheduleInterval: 10 * time.Second,
-		RenewInterval:    3 * time.Second,
+		BatchTimeout:     batchTimeout,
+		BatchSize:        batchSize,
+		PreemptedTimeout: preemptedTimeout,
+		ScheduleInterval: scheduleInterval,
+		RenewInterval:    renewInterval,
 	}
 	grpcClients := grpc.NewClients(func(conn *egrpc.Component) executorv1.ExecutorServiceClient {
 		return executorv1.NewExecutorServiceClient(conn)
@@ -37,6 +43,7 @@ func InitScheduler(
 		nodeID,
 		execRunner,
 		taskSvc,
+		execSvc,
 		acquirer,
 		grpcClients,
 		conf,

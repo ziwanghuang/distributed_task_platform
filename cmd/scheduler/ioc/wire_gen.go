@@ -20,28 +20,33 @@ import (
 func InitSchedulerApp() *ioc.SchedulerApp {
 	string2 := ioc.InitNodeID()
 	v := ioc.InitDB()
+	taskExecutionDAO := dao.NewGORMTaskExecutionDAO(v)
 	taskDAO := dao.NewGORMTaskDAO(v)
 	taskRepository := repository.NewTaskRepository(taskDAO)
-	service := task.NewService(taskRepository)
-	taskExecutionDAO := dao.NewGORMTaskExecutionDAO(v)
 	taskExecutionRepository := repository.NewTaskExecutionRepository(taskExecutionDAO, taskRepository)
-	executionService := task.NewExecutionService(taskExecutionRepository)
-	taskAcquirer := ioc.InitMySQLTaskAcquirer(service)
-	clients := ioc.InitExecutorServiceGRPCClients()
-	v2 := ioc.InitLocalExecuteFuncs()
-	v3 := ioc.InitExecutors(clients, v2)
+	service := task.NewService(taskRepository)
+	taskAcquirer := ioc.InitMySQLTaskAcquirer(taskRepository)
 	mq := ioc.InitMQ()
-	v4 := ioc.InitConsumers(mq, string2)
-	scheduler := ioc.InitScheduler(string2, service, executionService, taskAcquirer, v3, v4, clients)
-	reporterServer := grpc.NewReporterServer(scheduler)
+	completeProducer := ioc.InitCompleteProducer(mq)
+	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer)
+	reporterServer := grpc.NewReporterServer(executionService)
 	component := ioc.InitEtcdClient()
 	egrpcComponent := ioc.InitSchedulerNodeGRPCServer(reporterServer, component)
-	retryCompensator := ioc.InitRetryCompensator(service, executionService, scheduler)
-	v5 := ioc.InitTasks(retryCompensator)
+	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
+	clients := ioc.InitExecutorServiceGRPCClients()
+	invoker := ioc.InitInvoker(clients)
+	runner := ioc.InitRunner(string2, service, executionService, planService, taskAcquirer, invoker, completeProducer)
+	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clients)
+	retryCompensator := ioc.InitRetryCompensator(runner, executionService)
+	rescheduleCompensator := ioc.InitRescheduleCompensator(runner, executionService)
+	shardingCompensator := ioc.InitShardingCompensator(string2, service, executionService, taskAcquirer)
+	batchReportEventConsumer := ioc.InitExecutionBatchReportEventConsumer(mq, string2)
+	reportEventConsumer := ioc.InitExecutionReportEventConsumer(mq, string2)
+	v2 := ioc.InitTasks(retryCompensator, rescheduleCompensator, shardingCompensator, batchReportEventConsumer, reportEventConsumer)
 	schedulerApp := &ioc.SchedulerApp{
 		GRPC:      egrpcComponent,
 		Scheduler: scheduler,
-		Tasks:     v5,
+		Tasks:     v2,
 	}
 	return schedulerApp
 }
@@ -49,12 +54,19 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 // wire.go:
 
 var (
-	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitConsumers)
+	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
 
 	taskExecutionSet = wire.NewSet(dao.NewGORMTaskExecutionDAO, repository.NewTaskExecutionRepository, task.NewExecutionService)
 
-	schedulerSet   = wire.NewSet(ioc.InitNodeID, ioc.InitScheduler, ioc.InitExecutors, ioc.InitLocalExecuteFuncs, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients)
-	compensatorSet = wire.NewSet(ioc.InitRetryCompensator)
+	planSet = wire.NewSet(task.NewPlanService)
+
+	schedulerSet = wire.NewSet(ioc.InitNodeID, ioc.InitScheduler, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients)
+
+	compensatorSet = wire.NewSet(ioc.InitRetryCompensator, ioc.InitRescheduleCompensator, ioc.InitShardingCompensator)
+
+	producerSet = wire.NewSet(ioc.InitCompleteProducer)
+
+	consumerSet = wire.NewSet(ioc.InitExecutionReportEventConsumer, ioc.InitExecutionBatchReportEventConsumer)
 )

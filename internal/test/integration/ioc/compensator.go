@@ -9,20 +9,22 @@ import (
 )
 
 func InitRetryCompensator(
-	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	runner runner.Runner,
 ) *compensator.RetryCompensator {
+	const maxRetryCount = 3
+	const prepareTimeoutWindowMs = 10000000000
+	const batchSize = 10
+	const minDuration = 10 * time.Second
 	cfg := compensator.RetryConfig{
-		MaxRetryCount:          3,
-		PrepareTimeoutWindowMs: 10000000000,
-		BatchSize:              10,
-		MinDuration:            10 * time.Second,
+		MaxRetryCount:          maxRetryCount,
+		PrepareTimeoutWindowMs: prepareTimeoutWindowMs,
+		BatchSize:              batchSize,
+		MinDuration:            minDuration,
 	}
 	return compensator.NewRetryCompensator(
-		taskSvc,
-		execSvc,
 		runner,
+		execSvc,
 		cfg,
 	)
 }

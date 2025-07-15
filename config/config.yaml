@@ -54,11 +54,17 @@ compensator:
     prepareTimeoutWindowMs: 10000000000
     batchSize: 100
     minDuration: 1000000000
+  reschedule:
+    batchSize: 100
+    minDuration: 1000000000
+  sharding:
+    batchSize: 100
+    minDuration: 1000000000
 
 executionReportEvent:
   topic: "execution_report"
-  partitions: 2
+  partitions: 1
 
 executionBatchReportEvent:
   topic: "execution_batch_report"
-  partitions: 2
+  partitions: 1

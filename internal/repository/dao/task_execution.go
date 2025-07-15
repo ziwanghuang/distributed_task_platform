@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -35,15 +36,15 @@ type TaskExecution struct {
 	TaskPlanExecID      int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
 	TaskPlanID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的ID'"`
 	// 下面这些是 TaskExecution 的自身信息
-	ShardingParentID int64  `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=ID，分片任务的所有子任务的hardingParentID=父任务ID，使用过滤条件 ID != ShardingParentID 来选中非分片任务和分片子任务（即忽略分片父任务）'"`
-	Stime            int64  `gorm:"type:bigint;comment:'开始时间'"`
-	Etime            int64  `gorm:"type:bigint;comment:'结束时间'"`
-	RetryCount       int64  `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
-	NextRetryTime    int64  `gorm:"type:bigint;comment:'下次重试时间'"`
-	RunningProgress  int32  `gorm:"type:int;default:0;comment:'执行进度0-100，RUNNING状态下有效'"`
-	Status           string `gorm:"type:ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS');not null;default:'PREPARE';comment:'执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功'"`
-	Ctime            int64  `gorm:"comment:'创建时间'"`
-	Utime            int64  `gorm:"comment:'更新时间'"`
+	ShardingParentID sql.NullInt64 `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的hardingParentID=父任务ID'"`
+	Stime            int64         `gorm:"type:bigint;comment:'开始时间'"`
+	Etime            int64         `gorm:"type:bigint;comment:'结束时间'"`
+	RetryCount       int64         `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
+	NextRetryTime    int64         `gorm:"type:bigint;comment:'下次重试时间'"`
+	RunningProgress  int32         `gorm:"type:int;default:0;comment:'执行进度0-100，RUNNING状态下有效'"`
+	Status           string        `gorm:"type:ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS');not null;default:'PREPARE';comment:'执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功'"`
+	Ctime            int64         `gorm:"comment:'创建时间'"`
+	Utime            int64         `gorm:"comment:'更新时间'"`
 }
 
 // TableName 指定表名
@@ -54,6 +55,8 @@ func (TaskExecution) TableName() string {
 type TaskExecutionDAO interface {
 	// Create 创建任务执行记录
 	Create(ctx context.Context, execution TaskExecution) (TaskExecution, error)
+	// CreateShardingParent 创建分片任务父执行记录
+	CreateShardingParent(ctx context.Context, execution TaskExecution) (TaskExecution, error)
 	// BatchCreate 批量创建执行记录
 	BatchCreate(ctx context.Context, executions []TaskExecution) ([]TaskExecution, error)
 	// GetByID 根据ID获取执行记录
@@ -65,9 +68,13 @@ type TaskExecutionDAO interface {
 	// prepareTimeoutMs: PREPARE状态超时时间（毫秒），超过此时间未执行视为超时
 	// limit: 查询结果数量限制
 	FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]TaskExecution, error)
+	// FindShardingParents 查找分片父任务
+	FindShardingParents(ctx context.Context, batchSize int) ([]TaskExecution, error)
+	// FindShardingChildren 查找分片子任务
+	FindShardingChildren(ctx context.Context, parentID int64) ([]TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
 	UpdateRetryResult(ctx context.Context, id, retryCount, nextRetryTime int64, status string, progress int32, endTime int64, scheduleParams map[string]string) error
-	// SetRunningState 设置任务为运行状态并更新进度（从PREPARE状态转换）
+	// SetRunningState 设置任务为运行状态并更新进度
 	SetRunningState(ctx context.Context, id int64, progress int32) error
 	// UpdateProgress 更新任务执行进度、开始时间（仅在RUNNING状态下有效）
 	UpdateProgress(ctx context.Context, id int64, progress int32) error
@@ -140,6 +147,20 @@ func (g *GORMTaskExecutionDAO) Create(ctx context.Context, execution TaskExecuti
 	return execution, nil
 }
 
+func (g *GORMTaskExecutionDAO) CreateShardingParent(ctx context.Context, execution TaskExecution) (TaskExecution, error) {
+	now := time.Now().UnixMilli()
+	execution.Utime, execution.Ctime = now, now
+
+	// 显式设置 ShardingParentID 为 0
+	execution.ShardingParentID = sql.NullInt64{Int64: 0, Valid: true}
+
+	err := g.db.WithContext(ctx).Create(&execution).Error
+	if err != nil {
+		return TaskExecution{}, fmt.Errorf("创建分片父任务失败: %w", err)
+	}
+	return execution, nil
+}
+
 func (g *GORMTaskExecutionDAO) BatchCreate(ctx context.Context, executions []TaskExecution) ([]TaskExecution, error) {
 	now := time.Now().UnixMilli()
 	for i := range executions {
@@ -189,7 +210,7 @@ func (g *GORMTaskExecutionDAO) FindRetryableExecutions(ctx context.Context, maxR
 		// 过滤掉已达最大重试次数的记录
 		Where("retry_count < ?", maxRetryCount).
 		// 过滤掉分片父任务
-		Where("sharding_parent_id IS NULL OR id != sharding_parent_id").
+		Where("sharding_parent_id IS NULL OR sharding_parent_id > 0").
 		// PREPARE状态超时 - 调度失败需要重试
 		// FAILED_RETRYABLE状态 - 执行失败但可重试
 		Where(`
@@ -208,6 +229,30 @@ func (g *GORMTaskExecutionDAO) FindRetryableExecutions(ctx context.Context, maxR
 		Limit(limit).
 		Find(&executions).Error
 
+	return executions, err
+}
+
+func (g *GORMTaskExecutionDAO) FindShardingParents(ctx context.Context, batchSize int) ([]TaskExecution, error) {
+	var executions []TaskExecution
+	err := g.db.WithContext(ctx).
+		Where("sharding_parent_id = 0").
+		// 状态为RUNNING，表示任务还在进行中，需要检查
+		Where("status = ?", TaskExecutionStatusRunning).
+		// 按更新时间排序，优先处理最久没有变化的，更公平
+		Order("utime ASC").
+		Limit(batchSize).
+		Find(&executions).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询分片父任务失败: %w", err)
+	}
+	return executions, nil
+}
+
+func (g *GORMTaskExecutionDAO) FindShardingChildren(ctx context.Context, parentID int64) ([]TaskExecution, error) {
+	var executions []TaskExecution
+	err := g.db.WithContext(ctx).
+		Where("sharding_parent_id = ?", parentID).
+		Find(&executions).Error
 	return executions, err
 }
 
@@ -238,7 +283,8 @@ func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, pr
 	now := time.Now().UnixMilli()
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
-		Where("id = ? AND (status = ? OR status = ?) ", id, TaskExecutionStatusPrepare, TaskExecutionStatusFailedRetryable).
+		Where("id = ? AND (status = ? OR status = ? OR status = ?) ",
+			id, TaskExecutionStatusPrepare, TaskExecutionStatusFailedRetryable, TaskExecutionStatusFailedRescheduled).
 		Updates(map[string]any{
 			"status":           TaskExecutionStatusRunning,
 			"running_progress": progress,
@@ -297,7 +343,7 @@ func (g *GORMTaskExecutionDAO) FindReschedulableExecutions(ctx context.Context, 
 	var executions []TaskExecution
 	// 查找可重调度的执行记录
 	err := g.db.WithContext(ctx).
-		Where("status = ? AND (sharding_parent_id IS NULL OR id != sharding_parent_id) ", TaskExecutionStatusFailedRescheduled).
+		Where("status = ? AND (sharding_parent_id IS NULL OR sharding_parent_id > 0) ", TaskExecutionStatusFailedRescheduled).
 		Order("utime ASC").
 		Limit(limit).
 		Find(&executions).Error

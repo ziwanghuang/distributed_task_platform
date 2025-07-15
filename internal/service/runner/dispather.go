@@ -9,7 +9,6 @@ import (
 
 var _ Runner = &Dispatcher{}
 
-// Dispatcher
 type Dispatcher struct {
 	planRunner       Runner
 	singleTaskRunner Runner

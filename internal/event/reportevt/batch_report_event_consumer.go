@@ -13,9 +13,9 @@ import (
 )
 
 type BatchReportEventConsumer struct {
-	logger   *elog.Component
 	svc      task.ExecutionService
 	consumer *mqx.Consumer
+	logger   *elog.Component
 }
 
 func NewBatchReportEventConsumer(name string, mq mq.MQ, topic string) *BatchReportEventConsumer {
@@ -24,38 +24,42 @@ func NewBatchReportEventConsumer(name string, mq mq.MQ, topic string) *BatchRepo
 	}
 }
 
-func (c *BatchReportEventConsumer) Start(ctx context.Context) error {
-	return c.consumer.Start(ctx, c.consumeExecutionReportEvent)
+func (c *BatchReportEventConsumer) Start(ctx context.Context) {
+	if err := c.consumer.Start(ctx, c.consumeBatchExecutionReportEvent); err != nil {
+		panic(err)
+	}
 }
 
-// consumeExecutionReportEvent 异步消费 ExecutionReport 事件
-func (s *BatchReportEventConsumer) consumeExecutionReportEvent(ctx context.Context, message *mq.Message) error {
-	report := &domain.Report{}
-	err := json.Unmarshal(message.Value, report)
+// consumeBatchExecutionReportEvent 异步消费 ExecutionBatchReportEvent 事件
+func (c *BatchReportEventConsumer) consumeBatchExecutionReportEvent(ctx context.Context, message *mq.Message) error {
+	batchReport := &domain.BatchReport{}
+	err := json.Unmarshal(message.Value, batchReport)
 	if err != nil {
-		s.logger.Error("反序列化MQ消息体失败",
-			elog.String("step", "consumeExecutionReportEvent"),
+		c.logger.Error("反序列化MQ消息体失败",
+			elog.String("step", "consumeBatchExecutionReportEvent"),
 			elog.String("MQ消息体", string(message.Value)),
 			elog.FieldErr(err),
 		)
 		return err
 	}
 
-	if !report.ExecutionState.Status.IsValid() {
-		err = errs.ErrInvalidTaskExecutionStatus
-		s.logger.Error("执行记录状态非法",
-			elog.String("step", "consumeExecutionReportEvent"),
-			elog.String("MQ消息体", string(message.Value)),
-			elog.FieldErr(err),
-		)
-		return err
+	for i := range batchReport.Reports {
+		if !batchReport.Reports[i].ExecutionState.Status.IsValid() {
+			err = errs.ErrInvalidTaskExecutionStatus
+			c.logger.Error("执行记录状态非法",
+				elog.String("step", "consumeBatchExecutionReportEvent"),
+				elog.String("MQ消息体", string(message.Value)),
+				elog.FieldErr(err),
+			)
+			return err
+		}
 	}
 
-	err = s.svc.HandleReports(ctx, []*domain.Report{report})
+	err = c.svc.HandleReports(ctx, batchReport.Reports)
 	if err != nil {
-		s.logger.Error("处理异步上报失败",
-			elog.String("step", "consumeExecutionReportEvent"),
-			elog.Any("report", report),
+		c.logger.Error("处理异步上报失败",
+			elog.String("step", "consumeBatchExecutionReportEvent"),
+			elog.Any("batchReport", batchReport),
 			elog.FieldErr(err))
 		return err
 	}

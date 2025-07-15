@@ -1,10 +1,10 @@
 package ioc
 
 import (
+	"gitee.com/flycash/distributed_task_platform/internal/repository"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
-	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 )
 
-func InitMySQLTaskAcquirer(taskSvc task.Service) acquirer.TaskAcquirer {
-	return acquirer.NewTaskAcquirer(taskSvc)
+func InitMySQLTaskAcquirer(taskRepo repository.TaskRepository) acquirer.TaskAcquirer {
+	return acquirer.NewTaskAcquirer(taskRepo)
 }

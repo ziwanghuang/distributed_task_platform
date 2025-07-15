@@ -71,6 +71,8 @@ func (m *ExecutionState) validate(all bool) error {
 
 	// no validation rules for RescheduledParams
 
+	// no validation rules for ExecutorNodeId
+
 	if len(errors) > 0 {
 		return ExecutionStateMultiError(errors)
 	}
@@ -178,6 +180,8 @@ func (m *ExecuteRequest) validate(all bool) error {
 	// no validation rules for TaskName
 
 	// no validation rules for Params
+
+	// no validation rules for SchedulerContext
 
 	if len(errors) > 0 {
 		return ExecuteRequestMultiError(errors)

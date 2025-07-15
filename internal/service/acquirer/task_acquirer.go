@@ -22,13 +22,13 @@ type TaskAcquirer interface {
 
 // MySQLTaskAcquirer 基于MySQL实现的TaskAcquirer
 type MySQLTaskAcquirer struct {
-	taskRepo repository.TaskRepository // 依赖task.Service接口
+	taskRepo repository.TaskRepository
 }
 
 // NewTaskAcquirer 创建TaskAcquirer实例
-func NewTaskAcquirer(taskSvc repository.TaskRepository) *MySQLTaskAcquirer {
+func NewTaskAcquirer(taskRepo repository.TaskRepository) *MySQLTaskAcquirer {
 	return &MySQLTaskAcquirer{
-		taskRepo: taskSvc,
+		taskRepo: taskRepo,
 	}
 }
 

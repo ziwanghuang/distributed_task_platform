@@ -3,27 +3,20 @@ package ioc
 import (
 	"fmt"
 
-	"gitee.com/flycash/distributed_task_platform/pkg/mqx"
+	"gitee.com/flycash/distributed_task_platform/internal/event/reportevt"
 
 	"github.com/ecodeclub/mq-api"
 	"github.com/gotomicro/ego/core/econf"
 )
 
-func InitConsumers(q mq.MQ, nodeID string) map[string]*mqx.Consumer {
-	return map[string]*mqx.Consumer{
-		"executionReportEvent":      initPushMessageConsumer(q, nodeID),
-		"executionBatchReportEvent": initScaleUpConsumer(q, nodeID),
-	}
-}
-
-func initPushMessageConsumer(q mq.MQ, nodeID string) *mqx.Consumer {
+func InitExecutionReportEventConsumer(q mq.MQ, nodeID string) *reportevt.ReportEventConsumer {
 	topic := econf.GetString("executionReportEvent.topic")
-	return mqx.NewConsumer(name("executionReportEvent", nodeID), q, topic)
+	return reportevt.NewReportEventConsumer(name("executionReportEvent", nodeID), q, topic)
 }
 
-func initScaleUpConsumer(q mq.MQ, nodeID string) *mqx.Consumer {
+func InitExecutionBatchReportEventConsumer(q mq.MQ, nodeID string) *reportevt.BatchReportEventConsumer {
 	topic := econf.GetString("executionBatchReportEvent.topic")
-	return mqx.NewConsumer(name("executionBatchReportEvent", nodeID), q, topic)
+	return reportevt.NewBatchReportEventConsumer(name("executionBatchReportEvent", nodeID), q, topic)
 }
 
 func name(eventName, nodeID string) string {

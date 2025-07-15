@@ -14,11 +14,8 @@ import (
 	"github.com/gotomicro/ego/core/elog"
 )
 
-var errTaskHasAcquired = errors.New("task has acquired")
-
 const (
 	defaultRetrySleepTime = 500 * time.Millisecond
-	defaultTimeout        = 5 * time.Second
 )
 
 type PlanRunner struct {

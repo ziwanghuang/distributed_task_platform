@@ -8,6 +8,7 @@ import (
 	"github.com/gotomicro/ego/server/egrpc"
 )
 
+// Task 调度平台上的长任务 —— 各种补偿任务、消费者等
 type Task interface {
 	Start(ctx context.Context)
 }

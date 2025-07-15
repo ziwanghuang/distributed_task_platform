@@ -141,11 +141,11 @@ type ShardingRule struct {
 	Params map[string]string
 }
 
+// ToScheduleParams 根据分片规则计算出分片任务所需要的调度参数
 func (s *ShardingRule) ToScheduleParams() []map[string]string {
 	// 在后台创建该任务时，应该严格校验下面的参数，此处不要再校验
 	scheduleParams := make([]map[string]string, 0)
-	switch s.Type {
-	case "range":
+	if s.Type == "range" {
 		step, _ := strconv.ParseInt(s.Params["step"], 10, 64)
 		totalNums, _ := strconv.ParseInt(s.Params["totalNums"], 10, 64)
 		for i := range totalNums {

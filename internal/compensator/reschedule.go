@@ -18,23 +18,23 @@ type RescheduleConfig struct {
 
 // RescheduleCompensator 重调度补偿器
 type RescheduleCompensator struct {
-	execSvc task.ExecutionService
 	runner  runner.Runner
+	execSvc task.ExecutionService
 	config  RescheduleConfig
 	logger  *elog.Component
 }
 
 // NewRescheduleCompensator 创建重调度补偿器
 func NewRescheduleCompensator(
-	execSvc task.ExecutionService,
 	runner runner.Runner,
+	execSvc task.ExecutionService,
 	config RescheduleConfig,
 ) *RescheduleCompensator {
 	return &RescheduleCompensator{
-		execSvc: execSvc,
 		runner:  runner,
+		execSvc: execSvc,
 		config:  config,
-		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.reschedule")),
+		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.handle")),
 	}
 }
 
