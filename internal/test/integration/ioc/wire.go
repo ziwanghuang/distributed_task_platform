@@ -24,6 +24,7 @@ var (
 		InitNodeID,
 		InitConsumers,
 		InitRegistry,
+		InitPrometheusClient,
 	)
 
 	taskSet = wire.NewSet(
@@ -50,6 +51,7 @@ var (
 		InitSingleRunner,
 		InitPlanRunner,
 		InitDispatchRunner,
+		InitClusterLoadChecker,
 		InitScheduler,
 	)
 

@@ -7,6 +7,8 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
+	"gitee.com/flycash/distributed_task_platform/pkg/loadchecker"
+	"gitee.com/flycash/distributed_task_platform/pkg/prometheus"
 	"github.com/google/uuid"
 	"github.com/gotomicro/ego/core/econf"
 )
@@ -22,12 +24,14 @@ func InitScheduler(
 	execSvc task.ExecutionService,
 	acquirer acquirer.TaskAcquirer,
 	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient],
+	lc *loadchecker.ClusterLoadChecker,
 ) *scheduler.Scheduler {
 	var cfg scheduler.Config
 	err := econf.UnmarshalKey("scheduler", &cfg)
 	if err != nil {
 		panic(err)
 	}
+
 	return scheduler.NewScheduler(
 		nodeID,
 		runner,
@@ -36,5 +40,8 @@ func InitScheduler(
 		acquirer,
 		grpcClients,
 		cfg,
+		lc,
+		// 初始化指标收集器
+		prometheus.NewSchedulerMetrics(nodeID),
 	)
 }

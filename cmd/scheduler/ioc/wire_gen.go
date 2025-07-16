@@ -37,7 +37,9 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	clientsV2 := ioc.InitExecutorServiceGRPCClients(registry)
 	invoker := ioc.InitInvoker(clientsV2)
 	runner := ioc.InitRunner(string2, service, executionService, planService, taskAcquirer, invoker, completeProducer)
-	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clientsV2)
+	client := ioc.InitPrometheusClient()
+	clusterLoadChecker := ioc.InitClusterLoadChecker(string2, client)
+	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clientsV2, clusterLoadChecker)
 	retryCompensator := ioc.InitRetryCompensator(runner, executionService)
 	rescheduleCompensator := ioc.InitRescheduleCompensator(runner, executionService)
 	shardingCompensator := ioc.InitShardingCompensator(string2, service, executionService, taskAcquirer)
@@ -55,7 +57,7 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 // wire.go:
 
 var (
-	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker, ioc.InitRegistry)
+	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker, ioc.InitRegistry, ioc.InitPrometheusClient)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
 
@@ -63,7 +65,7 @@ var (
 
 	planSet = wire.NewSet(task.NewPlanService)
 
-	schedulerSet = wire.NewSet(ioc.InitNodeID, ioc.InitScheduler, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients)
+	schedulerSet = wire.NewSet(ioc.InitNodeID, ioc.InitClusterLoadChecker, ioc.InitScheduler, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients)
 
 	compensatorSet = wire.NewSet(ioc.InitRetryCompensator, ioc.InitRescheduleCompensator, ioc.InitShardingCompensator)
 

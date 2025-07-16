@@ -13,6 +13,8 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
+	"gitee.com/flycash/distributed_task_platform/pkg/loadchecker"
+	"gitee.com/flycash/distributed_task_platform/pkg/prometheus"
 	"github.com/gotomicro/ego/core/constant"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/gotomicro/ego/server"
@@ -22,13 +24,15 @@ var _ server.Server = &Scheduler{}
 
 // Scheduler 分布式任务调度器
 type Scheduler struct {
-	nodeID      string        // 当前调度节点ID
-	runner      runner.Runner // Runner 分发器
-	taskSvc     task.Service  // 任务服务
-	execSvc     task.ExecutionService
+	nodeID      string                                            // 当前调度节点ID
+	runner      runner.Runner                                     // Runner 分发器
+	taskSvc     task.Service                                      // 任务服务
+	execSvc     task.ExecutionService                             // 任务执行服务
 	acquirer    acquirer.TaskAcquirer                             // 任务抢占、续约、释放器
 	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池
 	config      Config                                            // 配置
+	loadChecker loadchecker.LoadChecker                           // 负载检查器
+	metrics     *prometheus.SchedulerMetrics                      // 指标收集器
 	ctx         context.Context
 	cancel      context.CancelFunc
 	logger      *elog.Component
@@ -52,6 +56,8 @@ func NewScheduler(
 	acquirer acquirer.TaskAcquirer,
 	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient],
 	config Config,
+	loadChecker loadchecker.LoadChecker,
+	metrics *prometheus.SchedulerMetrics,
 ) *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Scheduler{
@@ -62,6 +68,8 @@ func NewScheduler(
 		acquirer:    acquirer,
 		grpcClients: grpcClients,
 		config:      config,
+		loadChecker: loadChecker,
+		metrics:     metrics,
 		ctx:         ctx,
 		cancel:      cancel,
 		logger:      elog.DefaultLogger.With(elog.FieldComponentName("Scheduler")),
@@ -104,6 +112,7 @@ func (s *Scheduler) scheduleLoop() {
 			return
 		}
 
+		stopRecordExecutionTimeFunc := s.metrics.StartRecordExecutionTime()
 		s.logger.Info("开始一次调度")
 
 		// 获取可调度的任务列表
@@ -116,13 +125,16 @@ func (s *Scheduler) scheduleLoop() {
 		// 没有可以调度的任务就睡一会
 		if len(tasks) == 0 {
 			s.logger.Info("没有可调度的任务")
+			// 结束计时
+			stopRecordExecutionTimeFunc()
+			// 睡眠一下
 			time.Sleep(s.config.ScheduleInterval)
 			continue
 		}
 
 		s.logger.Info("发现可调度任务", elog.Int("count", len(tasks)))
 		// 开始调度
-		success := 0
+		successCount := 0
 		for i := range tasks {
 			err1 := s.runner.Run(s.ctx, tasks[i])
 			if err1 != nil {
@@ -131,12 +143,21 @@ func (s *Scheduler) scheduleLoop() {
 					elog.String("taskName", tasks[i].Name),
 					elog.FieldErr(err1))
 			} else {
-				success++
+				successCount++
 			}
 		}
 		s.logger.Info("本次调度信息",
-			elog.Int("success", success),
+			elog.Int("success", successCount),
 			elog.Int("total", len(tasks)))
+
+		// 负载检查
+		duration, ok := s.loadChecker.Check(loadchecker.WithExecutionTime(s.ctx, stopRecordExecutionTimeFunc()))
+		if !ok {
+			s.logger.Info("负载过高，降低调度频率", elog.Duration("sleep", duration))
+			s.metrics.RecordLoadCheckerSleep("composite", duration)
+			time.Sleep(duration)
+			continue
+		}
 	}
 }
 

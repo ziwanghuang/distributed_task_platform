@@ -20,6 +20,7 @@ var (
 		ioc.InitRunner,
 		ioc.InitInvoker,
 		ioc.InitRegistry,
+		ioc.InitPrometheusClient,
 	)
 
 	taskSet = wire.NewSet(
@@ -40,6 +41,7 @@ var (
 
 	schedulerSet = wire.NewSet(
 		ioc.InitNodeID,
+		ioc.InitClusterLoadChecker,
 		ioc.InitScheduler,
 		ioc.InitMySQLTaskAcquirer,
 		ioc.InitExecutorServiceGRPCClients,

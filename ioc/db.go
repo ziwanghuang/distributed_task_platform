@@ -8,6 +8,7 @@ import (
 	"github.com/gotomicro/ego/core/econf"
 
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
+	"gitee.com/flycash/distributed_task_platform/pkg/prometheus"
 
 	"github.com/ecodeclub/ekit/retry"
 	"github.com/ego-component/egorm"
@@ -16,6 +17,13 @@ import (
 func InitDB() *egorm.Component {
 	WaitForDBSetup(econf.GetString("mysql.dsn"))
 	db := egorm.Load("mysql").Build()
+
+	// 注册Prometheus指标插件
+	plugin := prometheus.NewGormMetricsPlugin()
+	if err := db.Use(plugin); err != nil {
+		panic(err)
+	}
+
 	err := dao.InitTables(db)
 	if err != nil {
 		panic(err)

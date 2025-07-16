@@ -39,7 +39,9 @@ func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerAp
 	runner := InitDispatchRunner(singleTaskRunner, planRunner)
 	component := ioc.InitEtcdClient()
 	registry := InitRegistry(component)
-	scheduler := InitScheduler(string2, runner, service, executionService, taskAcquirer, registry)
+	client := InitPrometheusClient()
+	clusterLoadChecker := InitClusterLoadChecker(string2, client)
+	scheduler := InitScheduler(string2, runner, service, executionService, taskAcquirer, registry, clusterLoadChecker)
 	completeConsumer := InitCompleteConsumer(mq, planRunner, service, executionService, taskAcquirer, string2)
 	retryCompensator := InitRetryCompensator(executionService, runner)
 	v2 := InitTasks(retryCompensator)
@@ -59,6 +61,7 @@ var (
 	BaseSet = wire.NewSet(ioc.InitDBAndTables, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, InitNodeID,
 		InitConsumers,
 		InitRegistry,
+		InitPrometheusClient,
 	)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
@@ -74,6 +77,7 @@ var (
 		InitSingleRunner,
 		InitPlanRunner,
 		InitDispatchRunner,
+		InitClusterLoadChecker,
 		InitScheduler,
 	)
 

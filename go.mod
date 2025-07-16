@@ -14,6 +14,8 @@ require (
 	github.com/meoying/dlock-go v0.0.0-20250530125835-af969a8b419d
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/client_golang v1.20.5
+	github.com/prometheus/common v0.62.0
 	github.com/redis/go-redis/v9 v9.11.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.10.0
@@ -22,6 +24,7 @@ require (
 	go.uber.org/multierr v1.11.0
 	golang.org/x/net v0.39.0
 	golang.org/x/sync v0.15.0
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 	gorm.io/driver/mysql v1.5.7
@@ -78,9 +81,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
-	github.com/prometheus/client_golang v1.20.5 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/samber/lo v1.39.0 // indirect
 	github.com/segmentio/kafka-go v0.4.44 // indirect

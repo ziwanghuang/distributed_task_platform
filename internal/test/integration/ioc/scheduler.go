@@ -10,6 +10,8 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	grpcpkg "gitee.com/flycash/distributed_task_platform/pkg/grpc"
 	registry "gitee.com/flycash/distributed_task_platform/pkg/grpc/registry/etcd"
+	"gitee.com/flycash/distributed_task_platform/pkg/loadchecker"
+	"gitee.com/flycash/distributed_task_platform/pkg/prometheus"
 	"github.com/pborman/uuid"
 	"google.golang.org/grpc"
 )
@@ -25,6 +27,7 @@ func InitScheduler(
 	execSvc task.ExecutionService,
 	acquirer acquirer.TaskAcquirer,
 	registry *registry.Registry,
+	lc *loadchecker.ClusterLoadChecker,
 ) *scheduler.Scheduler {
 	const batchTimeout = 30 * time.Second
 	const batchSize = 10
@@ -49,5 +52,7 @@ func InitScheduler(
 		acquirer,
 		grpcClients,
 		conf,
+		lc,
+		prometheus.NewSchedulerMetrics(nodeID),
 	)
 }

@@ -24,6 +24,9 @@ cache:
   requestTimeout: 3000000000
   valueExpiration: 600000000000
 
+prometheus:
+  url: "http://localhost:9090"
+
 server:
   scheduler:
     grpc:
@@ -47,6 +50,22 @@ scheduler:
   tokenAcquireTimeout: 3000000000
   pollInterval: 1000000000
   reportTimeout: 10000000000
+
+# 负载检查器配置
+loadChecker:
+  limiter:
+    rateLimit: 10.0           # 每秒允许10次调度
+    burstSize: 20             # 突发容量20
+    waitDuration: 5000000000  # 限流时等待5秒
+  database:
+    threshold: 100000000       # 数据库响应时间阈值100ms
+    timeWindow: 300000000000  # 查询时间窗口5分钟
+    backoffDuration: 10000000000  # 负载过高时退避10秒
+  cluster:
+    thresholdRatio: 1.2       # 超过平均值20%触发降频
+    timeWindow: 300000000000  # 查询时间窗口5分钟
+    slowdownMultiplier: 2.0   # 降频乘数，睡眠时间加倍
+    minBackoffDuration: 5000000000  # 最小退避时间5秒
 
 compensator:
   retry:
