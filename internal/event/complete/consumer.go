@@ -22,14 +22,14 @@ const (
 )
 
 type Consumer struct {
-	planRunner *runner.PlanRunner
+	planRunner *runner.PlanTaskRunner
 	// 更新
 	execSvc tasksvc.ExecutionService
 	taskSvc tasksvc.Service
 	acquire acquirer.TaskAcquirer
 }
 
-func NewConsumer(planRunner *runner.PlanRunner, execSvc tasksvc.ExecutionService,
+func NewConsumer(planRunner *runner.PlanTaskRunner, execSvc tasksvc.ExecutionService,
 	taskSvc tasksvc.Service,
 	acquirer acquirer.TaskAcquirer,
 ) *Consumer {

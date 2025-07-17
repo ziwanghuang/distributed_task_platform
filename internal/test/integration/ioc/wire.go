@@ -48,9 +48,9 @@ var (
 		NewExecutors,
 		InitMySQLTaskAcquirer,
 		initDispatcherExecutor,
-		InitSingleRunner,
-		InitPlanRunner,
-		InitDispatchRunner,
+		InitNormalTaskRunner,
+		InitPlanTaskRunner,
+		InitDispatcherRunner,
 		InitClusterLoadChecker,
 		InitScheduler,
 	)

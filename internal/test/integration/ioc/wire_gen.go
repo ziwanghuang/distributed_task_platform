@@ -33,16 +33,16 @@ func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerAp
 	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer)
 	localInvoker := NewExecutors(execFunc)
 	invokerInvoker := initDispatcherExecutor(localInvoker)
-	singleTaskRunner := InitSingleRunner(string2, service, executionService, taskAcquirer, invokerInvoker, completeProducer)
+	normalTaskRunner := InitNormalTaskRunner(string2, service, executionService, taskAcquirer, invokerInvoker, completeProducer)
 	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
-	planRunner := InitPlanRunner(planService, singleTaskRunner)
-	runner := InitDispatchRunner(singleTaskRunner, planRunner)
+	planTaskRunner := InitPlanTaskRunner(planService, normalTaskRunner)
+	runner := InitDispatcherRunner(normalTaskRunner, planTaskRunner)
 	component := ioc.InitEtcdClient()
 	registry := InitRegistry(component)
 	client := InitPrometheusClient()
 	clusterLoadChecker := InitClusterLoadChecker(string2, client)
 	scheduler := InitScheduler(string2, runner, service, executionService, taskAcquirer, registry, clusterLoadChecker)
-	completeConsumer := InitCompleteConsumer(mq, planRunner, service, executionService, taskAcquirer, string2)
+	completeConsumer := InitCompleteConsumer(mq, planTaskRunner, service, executionService, taskAcquirer, string2)
 	retryCompensator := InitRetryCompensator(executionService, runner)
 	v2 := InitTasks(retryCompensator)
 	schedulerApp := &SchedulerApp{
@@ -74,9 +74,9 @@ var (
 		NewExecutors,
 		InitMySQLTaskAcquirer,
 		initDispatcherExecutor,
-		InitSingleRunner,
-		InitPlanRunner,
-		InitDispatchRunner,
+		InitNormalTaskRunner,
+		InitPlanTaskRunner,
+		InitDispatcherRunner,
 		InitClusterLoadChecker,
 		InitScheduler,
 	)

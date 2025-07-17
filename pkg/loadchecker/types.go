@@ -9,7 +9,7 @@ import (
 type LoadChecker interface {
 	// Check 检查当前负载状态
 	// 参数：ctx 包含执行时间等上下文信息
-	// 返回：sleepDuration 睡眠时间，shouldSchedule 是否可以继续调度; shouldSchedule = false时 duration 才有意义
+	// 返回：sleepDuration 睡眠时间，shouldSchedule 是否可以继续调度; shouldSchedule = false时 sleepDuration 才有意义
 	Check(ctx context.Context) (sleepDuration time.Duration, shouldSchedule bool)
 }
 

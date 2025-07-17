@@ -198,12 +198,9 @@ type ExecuteRequest struct {
 	// 1 一部分是通过管理后台，业务方自己搞的参数
 	// 2. 另外一部分是我们调度用的，比如说 offset, limit
 	// 即包含了业务参数和调度参数 (e.g., offset, limit)
-	Params map[string]string `protobuf:"bytes,4,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// 调度器上下文，对执行器来说是不透明的
-	// Executor 必须在后续的 Report 调用中原样返回这个 context
-	SchedulerContext map[string]string `protobuf:"bytes,5,rep,name=scheduler_context,json=schedulerContext,proto3" json:"scheduler_context,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	Params        map[string]string `protobuf:"bytes,4,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ExecuteRequest) Reset() {
@@ -260,13 +257,6 @@ func (x *ExecuteRequest) GetTaskName() string {
 func (x *ExecuteRequest) GetParams() map[string]string {
 	if x != nil {
 		return x.Params
-	}
-	return nil
-}
-
-func (x *ExecuteRequest) GetSchedulerContext() map[string]string {
-	if x != nil {
-		return x.SchedulerContext
 	}
 	return nil
 }
@@ -515,17 +505,13 @@ const file_executor_v1_executor_proto_rawDesc = "" +
 	"\x10executor_node_id\x18\b \x01(\tR\x0eexecutorNodeId\x1aD\n" +
 	"\x16RescheduledParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf9\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd4\x01\n" +
 	"\x0eExecuteRequest\x12\x10\n" +
 	"\x03eid\x18\x01 \x01(\x03R\x03eid\x12\x17\n" +
 	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12\x1b\n" +
 	"\ttask_name\x18\x03 \x01(\tR\btaskName\x12?\n" +
-	"\x06params\x18\x04 \x03(\v2'.executor.v1.ExecuteRequest.ParamsEntryR\x06params\x12^\n" +
-	"\x11scheduler_context\x18\x05 \x03(\v21.executor.v1.ExecuteRequest.SchedulerContextEntryR\x10schedulerContext\x1a9\n" +
+	"\x06params\x18\x04 \x03(\v2'.executor.v1.ExecuteRequest.ParamsEntryR\x06params\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aC\n" +
-	"\x15SchedulerContextEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"W\n" +
 	"\x0fExecuteResponse\x12D\n" +
@@ -566,7 +552,7 @@ func file_executor_v1_executor_proto_rawDescGZIP() []byte {
 
 var (
 	file_executor_v1_executor_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-	file_executor_v1_executor_proto_msgTypes  = make([]protoimpl.MessageInfo, 10)
+	file_executor_v1_executor_proto_msgTypes  = make([]protoimpl.MessageInfo, 9)
 	file_executor_v1_executor_proto_goTypes   = []any{
 		(ExecutionStatus)(0),      // 0: executor.v1.ExecutionStatus
 		(*ExecutionState)(nil),    // 1: executor.v1.ExecutionState
@@ -578,29 +564,27 @@ var (
 		(*QueryResponse)(nil),     // 7: executor.v1.QueryResponse
 		nil,                       // 8: executor.v1.ExecutionState.RescheduledParamsEntry
 		nil,                       // 9: executor.v1.ExecuteRequest.ParamsEntry
-		nil,                       // 10: executor.v1.ExecuteRequest.SchedulerContextEntry
 	}
 )
 
 var file_executor_v1_executor_proto_depIdxs = []int32{
-	0,  // 0: executor.v1.ExecutionState.status:type_name -> executor.v1.ExecutionStatus
-	8,  // 1: executor.v1.ExecutionState.rescheduled_params:type_name -> executor.v1.ExecutionState.RescheduledParamsEntry
-	9,  // 2: executor.v1.ExecuteRequest.params:type_name -> executor.v1.ExecuteRequest.ParamsEntry
-	10, // 3: executor.v1.ExecuteRequest.scheduler_context:type_name -> executor.v1.ExecuteRequest.SchedulerContextEntry
-	1,  // 4: executor.v1.ExecuteResponse.execution_state:type_name -> executor.v1.ExecutionState
-	1,  // 5: executor.v1.InterruptResponse.execution_state:type_name -> executor.v1.ExecutionState
-	1,  // 6: executor.v1.QueryResponse.execution_state:type_name -> executor.v1.ExecutionState
-	2,  // 7: executor.v1.ExecutorService.Execute:input_type -> executor.v1.ExecuteRequest
-	4,  // 8: executor.v1.ExecutorService.Interrupt:input_type -> executor.v1.InterruptRequest
-	6,  // 9: executor.v1.ExecutorService.Query:input_type -> executor.v1.QueryRequest
-	3,  // 10: executor.v1.ExecutorService.Execute:output_type -> executor.v1.ExecuteResponse
-	5,  // 11: executor.v1.ExecutorService.Interrupt:output_type -> executor.v1.InterruptResponse
-	7,  // 12: executor.v1.ExecutorService.Query:output_type -> executor.v1.QueryResponse
-	10, // [10:13] is the sub-list for method output_type
-	7,  // [7:10] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	0, // 0: executor.v1.ExecutionState.status:type_name -> executor.v1.ExecutionStatus
+	8, // 1: executor.v1.ExecutionState.rescheduled_params:type_name -> executor.v1.ExecutionState.RescheduledParamsEntry
+	9, // 2: executor.v1.ExecuteRequest.params:type_name -> executor.v1.ExecuteRequest.ParamsEntry
+	1, // 3: executor.v1.ExecuteResponse.execution_state:type_name -> executor.v1.ExecutionState
+	1, // 4: executor.v1.InterruptResponse.execution_state:type_name -> executor.v1.ExecutionState
+	1, // 5: executor.v1.QueryResponse.execution_state:type_name -> executor.v1.ExecutionState
+	2, // 6: executor.v1.ExecutorService.Execute:input_type -> executor.v1.ExecuteRequest
+	4, // 7: executor.v1.ExecutorService.Interrupt:input_type -> executor.v1.InterruptRequest
+	6, // 8: executor.v1.ExecutorService.Query:input_type -> executor.v1.QueryRequest
+	3, // 9: executor.v1.ExecutorService.Execute:output_type -> executor.v1.ExecuteResponse
+	5, // 10: executor.v1.ExecutorService.Interrupt:output_type -> executor.v1.InterruptResponse
+	7, // 11: executor.v1.ExecutorService.Query:output_type -> executor.v1.QueryResponse
+	9, // [9:12] is the sub-list for method output_type
+	6, // [6:9] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_executor_v1_executor_proto_init() }
@@ -614,7 +598,7 @@ func file_executor_v1_executor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_executor_v1_executor_proto_rawDesc), len(file_executor_v1_executor_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

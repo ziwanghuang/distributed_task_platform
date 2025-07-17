@@ -181,8 +181,6 @@ func (m *ExecuteRequest) validate(all bool) error {
 
 	// no validation rules for Params
 
-	// no validation rules for SchedulerContext
-
 	if len(errors) > 0 {
 		return ExecuteRequestMultiError(errors)
 	}

@@ -8,28 +8,28 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 )
 
-func InitPlanRunner(
+func InitPlanTaskRunner(
 	planSvc task.PlanService,
-	singerRunner *runner.SingleTaskRunner,
-) *runner.PlanRunner {
+	singerRunner *runner.NormalTaskRunner,
+) *runner.PlanTaskRunner {
 	return runner.NewPlanRunner(planSvc, singerRunner)
 }
 
-func InitDispatchRunner(
-	singerRunner *runner.SingleTaskRunner,
-	planRunner *runner.PlanRunner,
+func InitDispatcherRunner(
+	singerRunner *runner.NormalTaskRunner,
+	planRunner *runner.PlanTaskRunner,
 ) runner.Runner {
 	return runner.NewDispatcherRunner(planRunner, singerRunner)
 }
 
-func InitSingleRunner(nodeID string,
+func InitNormalTaskRunner(nodeID string,
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	acquirer acquirer.TaskAcquirer,
 	invoker invoker.Invoker,
 	producer event.CompleteProducer,
-) *runner.SingleTaskRunner {
-	return runner.NewSingleTaskRunner(
+) *runner.NormalTaskRunner {
+	return runner.NewNormalTaskRunner(
 		nodeID,
 		taskSvc,
 		execSvc,

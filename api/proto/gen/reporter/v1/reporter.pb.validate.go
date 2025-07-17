@@ -86,8 +86,6 @@ func (m *ReportRequest) validate(all bool) error {
 		}
 	}
 
-	// no validation rules for SchedulerContext
-
 	if len(errors) > 0 {
 		return ReportRequestMultiError(errors)
 	}

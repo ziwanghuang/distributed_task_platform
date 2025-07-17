@@ -194,7 +194,7 @@ func (s *Scheduler) InterruptTaskExecution(ctx context.Context, execution domain
 		// 中断失败，忽略状态
 		return errs.ErrInterruptTaskExecutionFailed
 	}
-	return s.execSvc.HandleState(ctx, domain.ExecutionStateFromProto(resp.GetExecutionState()))
+	return s.execSvc.UpdateState(ctx, domain.ExecutionStateFromProto(resp.GetExecutionState()))
 }
 
 // Stop 停止调度器

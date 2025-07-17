@@ -54,10 +54,6 @@ message ExecuteRequest {
   // 2. 另外一部分是我们调度用的，比如说 offset, limit
   // 即包含了业务参数和调度参数 (e.g., offset, limit)
   map<string, string> params = 4;
-
-  // 调度器上下文，对执行器来说是不透明的
-  // Executor 必须在后续的 Report 调用中原样返回这个 context
-  map<string, string> scheduler_context = 5;
 }
 
 message ExecuteResponse {

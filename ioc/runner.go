@@ -17,7 +17,7 @@ func InitRunner(
 	invoker invoker.Invoker,
 	producer event.CompleteProducer,
 ) runner.Runner {
-	s := runner.NewSingleTaskRunner(
+	s := runner.NewNormalTaskRunner(
 		nodeID,
 		taskSvc,
 		execSvc,

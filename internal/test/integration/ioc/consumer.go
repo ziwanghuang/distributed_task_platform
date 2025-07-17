@@ -13,7 +13,7 @@ import (
 )
 
 func InitCompleteConsumer(q mq.MQ,
-	planRunner *runner.PlanRunner,
+	planRunner *runner.PlanTaskRunner,
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	acquire acquirer.TaskAcquirer,

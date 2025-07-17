@@ -57,7 +57,7 @@ func (t TaskExecutionStatus) IsFailedRescheduled() bool {
 }
 
 func (t TaskExecutionStatus) IsTerminalStatus() bool {
-	return t.IsSuccess() || t.IsFailed() || t.IsFailedRetryable() || t.IsFailedRescheduled()
+	return t.IsSuccess() || t.IsFailed()
 }
 
 func TaskExecutionStatusFromProto(status executorv1.ExecutionStatus) TaskExecutionStatus {
@@ -73,18 +73,6 @@ func TaskExecutionStatusFromProto(status executorv1.ExecutionStatus) TaskExecuti
 	default:
 		return TaskExecutionStatusUnknown
 	}
-}
-
-type ExecutionType string
-
-const (
-	ExecutionTypeNormal     ExecutionType = "NORMAL"
-	ExecutionTypeRetry      ExecutionType = "RETRY"
-	ExecutionTypeReschedule ExecutionType = "RESCHEDULE"
-)
-
-func (e ExecutionType) String() string {
-	return string(e)
 }
 
 // TaskExecution 任务执行记录

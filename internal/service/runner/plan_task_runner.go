@@ -18,41 +18,19 @@ const (
 	defaultRetrySleepTime = 500 * time.Millisecond
 )
 
-type PlanRunner struct {
+type PlanTaskRunner struct {
 	planService task.PlanService
-	*SingleTaskRunner
+	*NormalTaskRunner
 }
 
-func NewPlanRunner(planService task.PlanService, singleRunner *SingleTaskRunner) *PlanRunner {
-	return &PlanRunner{
+func NewPlanRunner(planService task.PlanService, singleRunner *NormalTaskRunner) *PlanTaskRunner {
+	return &PlanTaskRunner{
 		planService:      planService,
-		SingleTaskRunner: singleRunner,
+		NormalTaskRunner: singleRunner,
 	}
 }
 
-func (p *PlanRunner) Retry(_ context.Context, _ domain.TaskExecution) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (p *PlanRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
-	acquiredTask, err := p.taskAcquirer.Acquire(ctx, task.ID, p.nodeID)
-	if err != nil {
-		return domain.Task{}, fmt.Errorf("任务抢占失败: %w", err)
-	}
-	return acquiredTask, nil
-}
-
-func (p *PlanRunner) releaseTask(ctx context.Context, task domain.Task) {
-	if err := p.taskAcquirer.Release(ctx, task.ID, p.nodeID); err != nil {
-		p.logger.Error("释放任务失败",
-			elog.Int64("taskID", task.ID),
-			elog.String("taskName", task.Name),
-			elog.FieldErr(err))
-	}
-}
-
-func (p *PlanRunner) Run(ctx context.Context, task domain.Task) error {
+func (p *PlanTaskRunner) Run(ctx context.Context, task domain.Task) error {
 	// 只需要抢占任务就行
 	ta, err := p.acquireTask(ctx, task)
 	if err != nil {
@@ -82,7 +60,24 @@ func (p *PlanRunner) Run(ctx context.Context, task domain.Task) error {
 	return nil
 }
 
-func (p *PlanRunner) NextStep(ctx context.Context, task domain.Task) error {
+func (p *PlanTaskRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
+	acquiredTask, err := p.taskAcquirer.Acquire(ctx, task.ID, p.nodeID)
+	if err != nil {
+		return domain.Task{}, fmt.Errorf("任务抢占失败: %w", err)
+	}
+	return acquiredTask, nil
+}
+
+func (p *PlanTaskRunner) releaseTask(ctx context.Context, task domain.Task) {
+	if err := p.taskAcquirer.Release(ctx, task.ID, p.nodeID); err != nil {
+		p.logger.Error("释放任务失败",
+			elog.Int64("taskID", task.ID),
+			elog.String("taskName", task.Name),
+			elog.FieldErr(err))
+	}
+}
+
+func (p *PlanTaskRunner) NextStep(ctx context.Context, task domain.Task) error {
 	plan, err := p.planService.GetPlan(ctx, task.PlanID)
 	if err != nil {
 		return err
@@ -121,9 +116,9 @@ func (p *PlanRunner) NextStep(ctx context.Context, task domain.Task) error {
 }
 
 // 单个任务的逻辑：不断抢占，直至抢占成功或者被其他节点抢占。
-func (p *PlanRunner) run(ctx context.Context, task domain.Task) {
+func (p *PlanTaskRunner) run(ctx context.Context, task domain.Task) {
 	for {
-		err := p.SingleTaskRunner.Run(ctx, task)
+		err := p.NormalTaskRunner.Run(ctx, task)
 		if err != nil && !errors.Is(err, errs.ErrTaskPreemptFailed) {
 			p.logger.Error("运行任务失败", elog.FieldErr(err))
 			time.Sleep(defaultRetrySleepTime)

@@ -17,9 +17,9 @@ import (
 	"github.com/gotomicro/ego/core/elog"
 )
 
-var _ Runner = &SingleTaskRunner{}
+var _ Runner = &NormalTaskRunner{}
 
-type SingleTaskRunner struct {
+type NormalTaskRunner struct {
 	nodeID       string                 // 当前调度节点ID
 	taskSvc      task.Service           // 任务服务
 	execSvc      task.ExecutionService  // 任务执行服务
@@ -30,26 +30,26 @@ type SingleTaskRunner struct {
 	logger *elog.Component
 }
 
-func NewSingleTaskRunner(
+func NewNormalTaskRunner(
 	nodeID string,
 	taskSvc task.Service,
 	execSvc task.ExecutionService,
 	taskAcquirer acquirer.TaskAcquirer,
 	invoker invoker.Invoker,
 	producer event.CompleteProducer,
-) *SingleTaskRunner {
-	return &SingleTaskRunner{
+) *NormalTaskRunner {
+	return &NormalTaskRunner{
 		nodeID:       nodeID,
 		taskSvc:      taskSvc,
 		execSvc:      execSvc,
 		taskAcquirer: taskAcquirer,
 		invoker:      invoker,
 		producer:     producer,
-		logger:       elog.DefaultLogger.With(elog.FieldComponentName("runner.SingleTaskRunner")),
+		logger:       elog.DefaultLogger.With(elog.FieldComponentName("runner.NormalTaskRunner")),
 	}
 }
 
-func (s *SingleTaskRunner) Run(ctx context.Context, task domain.Task) error {
+func (s *NormalTaskRunner) Run(ctx context.Context, task domain.Task) error {
 	// 抢占任务
 	acquiredTask, err := s.acquireTask(ctx, task)
 	if err != nil {
@@ -59,7 +59,7 @@ func (s *SingleTaskRunner) Run(ctx context.Context, task domain.Task) error {
 			elog.FieldErr(err))
 		return err
 	}
-	// 这里使用传入的execid，因为execid还没有入库。
+	// 这里使用传入的 PlanExecID ，因为 PlanExecID 还没有入库。
 	acquiredTask.PlanExecID = task.PlanExecID
 	// 根据分片规则区分任务类型
 	if acquiredTask.ShardingRule == nil {
@@ -69,12 +69,11 @@ func (s *SingleTaskRunner) Run(ctx context.Context, task domain.Task) error {
 	}
 }
 
-func (s *SingleTaskRunner) handleNormalTask(ctx context.Context, task domain.Task) error {
+func (s *NormalTaskRunner) handleNormalTask(ctx context.Context, task domain.Task) error {
 	// 抢占成功，立即创建TaskExecution记录
 	execution, err := s.execSvc.Create(ctx, domain.TaskExecution{
 		Task: task,
 		// 可以认为开始执行了，防止执行节点直接返回"终态"状态Failed，Success等
-
 		StartTime: time.Now().UnixMilli(),
 		Status:    domain.TaskExecutionStatusPrepare,
 	})
@@ -91,28 +90,24 @@ func (s *SingleTaskRunner) handleNormalTask(ctx context.Context, task domain.Tas
 	// 抢占和创建都成功，异步触发任务
 	go func() {
 		// 执行任务
-		result, err1 := s.invoker.Run(ctx, execution)
+		state, err1 := s.invoker.Run(ctx, execution)
 		if err1 != nil {
 			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
 			return
 		}
 
-		// 执行任务，并传入上下文
-		// result, err1 := s.invoker.Run(ctx, execution, map[string]string{
-		// 	"type": domain.ExecutionTypeNormal.String(),
-		// })
-
-		err1 = s.execSvc.HandleState(ctx, result)
+		err1 = s.execSvc.UpdateState(ctx, state)
 		if err1 != nil {
 			s.logger.Error("正常调度任务失败",
 				elog.Any("execution", execution),
+				elog.Any("state", state),
 				elog.FieldErr(err1))
 		}
 	}()
 	return nil
 }
 
-func (s *SingleTaskRunner) handleShardingTask(ctx context.Context, task domain.Task) error {
+func (s *NormalTaskRunner) handleShardingTask(ctx context.Context, task domain.Task) error {
 	// 抢占成功，立即创建子任务执行记录
 	executions, err := s.execSvc.CreateShardingChildren(ctx, domain.TaskExecution{
 		Task: task,
@@ -135,21 +130,17 @@ func (s *SingleTaskRunner) handleShardingTask(ctx context.Context, task domain.T
 		execution := executions[i]
 		go func() {
 			// 执行任务
-			result, err1 := s.invoker.Run(ctx, execution)
+			state, err1 := s.invoker.Run(ctx, execution)
 			if err1 != nil {
 				s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
 				return
 			}
 
-			// 执行任务，并传入上下文
-			// result, err1 := s.invoker.Run(ctx, execution, map[string]string{
-			// 	"type": domain.ExecutionTypeNormal.String(),
-			// })
-
-			err1 = s.execSvc.HandleState(ctx, result)
+			err1 = s.execSvc.UpdateState(ctx, state)
 			if err1 != nil {
 				s.logger.Error("正常调度子任务失败",
 					elog.Any("execution", execution),
+					elog.Any("state", state),
 					elog.FieldErr(err1))
 			}
 		}()
@@ -158,7 +149,7 @@ func (s *SingleTaskRunner) handleShardingTask(ctx context.Context, task domain.T
 }
 
 // acquireTask 抢占任务
-func (s *SingleTaskRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
+func (s *NormalTaskRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
 	// 抢占任务
 	acquiredTask, err := s.taskAcquirer.Acquire(ctx, task.ID, s.nodeID)
 	if err != nil {
@@ -169,7 +160,7 @@ func (s *SingleTaskRunner) acquireTask(ctx context.Context, task domain.Task) (d
 }
 
 // releaseTask 释放任务
-func (s *SingleTaskRunner) releaseTask(ctx context.Context, task domain.Task) {
+func (s *NormalTaskRunner) releaseTask(ctx context.Context, task domain.Task) {
 	if err := s.taskAcquirer.Release(ctx, task.ID, s.nodeID); err != nil {
 		s.logger.Error("释放任务失败",
 			elog.Int64("taskID", task.ID),
@@ -178,7 +169,7 @@ func (s *SingleTaskRunner) releaseTask(ctx context.Context, task domain.Task) {
 	}
 }
 
-func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecution) error {
+func (s *NormalTaskRunner) Retry(ctx context.Context, execution domain.TaskExecution) error {
 	// 是否有重试配置
 	if execution.Task.RetryConfig == nil {
 		execution.RetryCount++
@@ -224,42 +215,31 @@ func (s *SingleTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 	// 抢占和创建都成功，异步触发任务
 	go func() {
 		// 执行任务，并在 context 中设置要排除的执行节点 ID，避免重调度到同一个节点
-		result, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution)
+		state, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution)
 		if err1 != nil {
 			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
 			return
 		}
 
-		// 执行任务，并传入上下文
-		// result, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution, map[string]string{
-		// 	"type": domain.ExecutionTypeRetry.String(),
-		// })
-
-		err1 = s.execSvc.HandleState(ctx, result)
+		err1 = s.execSvc.UpdateState(ctx, state)
 		if err1 != nil {
 			s.logger.Error("重试任务失败",
 				elog.Any("execution", execution),
+				elog.Any("state", state),
 				elog.FieldErr(err1))
 		}
-
-		// err1 = s.retryExecutionStateHandler(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), result, retryStrategy)
-		// if err1 != nil {
-		// 	s.logger.Error("重试任务失败",
-		// 		elog.Any("execution", execution),
-		// 		elog.FieldErr(err1))
-		// }
 	}()
 	return nil
 }
 
-func (s *SingleTaskRunner) WithExcludedNodeIDContext(ctx context.Context, executorNodeID string) context.Context {
+func (s *NormalTaskRunner) WithExcludedNodeIDContext(ctx context.Context, executorNodeID string) context.Context {
 	if executorNodeID != "" {
 		return balancer.WithExcludedNodeID(ctx, executorNodeID)
 	}
 	return ctx
 }
 
-func (s *SingleTaskRunner) Reschedule(ctx context.Context, execution domain.TaskExecution) error {
+func (s *NormalTaskRunner) Reschedule(ctx context.Context, execution domain.TaskExecution) error {
 	// 抢占任务
 	acquiredTask, err := s.acquireTask(ctx, execution.Task)
 	if err != nil {
@@ -274,21 +254,17 @@ func (s *SingleTaskRunner) Reschedule(ctx context.Context, execution domain.Task
 	// 抢占和创建都成功，异步触发任务
 	go func() {
 		// 执行任务，并在 context 中设置要排除的执行节点 ID，避免重调度到同一个节点
-		result, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution)
+		state, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution)
 		if err1 != nil {
 			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
 			return
 		}
 
-		// 执行任务，并传入上下文
-		// result, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution, map[string]string{
-		// 	"type": domain.ExecutionTypeReschedule.String(),
-		// })
-
-		err1 = s.execSvc.HandleState(ctx, result)
+		err1 = s.execSvc.UpdateState(ctx, state)
 		if err1 != nil {
 			s.logger.Error("重调度任务失败",
 				elog.Any("execution", execution),
+				elog.Any("state", state),
 				elog.FieldErr(err1))
 		}
 	}()

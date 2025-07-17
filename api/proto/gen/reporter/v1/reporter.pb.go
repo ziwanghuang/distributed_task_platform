@@ -27,10 +27,8 @@ const (
 type ReportRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionState *v1.ExecutionState     `protobuf:"bytes,1,opt,name=execution_state,json=executionState,proto3" json:"execution_state,omitempty"`
-	// 从 ExecuteRequest 中收到的、原样返回的调度器上下文
-	SchedulerContext map[string]string `protobuf:"bytes,2,rep,name=scheduler_context,json=schedulerContext,proto3" json:"scheduler_context,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ReportRequest) Reset() {
@@ -66,13 +64,6 @@ func (*ReportRequest) Descriptor() ([]byte, []int) {
 func (x *ReportRequest) GetExecutionState() *v1.ExecutionState {
 	if x != nil {
 		return x.ExecutionState
-	}
-	return nil
-}
-
-func (x *ReportRequest) GetSchedulerContext() map[string]string {
-	if x != nil {
-		return x.SchedulerContext
 	}
 	return nil
 }
@@ -197,13 +188,9 @@ var File_reporter_v1_reporter_proto protoreflect.FileDescriptor
 
 const file_reporter_v1_reporter_proto_rawDesc = "" +
 	"\n" +
-	"\x1areporter/v1/reporter.proto\x12\vreporter.v1\x1a\x1aexecutor/v1/executor.proto\"\xf9\x01\n" +
+	"\x1areporter/v1/reporter.proto\x12\vreporter.v1\x1a\x1aexecutor/v1/executor.proto\"U\n" +
 	"\rReportRequest\x12D\n" +
-	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState\x12]\n" +
-	"\x11scheduler_context\x18\x02 \x03(\v20.reporter.v1.ReportRequest.SchedulerContextEntryR\x10schedulerContext\x1aC\n" +
-	"\x15SchedulerContextEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x10\n" +
+	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState\"\x10\n" +
 	"\x0eReportResponse\"J\n" +
 	"\x12BatchReportRequest\x124\n" +
 	"\areports\x18\x01 \x03(\v2\x1a.reporter.v1.ReportRequestR\areports\"\x15\n" +
@@ -226,30 +213,28 @@ func file_reporter_v1_reporter_proto_rawDescGZIP() []byte {
 }
 
 var (
-	file_reporter_v1_reporter_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+	file_reporter_v1_reporter_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 	file_reporter_v1_reporter_proto_goTypes  = []any{
 		(*ReportRequest)(nil),       // 0: reporter.v1.ReportRequest
 		(*ReportResponse)(nil),      // 1: reporter.v1.ReportResponse
 		(*BatchReportRequest)(nil),  // 2: reporter.v1.BatchReportRequest
 		(*BatchReportResponse)(nil), // 3: reporter.v1.BatchReportResponse
-		nil,                         // 4: reporter.v1.ReportRequest.SchedulerContextEntry
-		(*v1.ExecutionState)(nil),   // 5: executor.v1.ExecutionState
+		(*v1.ExecutionState)(nil),   // 4: executor.v1.ExecutionState
 	}
 )
 
 var file_reporter_v1_reporter_proto_depIdxs = []int32{
-	5, // 0: reporter.v1.ReportRequest.execution_state:type_name -> executor.v1.ExecutionState
-	4, // 1: reporter.v1.ReportRequest.scheduler_context:type_name -> reporter.v1.ReportRequest.SchedulerContextEntry
-	0, // 2: reporter.v1.BatchReportRequest.reports:type_name -> reporter.v1.ReportRequest
-	0, // 3: reporter.v1.ReporterService.Report:input_type -> reporter.v1.ReportRequest
-	2, // 4: reporter.v1.ReporterService.BatchReport:input_type -> reporter.v1.BatchReportRequest
-	1, // 5: reporter.v1.ReporterService.Report:output_type -> reporter.v1.ReportResponse
-	3, // 6: reporter.v1.ReporterService.BatchReport:output_type -> reporter.v1.BatchReportResponse
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 0: reporter.v1.ReportRequest.execution_state:type_name -> executor.v1.ExecutionState
+	0, // 1: reporter.v1.BatchReportRequest.reports:type_name -> reporter.v1.ReportRequest
+	0, // 2: reporter.v1.ReporterService.Report:input_type -> reporter.v1.ReportRequest
+	2, // 3: reporter.v1.ReporterService.BatchReport:input_type -> reporter.v1.BatchReportRequest
+	1, // 4: reporter.v1.ReporterService.Report:output_type -> reporter.v1.ReportResponse
+	3, // 5: reporter.v1.ReporterService.BatchReport:output_type -> reporter.v1.BatchReportResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_reporter_v1_reporter_proto_init() }
@@ -263,7 +248,7 @@ func file_reporter_v1_reporter_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_reporter_v1_reporter_proto_rawDesc), len(file_reporter_v1_reporter_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

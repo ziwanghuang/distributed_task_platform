@@ -2,7 +2,6 @@ package domain
 
 import (
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
-	reporterv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/reporter/v1"
 )
 
 // Report 进度上报结构
@@ -21,9 +20,6 @@ type ExecutionState struct {
 	RescheduleParams  map[string]string `json:"rescheduleParams"`
 	// 执行节点的 nodeID，用于记录是哪个节点处理了任务
 	ExecutorNodeID string `json:"executorNodeId"`
-
-	// 它将从 scheduler_context 中解析而来
-	Type ExecutionType `json:"type"`
 }
 
 func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionState {
@@ -40,39 +36,6 @@ func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionSta
 		RescheduleParams:  protoState.GetRescheduledParams(),
 		ExecutorNodeID:    protoState.GetExecutorNodeId(),
 	}
-}
-
-func ExecutionStateFromReportRequestProto(req *reporterv1.ReportRequest) ExecutionState {
-	// 先处理已有的 state 部分
-	protoState := req.GetExecutionState()
-	if protoState == nil {
-		return ExecutionState{}
-	}
-	state := ExecutionState{
-		ID:                protoState.GetId(),
-		TaskID:            protoState.GetTaskId(),
-		TaskName:          protoState.GetTaskName(),
-		Status:            TaskExecutionStatusFromProto(protoState.GetStatus()),
-		RunningProgress:   protoState.GetRunningProgress(),
-		RequestReschedule: protoState.GetRequestReschedule(),
-		RescheduleParams:  protoState.GetRescheduledParams(),
-		ExecutorNodeID:    protoState.GetExecutorNodeId(),
-	}
-
-	// 解析 scheduler_context，并填充 Type 字段
-	context := req.GetSchedulerContext()
-	if context != nil {
-		// 从 map 中安全地获取类型字符串
-		typeStr := context["type"]
-		state.Type = ExecutionType(typeStr)
-	}
-
-	// 设置一个安全的默认值
-	// 如果 context 中没有提供 type，我们默认它是 NORMAL 类型
-	if state.Type == "" {
-		state.Type = ExecutionTypeNormal
-	}
-	return state
 }
 
 type BatchReport struct {
