@@ -34,7 +34,7 @@ func NewRescheduleCompensator(
 		runner:  runner,
 		execSvc: execSvc,
 		config:  config,
-		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.handle")),
+		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.reschedule")),
 	}
 }
 

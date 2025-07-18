@@ -1,6 +1,10 @@
 package domain
 
-import executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
+import (
+	"strconv"
+
+	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
+)
 
 // TaskExecutionStatus 任务执行状态
 type TaskExecutionStatus string
@@ -83,6 +87,7 @@ type TaskExecution struct {
 	// 分片任务的父任务的ShardingParentID=0，
 	// 分片任务的所有子任务的ShardingParentID=父任务ID
 	ShardingParentID *int64
+	Deadline         int64               // 任务执行截止时间（毫秒时间戳）
 	ExecutorNodeID   string              // 执行节点的 nodeID，用于记录是哪个节点处理了任务
 	StartTime        int64               // 开始时间
 	EndTime          int64               // 结束时间
@@ -128,6 +133,10 @@ func (te *TaskExecution) GRPCParams() map[string]string {
 			result[k] = v
 		}
 	}
+
+	// 3. 添加任务执行超时参数
+	result["max_execution_seconds"] = strconv.FormatInt(te.Task.MaxExecutionSeconds, 10)
+
 	return result
 }
 
@@ -149,6 +158,9 @@ func (te *TaskExecution) HTTPParams() map[string]string {
 			result[k] = v
 		}
 	}
+
+	// 3. 添加任务执行超时参数
+	result["max_execution_seconds"] = strconv.FormatInt(te.Task.MaxExecutionSeconds, 10)
 
 	return result
 }

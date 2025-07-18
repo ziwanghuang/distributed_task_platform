@@ -45,6 +45,8 @@ type TaskExecutionRepository interface {
 	FindExecutionsByPlanExecID(ctx context.Context, planExecID int64) (map[int64]domain.TaskExecution, error)
 	FindByTaskID(ctx context.Context, taskID int64) ([]domain.TaskExecution, error)
 	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (domain.TaskExecution, error)
+	// FindTimeoutExecutions 查找超时的执行记录
+	FindTimeoutExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error)
 }
 
 type taskExecutionRepository struct {
@@ -228,6 +230,16 @@ func (r *taskExecutionRepository) FindShardingChildren(ctx context.Context, pare
 	}), nil
 }
 
+func (r *taskExecutionRepository) FindTimeoutExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error) {
+	daoExecutions, err := r.dao.FindTimeoutExecutions(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(daoExecutions, func(_ int, src dao.TaskExecution) domain.TaskExecution {
+		return r.toDomain(src)
+	}), nil
+}
+
 // toEntity 将领域模型转换为DAO模型
 func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.TaskExecution {
 	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
@@ -264,21 +276,23 @@ func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.T
 	return dao.TaskExecution{
 		ID: execution.ID,
 		// 从Task展开的冗余字段
-		TaskID:              execution.Task.ID,
-		TaskName:            execution.Task.Name,
-		TaskCronExpr:        execution.Task.CronExpr,
-		TaskExecutionMethod: execution.Task.ExecutionMethod.String(),
-		TaskGrpcConfig:      grpcConfig,
-		TaskHTTPConfig:      httpConfig,
-		TaskRetryConfig:     retryConfig,
-		TaskVersion:         execution.Task.Version,
-		TaskScheduleNodeID:  execution.Task.ScheduleNodeID,
-		TaskScheduleParams:  taskScheduleParams,
-		TaskPlanExecID:      execution.Task.PlanExecID,
-		TaskPlanID:          execution.Task.PlanID,
+		TaskID:                  execution.Task.ID,
+		TaskName:                execution.Task.Name,
+		TaskCronExpr:            execution.Task.CronExpr,
+		TaskExecutionMethod:     execution.Task.ExecutionMethod.String(),
+		TaskGrpcConfig:          grpcConfig,
+		TaskHTTPConfig:          httpConfig,
+		TaskRetryConfig:         retryConfig,
+		TaskMaxExecutionSeconds: execution.Task.MaxExecutionSeconds,
+		TaskVersion:             execution.Task.Version,
+		TaskScheduleNodeID:      execution.Task.ScheduleNodeID,
+		TaskScheduleParams:      taskScheduleParams,
+		TaskPlanExecID:          execution.Task.PlanExecID,
+		TaskPlanID:              execution.Task.PlanID,
 		// TaskExecution自身字段
 		ShardingParentID: shardingParentID,
 		ExecutorNodeID:   executorNodeID,
+		Deadline:         execution.Deadline,
 		Stime:            execution.StartTime,
 		Etime:            execution.EndTime,
 		RetryCount:       execution.RetryCount,
@@ -326,19 +340,21 @@ func (r *taskExecutionRepository) toDomain(daoExecution dao.TaskExecution) domai
 	return domain.TaskExecution{
 		ID: daoExecution.ID,
 		Task: domain.Task{
-			ID:              daoExecution.TaskID,
-			Name:            daoExecution.TaskName,
-			CronExpr:        daoExecution.TaskCronExpr,
-			ExecutionMethod: domain.TaskExecutionMethod(daoExecution.TaskExecutionMethod),
-			GrpcConfig:      taskGrpcConfig,
-			HTTPConfig:      taskHTTPConfig,
-			RetryConfig:     taskRetryConfig,
-			ScheduleParams:  taskScheduleParams,
-			ScheduleNodeID:  daoExecution.TaskScheduleNodeID,
-			Version:         daoExecution.TaskVersion,
-			PlanID:          daoExecution.TaskPlanID,
+			ID:                  daoExecution.TaskID,
+			Name:                daoExecution.TaskName,
+			CronExpr:            daoExecution.TaskCronExpr,
+			ExecutionMethod:     domain.TaskExecutionMethod(daoExecution.TaskExecutionMethod),
+			GrpcConfig:          taskGrpcConfig,
+			HTTPConfig:          taskHTTPConfig,
+			RetryConfig:         taskRetryConfig,
+			MaxExecutionSeconds: daoExecution.TaskMaxExecutionSeconds,
+			ScheduleParams:      taskScheduleParams,
+			ScheduleNodeID:      daoExecution.TaskScheduleNodeID,
+			Version:             daoExecution.TaskVersion,
+			PlanID:              daoExecution.TaskPlanID,
 		},
 		ShardingParentID: shardingParentID,
+		Deadline:         daoExecution.Deadline,
 		ExecutorNodeID:   executorNodeID,
 		StartTime:        daoExecution.Stime,
 		EndTime:          daoExecution.Etime,

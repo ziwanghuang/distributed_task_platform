@@ -51,6 +51,7 @@ var (
 		ioc.InitRetryCompensator,
 		ioc.InitRescheduleCompensator,
 		ioc.InitShardingCompensator,
+		ioc.InitInterruptCompensator,
 	)
 
 	producerSet = wire.NewSet(

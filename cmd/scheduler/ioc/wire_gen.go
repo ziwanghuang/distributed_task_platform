@@ -43,9 +43,10 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	retryCompensator := ioc.InitRetryCompensator(runner, executionService)
 	rescheduleCompensator := ioc.InitRescheduleCompensator(runner, executionService)
 	shardingCompensator := ioc.InitShardingCompensator(string2, service, executionService, taskAcquirer)
+	interruptCompensator := ioc.InitInterruptCompensator(scheduler, executionService)
 	batchReportEventConsumer := ioc.InitExecutionBatchReportEventConsumer(mq, string2)
 	reportEventConsumer := ioc.InitExecutionReportEventConsumer(mq, string2)
-	v2 := ioc.InitTasks(retryCompensator, rescheduleCompensator, shardingCompensator, batchReportEventConsumer, reportEventConsumer)
+	v2 := ioc.InitTasks(retryCompensator, rescheduleCompensator, shardingCompensator, interruptCompensator, batchReportEventConsumer, reportEventConsumer)
 	schedulerApp := &ioc.SchedulerApp{
 		GRPC:      egrpcComponent,
 		Scheduler: scheduler,
@@ -67,7 +68,7 @@ var (
 
 	schedulerSet = wire.NewSet(ioc.InitNodeID, ioc.InitClusterLoadChecker, ioc.InitScheduler, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients)
 
-	compensatorSet = wire.NewSet(ioc.InitRetryCompensator, ioc.InitRescheduleCompensator, ioc.InitShardingCompensator)
+	compensatorSet = wire.NewSet(ioc.InitRetryCompensator, ioc.InitRescheduleCompensator, ioc.InitShardingCompensator, ioc.InitInterruptCompensator)
 
 	producerSet = wire.NewSet(ioc.InitCompleteProducer)
 

@@ -37,6 +37,8 @@ type ExecutionService interface {
 	// FindShardingChildren 查找分片子任务
 	FindShardingChildren(ctx context.Context, parentID int64) ([]domain.TaskExecution, error)
 	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (domain.TaskExecution, error)
+	// FindTimeoutExecutions 查找超时的执行记录
+	FindTimeoutExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error)
 
 	// SetRunningState 设置任务为运行状态并更新进度
 	SetRunningState(ctx context.Context, id int64, progress int32, executorNodeID string) error
@@ -110,6 +112,10 @@ func (s *executionService) FindShardingChildren(ctx context.Context, parentID in
 
 func (s *executionService) FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID, planExecID int64) (domain.TaskExecution, error) {
 	return s.repo.FindExecutionByTaskIDAndPlanExecID(ctx, taskID, planExecID)
+}
+
+func (s *executionService) FindTimeoutExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error) {
+	return s.repo.FindTimeoutExecutions(ctx, limit)
 }
 
 func (s *executionService) SetRunningState(ctx context.Context, id int64, progress int32, executorNodeID string) error {

@@ -4,6 +4,7 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/compensator"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
+	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"github.com/gotomicro/ego/core/econf"
 )
@@ -56,4 +57,20 @@ func InitShardingCompensator(
 		execSvc,
 		taskAcquirer,
 		cfg)
+}
+
+func InitInterruptCompensator(
+	scheduler *scheduler.Scheduler,
+	execSvc task.ExecutionService,
+) *compensator.InterruptCompensator {
+	var cfg compensator.InterruptConfig
+	err := econf.UnmarshalKey("compensator.interrupt", &cfg)
+	if err != nil {
+		panic(err)
+	}
+	return compensator.NewInterruptCompensator(
+		scheduler,
+		execSvc,
+		cfg,
+	)
 }

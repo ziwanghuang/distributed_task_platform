@@ -79,6 +79,9 @@ compensator:
   sharding:
     batchSize: 100
     minDuration: 1000000000
+  interrupt:
+    batchSize: 100
+    minDuration: 1000000000
 
 executionReportEvent:
   topic: "execution_report"

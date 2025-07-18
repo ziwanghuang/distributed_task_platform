@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// excludeBalancer 实现排除式负载均衡器
-type excludeBalancer struct {
+// routingBalancer 实现路由式负载均衡器（支持排除+指定两种路由策略）
+type routingBalancer struct {
 	// cc 用于向 gRPC 报告 Picker 的更新
 	cc balancer.ClientConn
 	mu sync.RWMutex
@@ -27,9 +27,9 @@ type excludeBalancer struct {
 	readySCs map[balancer.SubConn]string
 }
 
-// newExcludeBalancer 创建新的排除式负载均衡器
-func newExcludeBalancer(cc balancer.ClientConn) *excludeBalancer {
-	return &excludeBalancer{
+// newRoutingBalancer 创建新的排除式负载均衡器
+func newRoutingBalancer(cc balancer.ClientConn) *routingBalancer {
+	return &routingBalancer{
 		cc:          cc,
 		subConnMap:  make(map[resolver.Address]balancer.SubConn),
 		scToAddrMap: make(map[balancer.SubConn]resolver.Address),
@@ -39,7 +39,7 @@ func newExcludeBalancer(cc balancer.ClientConn) *excludeBalancer {
 }
 
 // UpdateClientConnState 在服务发现的地址列表发生变化时被调用
-func (b *excludeBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
+func (b *routingBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -88,7 +88,7 @@ func (b *excludeBalancer) UpdateClientConnState(state balancer.ClientConnState) 
 }
 
 // UpdateSubConnState 在子连接的状态发生变化时被调用
-func (b *excludeBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (b *routingBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -120,7 +120,7 @@ func (b *excludeBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer
 
 // updatePicker 根据当前可用的连接列表，创建新的 Picker 并更新客户端状态
 // 这个函数必须在持有锁的情况下被调用
-func (b *excludeBalancer) updatePicker() {
+func (b *routingBalancer) updatePicker() {
 	if len(b.readySCs) == 0 {
 		// 没有可用的连接，通知客户端连接暂时失败
 		b.cc.UpdateState(balancer.State{
@@ -142,12 +142,12 @@ func (b *excludeBalancer) updatePicker() {
 	// 创建新的 Picker，并更新客户端状态为就绪
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Ready,
-		Picker:            newExcludePicker(readyConns, nodeIDs),
+		Picker:            newRoutingPicker(readyConns, nodeIDs),
 	})
 }
 
 // extractNodeID 从地址的 attributes 中提取节点 ID
-func (b *excludeBalancer) extractNodeID(addr resolver.Address) string {
+func (b *routingBalancer) extractNodeID(addr resolver.Address) string {
 	// 服务发现机制必须在 resolver.Address.Attributes 中注入节点ID
 	// 这里假设节点 ID 存储在 "nodeID" 字段
 	if addr.Attributes != nil {
@@ -162,13 +162,13 @@ func (b *excludeBalancer) extractNodeID(addr resolver.Address) string {
 }
 
 // ResolverError 在解析器发生错误时被调用
-func (b *excludeBalancer) ResolverError(error) {
+func (b *routingBalancer) ResolverError(error) {
 	// 在实践中，应该记录这个错误。
 	// gRPC 建议此时不要改变连接状态，等待解析器恢复。
 }
 
 // Close 关闭负载均衡器，释放所有资源
-func (b *excludeBalancer) Close() {
+func (b *routingBalancer) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

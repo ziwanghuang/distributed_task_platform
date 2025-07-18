@@ -43,7 +43,7 @@ func (c *ClientsV2[T]) Get(serviceName string) T {
 		// 注入解析器
 		grpc.WithResolvers(NewResolverBuilder(c.registry, c.timeout)),
 		// 默认负载均衡器实现
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingPolicy":%q}`, balancer.ExcludeRoundRobinName)),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingPolicy":%q}`, balancer.RoutingRoundRobinName)),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {

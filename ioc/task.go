@@ -9,8 +9,9 @@ func InitTasks(
 	t1 *compensator.RetryCompensator,
 	t2 *compensator.RescheduleCompensator,
 	t3 *compensator.ShardingCompensator,
-	t4 *reportevt.BatchReportEventConsumer,
-	t5 *reportevt.ReportEventConsumer,
+	t4 *compensator.InterruptCompensator,
+	t5 *reportevt.BatchReportEventConsumer,
+	t6 *reportevt.ReportEventConsumer,
 ) []Task {
 	return []Task{
 		t1,
@@ -18,5 +19,6 @@ func InitTasks(
 		t3,
 		t4,
 		t5,
+		t6,
 	}
 }

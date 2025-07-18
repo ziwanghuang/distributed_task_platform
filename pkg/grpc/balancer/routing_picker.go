@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// excludePicker 实现排除式轮询的 Picker
-type excludePicker struct {
+// routingPicker 实现路由式轮询的 Picker（支持排除+指定两种路由策略）
+type routingPicker struct {
 	// subConns 是所有可用的子连接
 	subConns []balancer.SubConn
 	// nodeIDs 是与 subConns 对应的节点 ID
@@ -18,21 +18,35 @@ type excludePicker struct {
 	next uint32
 }
 
-// newExcludePicker 创建新的 excludePicker
-func newExcludePicker(subConns []balancer.SubConn, nodeIDs []string) *excludePicker {
-	return &excludePicker{
+// newRoutingPicker 创建新的 routingPicker
+func newRoutingPicker(subConns []balancer.SubConn, nodeIDs []string) *routingPicker {
+	return &routingPicker{
 		subConns: subConns,
 		nodeIDs:  nodeIDs,
 	}
 }
 
 // Pick 实现 balancer.Picker 接口，选择一个可用的连接
-func (p *excludePicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *routingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if len(p.subConns) == 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
 
-	// 从 context 中获取要排除的节点 ID
+	// 优先级1：检查是否有指定节点ID（优先级最高）
+	specificNodeID, hasSpecific := GetSpecificNodeID(info.Ctx)
+	if hasSpecific {
+		// 查找指定的节点
+		for i := range p.nodeIDs {
+			if p.nodeIDs[i] == specificNodeID {
+				return balancer.PickResult{SubConn: p.subConns[i], Done: nil}, nil
+			}
+		}
+		// 如果指定的节点不可用，返回错误
+		return balancer.PickResult{}, status.Errorf(codes.Unavailable,
+			"指定的节点不可用: %s", specificNodeID)
+	}
+
+	// 优先级2：检查排除节点ID
 	excludeNodeID, hasExclude := GetExcludeNode(info.Ctx)
 
 	// 如果没有排除节点，或者只有一个连接，直接使用轮询
@@ -67,7 +81,7 @@ func (p *excludePicker) Pick(info balancer.PickInfo) (balancer.PickResult, error
 }
 
 // pickRoundRobin 执行标准的轮询选择
-func (p *excludePicker) pickRoundRobin() balancer.PickResult {
+func (p *routingPicker) pickRoundRobin() balancer.PickResult {
 	next := atomic.AddUint32(&p.next, 1)
 	idx := int(next-1) % len(p.subConns)
 

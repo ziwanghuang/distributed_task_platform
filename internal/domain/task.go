@@ -58,20 +58,21 @@ type Task struct {
 
 	Type TaskType
 	// 为了方便测试，这里额外引入了一种本地运行的任务
-	ExecutionMethod TaskExecutionMethod
-	GrpcConfig      *GrpcConfig
-	HTTPConfig      *HTTPConfig
-	RetryConfig     *RetryConfig
-	ScheduleNodeID  string
-	ScheduleParams  map[string]string // 调度参数（如分页偏移量、处理进度等）
-	ShardingRule    *ShardingRule
-	NextTime        int64 // 下次执行时间戳
-	Status          TaskStatus
-	Version         int64 // 版本号，用于乐观锁
-	PlanID          int64
-	PlanExecID      int64
-	CTime           int64 // 创建时间戳
-	UTime           int64 // 更新时间戳
+	ExecutionMethod     TaskExecutionMethod
+	GrpcConfig          *GrpcConfig
+	HTTPConfig          *HTTPConfig
+	RetryConfig         *RetryConfig
+	MaxExecutionSeconds int64             // 最大执行秒数，默认24小时
+	ScheduleNodeID      string            // 调度节点ID
+	ScheduleParams      map[string]string // 调度参数（如分页偏移量、处理进度等）
+	ShardingRule        *ShardingRule     // 分片规则
+	NextTime            int64             // 下次执行时间戳
+	Status              TaskStatus        // 任务状态
+	Version             int64             // 版本号，用于乐观锁
+	PlanID              int64
+	PlanExecID          int64
+	CTime               int64 // 创建时间戳
+	UTime               int64 // 更新时间戳
 }
 
 func (t *Task) CalculateNextTime() (time.Time, error) {

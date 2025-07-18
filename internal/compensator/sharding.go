@@ -71,6 +71,7 @@ func (r *ShardingCompensator) Start(ctx context.Context) {
 		if len(executions) == 0 {
 			r.logger.Info("没有找到分片父任务")
 			time.Sleep(r.config.MinDuration)
+			continue
 		}
 
 		r.logger.Info("找到分片父任务", elog.Int("count", len(executions)))

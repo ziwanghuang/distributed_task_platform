@@ -253,8 +253,8 @@ func (s *NormalTaskRunner) Reschedule(ctx context.Context, execution domain.Task
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
-		// 执行任务，并在 context 中设置要排除的执行节点 ID，避免重调度到同一个节点
-		state, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution)
+		// 执行任务，并在 context 中设置要指定的执行节点ID
+		state, err1 := s.invoker.Run(balancer.WithSpecificNodeID(ctx, execution.ExecutorNodeID), execution)
 		if err1 != nil {
 			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
 			return

@@ -17,27 +17,31 @@ const (
 	TaskExecutionStatusRunning           = "RUNNING"
 	TaskExecutionStatusFailedRetryable   = "FAILED_RETRYABLE"
 	TaskExecutionStatusFailedRescheduled = "FAILED_RESCHEDULED"
+
+	milliseconds = 1000
 )
 
 // TaskExecution 任务执行记录表DAO对象
 type TaskExecution struct {
 	ID int64 `gorm:"type:bigint;primaryKey;autoIncrement;"`
 	// 下面都是创建当前 TaskExecution时从对应的Task直接拷贝过来的冗余信息
-	TaskID              int64                               `gorm:"type:bigint;not null;comment:'任务ID'"`
-	TaskName            string                              `gorm:"type:varchar(255);not null;comment:'任务名称'"`
-	TaskCronExpr        string                              `gorm:"type:varchar(100);not null;comment:'cron表达式'"`
-	TaskExecutionMethod string                              `gorm:"type:ENUM('LOCAL', 'REMOTE');not null;default:'REMOTE';comment:'任务执行方式：LOCAL-本地执行，REMOTE-远程执行'"`
-	TaskGrpcConfig      sqlx.JsonColumn[domain.GrpcConfig]  `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
-	TaskHTTPConfig      sqlx.JsonColumn[domain.HTTPConfig]  `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
-	TaskRetryConfig     sqlx.JsonColumn[domain.RetryConfig] `gorm:"type:json;comment:'重试配置'"`
-	TaskVersion         int64                               `gorm:"type:bigint;not null;comment:'创建时Task的版本号'"`
-	TaskScheduleNodeID  string                              `gorm:"type:varchar(255);not null;comment:'创建此执行的调度节点ID'"`
-	TaskScheduleParams  sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
-	TaskPlanExecID      int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
-	TaskPlanID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的ID'"`
+	TaskID                  int64                               `gorm:"type:bigint;not null;comment:'任务ID'"`
+	TaskName                string                              `gorm:"type:varchar(255);not null;comment:'任务名称'"`
+	TaskCronExpr            string                              `gorm:"type:varchar(100);not null;comment:'cron表达式'"`
+	TaskExecutionMethod     string                              `gorm:"type:ENUM('LOCAL', 'REMOTE');not null;default:'REMOTE';comment:'任务执行方式：LOCAL-本地执行，REMOTE-远程执行'"`
+	TaskGrpcConfig          sqlx.JsonColumn[domain.GrpcConfig]  `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
+	TaskHTTPConfig          sqlx.JsonColumn[domain.HTTPConfig]  `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
+	TaskRetryConfig         sqlx.JsonColumn[domain.RetryConfig] `gorm:"type:json;comment:'重试配置'"`
+	TaskMaxExecutionSeconds int64                               `gorm:"type:bigint;not null;default:86400;comment:'最大执行秒数，默认24小时'"`
+	TaskVersion             int64                               `gorm:"type:bigint;not null;comment:'创建时Task的版本号'"`
+	TaskScheduleNodeID      string                              `gorm:"type:varchar(255);not null;comment:'创建此执行的调度节点ID'"`
+	TaskScheduleParams      sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
+	TaskPlanExecID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
+	TaskPlanID              int64                               `gorm:"type:bigint;not null;comment:'对应Plan的ID'"`
 	// 下面这些是 TaskExecution 的自身信息
 	ShardingParentID sql.NullInt64  `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的hardingParentID=父任务ID'"`
 	ExecutorNodeID   sql.NullString `gorm:"type:varchar(255);comment:'执行节点的 nodeID，用于记录是哪个节点处理了任务'"`
+	Deadline         int64          `gorm:"type:bigint;not null;comment:'任务执行截止时间（毫秒时间戳）'"`
 	Stime            int64          `gorm:"type:bigint;comment:'开始时间'"`
 	Etime            int64          `gorm:"type:bigint;comment:'结束时间'"`
 	RetryCount       int64          `gorm:"type:bigint;not null;default:0;comment:'已重试次数'"`
@@ -87,6 +91,8 @@ type TaskExecutionDAO interface {
 	FindExecutionByPlanID(ctx context.Context, planExecID int64) (map[int64]TaskExecution, error)
 	FindByTaskID(ctx context.Context, taskID int64) ([]TaskExecution, error)
 	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (TaskExecution, error)
+	// FindTimeoutExecutions 查找超时的执行记录
+	FindTimeoutExecutions(ctx context.Context, limit int) ([]TaskExecution, error)
 }
 
 type GORMTaskExecutionDAO struct {
@@ -137,6 +143,8 @@ func NewGORMTaskExecutionDAO(db *egorm.Component) TaskExecutionDAO {
 func (g *GORMTaskExecutionDAO) Create(ctx context.Context, execution TaskExecution) (TaskExecution, error) {
 	now := time.Now().UnixMilli()
 	execution.Utime, execution.Ctime = now, now
+	// 计算deadline
+	execution.Deadline = now + execution.TaskMaxExecutionSeconds*milliseconds
 
 	// GORM的Create会自动填充ID到结构体中
 	err := g.db.WithContext(ctx).Create(&execution).Error
@@ -283,6 +291,17 @@ func (g *GORMTaskExecutionDAO) UpdateRetryResult(ctx context.Context, id, retryC
 
 func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, progress int32, executorNodeID string) error {
 	now := time.Now().UnixMilli()
+
+	// 首先查询任务执行记录
+	var execution TaskExecution
+	err := g.db.WithContext(ctx).Where("id = ?", id).First(&execution).Error
+	if err != nil {
+		return fmt.Errorf("%w: 查询执行记录失败: %w", errs.ErrSetExecutionStateRunningFailed, err)
+	}
+
+	// 重新计算deadline
+	newDeadline := now + execution.TaskMaxExecutionSeconds*milliseconds
+
 	result := g.db.WithContext(ctx).
 		Model(&TaskExecution{}).
 		Where("id = ? AND (status = ? OR status = ? OR status = ?) ",
@@ -291,6 +310,7 @@ func (g *GORMTaskExecutionDAO) SetRunningState(ctx context.Context, id int64, pr
 			"status":           TaskExecutionStatusRunning,
 			"running_progress": progress,
 			"stime":            now,
+			"deadline":         newDeadline,
 			"utime":            now,
 			"executor_node_id": sql.NullString{String: executorNodeID, Valid: executorNodeID != ""},
 		})
@@ -351,5 +371,18 @@ func (g *GORMTaskExecutionDAO) FindReschedulableExecutions(ctx context.Context, 
 		Order("utime ASC").
 		Limit(limit).
 		Find(&executions).Error
+	return executions, err
+}
+
+func (g *GORMTaskExecutionDAO) FindTimeoutExecutions(ctx context.Context, limit int) ([]TaskExecution, error) {
+	var executions []TaskExecution
+	now := time.Now().UnixMilli()
+
+	err := g.db.WithContext(ctx).
+		Where("deadline <= ? AND status = ?", now, TaskExecutionStatusRunning).
+		Order("deadline ASC").
+		Limit(limit).
+		Find(&executions).Error
+
 	return executions, err
 }
