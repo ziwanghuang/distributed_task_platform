@@ -26,10 +26,8 @@ type ExecutionService interface {
 	// FindByID 根据ID获取执行实例
 	FindByID(ctx context.Context, id int64) (domain.TaskExecution, error)
 	// FindRetryableExecutions 查找所有可以重试的执行记录
-	// maxRetryCount: 最大重试次数限制
-	// prepareTimeoutMs: PREPARE状态超时时间（毫秒），超过此时间未执行视为超时
 	// limit: 查询结果数量限制
-	FindRetryableExecutions(ctx context.Context, maxRetryCount int64, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
+	FindRetryableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error)
 	// FindReschedulableExecutions 查找所有可以重调度的执行记录
 	FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error)
 	// FindShardingParents 查找分片父任务
@@ -94,8 +92,8 @@ func (s *executionService) FindByID(ctx context.Context, id int64) (domain.TaskE
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *executionService) FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error) {
-	return s.repo.FindRetryableExecutions(ctx, maxRetryCount, prepareTimeoutMs, limit)
+func (s *executionService) FindRetryableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error) {
+	return s.repo.FindRetryableExecutions(ctx, limit)
 }
 
 func (s *executionService) FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error) {

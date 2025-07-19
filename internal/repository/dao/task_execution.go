@@ -69,10 +69,8 @@ type TaskExecutionDAO interface {
 	// UpdateStatus 更新执行状态
 	UpdateStatus(ctx context.Context, id int64, status string) error
 	// FindRetryableExecutions 查找所有可以重试的执行记录
-	// maxRetryCount: 最大重试次数限制
-	// prepareTimeoutMs: PREPARE状态超时时间（毫秒），超过此时间未执行视为超时
 	// limit: 查询结果数量限制
-	FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]TaskExecution, error)
+	FindRetryableExecutions(ctx context.Context, limit int) ([]TaskExecution, error)
 	// FindShardingParents 查找分片父任务
 	FindShardingParents(ctx context.Context, offset, batchSize int) ([]TaskExecution, error)
 	// FindShardingChildren 查找分片子任务
@@ -209,35 +207,19 @@ func (g *GORMTaskExecutionDAO) UpdateStatus(ctx context.Context, id int64, statu
 	return nil
 }
 
-func (g *GORMTaskExecutionDAO) FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]TaskExecution, error) {
+func (g *GORMTaskExecutionDAO) FindRetryableExecutions(ctx context.Context, limit int) ([]TaskExecution, error) {
 	var executions []TaskExecution
 	now := time.Now().UnixMilli()
-	prepareTimeoutThreshold := now - prepareTimeoutMs
 
 	// 复杂查询：查找可重试的执行记录
 	err := g.db.WithContext(ctx).
 		// 过滤掉已达最大重试次数的记录
-		Where("retry_count < ?", maxRetryCount).
-		// 过滤掉分片父任务
-		Where("sharding_parent_id IS NULL OR sharding_parent_id > 0").
-		// PREPARE状态超时 - 调度失败需要重试
 		// FAILED_RETRYABLE状态 - 执行失败但可重试
-		Where(`
-			(status = ? AND ctime <= ?) OR (status = ?)
-		`, TaskExecutionStatusPrepare, prepareTimeoutThreshold, TaskExecutionStatusFailedRetryable).
+		Where(`status=? AND next_retry_time <= ?`, TaskExecutionStatusFailedRetryable, now).
 		// 确保到了可以执行的时间
-		Where("next_retry_time IS NULL OR next_retry_time <= ?", now).
-		Order(`
-			CASE 
-				WHEN status = 'PREPARE' THEN ctime 
-				ELSE COALESCE(next_retry_time, ctime)
-			END ASC
-		`).
-		// 简化版排序（备选方案）：
-		// Order("COALESCE(next_retry_time, ctime) ASC").
+		Where(" next_retry_time <= ?", now).
 		Limit(limit).
 		Find(&executions).Error
-
 	return executions, err
 }
 
