@@ -169,20 +169,6 @@ func (s *NormalTaskRunner) releaseTask(ctx context.Context, task domain.Task) {
 }
 
 func (s *NormalTaskRunner) Retry(ctx context.Context, execution domain.TaskExecution) error {
-	// 是否有重试配置
-	if execution.Task.RetryConfig == nil {
-		_ = s.execSvc.UpdateRetryResult(ctx,
-			execution.ID,
-			execution.RetryCount,
-			execution.NextRetryTime,
-			domain.TaskExecutionStatusFailed,
-			execution.RunningProgress,
-			time.Now().UnixMilli(),
-			execution.Task.ScheduleParams,
-			execution.ExecutorNodeID)
-		return fmt.Errorf("任务重试配置为空")
-	}
-
 	// 抢占任务
 	acquiredTask, err := s.acquireTask(ctx, execution.Task)
 	if err != nil {
