@@ -75,8 +75,6 @@ func (r *RetryCompensator) retry(ctx context.Context) error {
 	// 查找可重试的执行记录
 	executions, err := r.execSvc.FindRetryableExecutions(
 		ctx,
-		r.config.MaxRetryCount,
-		r.config.PrepareTimeoutWindowMs,
 		r.config.BatchSize,
 	)
 	if err != nil {
