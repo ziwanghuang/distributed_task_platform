@@ -13,7 +13,6 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
-	"gitee.com/flycash/distributed_task_platform/pkg/retry"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -172,7 +171,6 @@ func (s *NormalTaskRunner) releaseTask(ctx context.Context, task domain.Task) {
 func (s *NormalTaskRunner) Retry(ctx context.Context, execution domain.TaskExecution) error {
 	// 是否有重试配置
 	if execution.Task.RetryConfig == nil {
-		execution.RetryCount++
 		_ = s.execSvc.UpdateRetryResult(ctx,
 			execution.ID,
 			execution.RetryCount,
@@ -183,22 +181,6 @@ func (s *NormalTaskRunner) Retry(ctx context.Context, execution domain.TaskExecu
 			execution.Task.ScheduleParams,
 			execution.ExecutorNodeID)
 		return fmt.Errorf("任务重试配置为空")
-	}
-
-	// 是否能够正常初始化重试器
-	_, err := retry.NewRetry(execution.Task.RetryConfig.ToRetryComponentConfig())
-	if err != nil {
-		execution.RetryCount++
-		_ = s.execSvc.UpdateRetryResult(ctx,
-			execution.ID,
-			execution.RetryCount,
-			execution.NextRetryTime,
-			domain.TaskExecutionStatusFailed,
-			execution.RunningProgress,
-			time.Now().UnixMilli(),
-			execution.Task.ScheduleParams,
-			execution.ExecutorNodeID)
-		return fmt.Errorf("创建重试策略失败: %w", err)
 	}
 
 	// 抢占任务
