@@ -147,14 +147,22 @@ func (s *ShardingRule) ToScheduleParams() []map[string]string {
 	// 在后台创建该任务时，应该严格校验下面的参数，此处不要再校验
 	scheduleParams := make([]map[string]string, 0)
 	if s.Type == "range" {
-		step, _ := strconv.ParseInt(s.Params["step"], 10, 64)
-		totalNums, _ := strconv.ParseInt(s.Params["totalNums"], 10, 64)
-		for i := range totalNums {
-			mp := make(map[string]string)
-			mp["start"] = strconv.FormatInt(i*step, 10)
-			mp["end"] = strconv.FormatInt((i+1)*step, 10)
-			scheduleParams = append(scheduleParams, mp)
-		}
+		return (*RangeShardingRule)(s).ToScheduleParams()
+	}
+	return scheduleParams
+}
+
+type RangeShardingRule ShardingRule
+
+func (s *RangeShardingRule) ToScheduleParams() []map[string]string {
+	scheduleParams := make([]map[string]string, 0)
+	step, _ := strconv.ParseInt(s.Params["step"], 10, 64)
+	totalNums, _ := strconv.ParseInt(s.Params["totalNums"], 10, 64)
+	for i := range totalNums {
+		mp := make(map[string]string)
+		mp["start"] = strconv.FormatInt(i*step, 10)
+		mp["end"] = strconv.FormatInt((i+1)*step, 10)
+		scheduleParams = append(scheduleParams, mp)
 	}
 	return scheduleParams
 }

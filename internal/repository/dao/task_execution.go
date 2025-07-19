@@ -74,7 +74,7 @@ type TaskExecutionDAO interface {
 	// limit: 查询结果数量限制
 	FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]TaskExecution, error)
 	// FindShardingParents 查找分片父任务
-	FindShardingParents(ctx context.Context, batchSize int) ([]TaskExecution, error)
+	FindShardingParents(ctx context.Context, offset, batchSize int) ([]TaskExecution, error)
 	// FindShardingChildren 查找分片子任务
 	FindShardingChildren(ctx context.Context, parentID int64) ([]TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
@@ -241,7 +241,7 @@ func (g *GORMTaskExecutionDAO) FindRetryableExecutions(ctx context.Context, maxR
 	return executions, err
 }
 
-func (g *GORMTaskExecutionDAO) FindShardingParents(ctx context.Context, batchSize int) ([]TaskExecution, error) {
+func (g *GORMTaskExecutionDAO) FindShardingParents(ctx context.Context, offset, batchSize int) ([]TaskExecution, error) {
 	var executions []TaskExecution
 	err := g.db.WithContext(ctx).
 		Where("sharding_parent_id = 0").
@@ -249,6 +249,7 @@ func (g *GORMTaskExecutionDAO) FindShardingParents(ctx context.Context, batchSiz
 		Where("status = ?", TaskExecutionStatusRunning).
 		// 按更新时间排序，优先处理最久没有变化的，更公平
 		Order("utime ASC").
+		Offset(offset).
 		Limit(batchSize).
 		Find(&executions).Error
 	if err != nil {

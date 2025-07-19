@@ -33,7 +33,7 @@ type ExecutionService interface {
 	// FindReschedulableExecutions 查找所有可以重调度的执行记录
 	FindReschedulableExecutions(ctx context.Context, limit int) ([]domain.TaskExecution, error)
 	// FindShardingParents 查找分片父任务
-	FindShardingParents(ctx context.Context, batchSize int) ([]domain.TaskExecution, error)
+	FindShardingParents(ctx context.Context, offset, batchSize int) ([]domain.TaskExecution, error)
 	// FindShardingChildren 查找分片子任务
 	FindShardingChildren(ctx context.Context, parentID int64) ([]domain.TaskExecution, error)
 	FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (domain.TaskExecution, error)
@@ -102,8 +102,8 @@ func (s *executionService) FindReschedulableExecutions(ctx context.Context, limi
 	return s.repo.FindReschedulableExecutions(ctx, limit)
 }
 
-func (s *executionService) FindShardingParents(ctx context.Context, batchSize int) ([]domain.TaskExecution, error) {
-	return s.repo.FindShardingParents(ctx, batchSize)
+func (s *executionService) FindShardingParents(ctx context.Context, offset, batchSize int) ([]domain.TaskExecution, error) {
+	return s.repo.FindShardingParents(ctx, offset, batchSize)
 }
 
 func (s *executionService) FindShardingChildren(ctx context.Context, parentID int64) ([]domain.TaskExecution, error) {

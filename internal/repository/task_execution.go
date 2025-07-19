@@ -28,7 +28,7 @@ type TaskExecutionRepository interface {
 	// limit: 查询结果数量限制
 	FindRetryableExecutions(ctx context.Context, maxRetryCount, prepareTimeoutMs int64, limit int) ([]domain.TaskExecution, error)
 	// FindShardingParents 查找分片父任务
-	FindShardingParents(ctx context.Context, batchSize int) ([]domain.TaskExecution, error)
+	FindShardingParents(ctx context.Context, offset, batchSize int) ([]domain.TaskExecution, error)
 	// FindShardingChildren 查找分片子任务
 	FindShardingChildren(ctx context.Context, parentID int64) ([]domain.TaskExecution, error)
 	// UpdateRetryResult 更新重试结果
@@ -210,8 +210,8 @@ func (r *taskExecutionRepository) FindReschedulableExecutions(ctx context.Contex
 	}), nil
 }
 
-func (r *taskExecutionRepository) FindShardingParents(ctx context.Context, batchSize int) ([]domain.TaskExecution, error) {
-	daoExecutions, err := r.dao.FindShardingParents(ctx, batchSize)
+func (r *taskExecutionRepository) FindShardingParents(ctx context.Context, offset, batchSize int) ([]domain.TaskExecution, error) {
+	daoExecutions, err := r.dao.FindShardingParents(ctx, offset, batchSize)
 	if err != nil {
 		return nil, err
 	}

@@ -49,7 +49,7 @@ func NewShardingCompensator(
 // Start 启动补偿器
 func (r *ShardingCompensator) Start(ctx context.Context) {
 	r.logger.Info("分片任务补偿器启动")
-
+	offset := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -61,16 +61,22 @@ func (r *ShardingCompensator) Start(ctx context.Context) {
 		// 查找可重调度的执行记录
 		executions, err := r.execSvc.FindShardingParents(
 			ctx,
+			offset,
 			r.config.BatchSize,
 		)
 		if err != nil {
 			r.logger.Error("查找分片父任务失败", elog.FieldErr(err))
+			// 继续往后执行
+			offset += r.config.BatchSize
 			continue
 		}
 
 		if len(executions) == 0 {
 			r.logger.Info("没有找到分片父任务")
+			// 可能是到头了
 			time.Sleep(r.config.MinDuration)
+			// 重置 offset
+			offset = 0
 			continue
 		}
 
@@ -86,6 +92,7 @@ func (r *ShardingCompensator) Start(ctx context.Context) {
 				continue
 			}
 		}
+		offset += len(executions)
 	}
 }
 
