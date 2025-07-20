@@ -21,7 +21,7 @@ type PlanTask struct {
 func (p *PlanTask) SetPre(tasks map[string]*PlanTask) error {
 	planNode := p.AstPlanNode
 	if planNode.Pre != nil {
-		nodes := planNode.Pre.AllNodeName()
+		nodes := planNode.Pre.ChildNodes()
 		for jdx := range nodes {
 			if v, ok := tasks[nodes[jdx]]; ok {
 				p.PreTask = append(p.PreTask, v)
@@ -36,7 +36,7 @@ func (p *PlanTask) SetPre(tasks map[string]*PlanTask) error {
 func (p *PlanTask) SetNext(tasks map[string]*PlanTask) error {
 	planNode := p.AstPlanNode
 	if planNode.Next != nil {
-		nodes := planNode.Next.NodeName(newAstExecution(p.TaskExecution))
+		nodes := planNode.Next.NextNodes(newAstExecution(p.TaskExecution))
 		for jdx := range nodes {
 			if v, ok := tasks[nodes[jdx]]; ok {
 				p.NextTask = append(p.NextTask, v)

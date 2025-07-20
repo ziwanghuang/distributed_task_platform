@@ -3,11 +3,12 @@ package parser
 import "reflect"
 
 type Node interface {
-	// 根据上一个任务的执行情况返回，下一步需要执行的任务名
-	NodeName(execution Execution) []string
+	// NextNodes 根据上一个任务的执行情况返回，下一步需要执行的任务名
+	// 主要是给复合节点使用
+	NextNodes(execution Execution) []string
 	Type() NodeType
-	// 用于前置节点校验，获取全部节点
-	AllNodeName() []string
+	// 获取该节点的所有的后续节点
+	ChildNodes() []string
 }
 
 func NodeIsNil(n Node) bool {

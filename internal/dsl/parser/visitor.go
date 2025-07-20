@@ -98,15 +98,15 @@ func (v *TaskOrchestrationVisitor) getAllNode(plans [][]*PlanNode) map[string]Pl
 		for jdx := range plan {
 			task := plan[jdx]
 			if task.Type() == NodeTypeLoop {
-				if len(task.AllNodeName()) > 0 {
-					taskMap[task.AllNodeName()[0]] = PlanNode{
+				if len(task.ChildNodes()) > 0 {
+					taskMap[task.ChildNodes()[0]] = PlanNode{
 						Node: task.Node,
 					}
 				}
 				continue
 			}
-			for kdx := range task.AllNodeName() {
-				taskName := task.AllNodeName()[kdx]
+			for kdx := range task.ChildNodes() {
+				taskName := task.ChildNodes()[kdx]
 				taskMap[taskName] = PlanNode{
 					Node: NewSimpleTask(taskName),
 				}
@@ -123,7 +123,7 @@ func (v *TaskOrchestrationVisitor) setAstNode(plans [][]*PlanNode) (*mapx.TreeMa
 	}
 	for _, plan := range plans {
 		for _, task := range plan {
-			err = treeMap.Put(task.AllNodeName(), task.Node)
+			err = treeMap.Put(task.ChildNodes(), task.Node)
 			if err != nil {
 				return nil, err
 			}
@@ -137,18 +137,18 @@ func (v *TaskOrchestrationVisitor) setEndNode(taskMap map[string]PlanNode, endLi
 		return errors.New("有多个结束任务")
 	} else {
 		endPlanNode := endList[0]
-		if len(endPlanNode.AllNodeName()) > 1 {
+		if len(endPlanNode.ChildNodes()) > 1 {
 			return errors.New("结束任务必须是单一任务")
 		}
 		if endPlanNode.Node.Type() == NodeTypeLoop {
 			return nil
 		}
-		endNodeName := endPlanNode.AllNodeName()[0]
+		endNodeName := endPlanNode.ChildNodes()[0]
 		// 重新设置结束任务
 		// 如果是简单任务就设置为 结束节点
 		// 如果是循环任务就返回，循环任务也可以认为是一个结束节点
 		endPlanNode.Node = NewEndNode(endNodeName)
-		taskMap[endPlanNode.AllNodeName()[0]] = endPlanNode
+		taskMap[endPlanNode.ChildNodes()[0]] = endPlanNode
 		for name, task := range taskMap {
 			if v.checkIsEndNode(task.Pre, endNodeName) {
 				task.Pre = endPlanNode.Node
@@ -164,7 +164,7 @@ func (v *TaskOrchestrationVisitor) setEndNode(taskMap map[string]PlanNode, endLi
 
 func (v *TaskOrchestrationVisitor) checkIsEndNode(no Node, endNodeName string) bool {
 	if no != nil {
-		return slice.Contains[string](no.AllNodeName(), endNodeName)
+		return slice.Contains[string](no.ChildNodes(), endNodeName)
 	}
 	return false
 }
@@ -189,7 +189,7 @@ func (v *TaskOrchestrationVisitor) getPreAndNext(plans [][]*PlanNode, taskName s
 	nextSet := set.NewMapSet[string](defaultTreeLen)
 	for _, plan := range plans {
 		for _, task := range plan {
-			if slice.Contains[string](task.Node.AllNodeName(), taskName) {
+			if slice.Contains[string](task.Node.ChildNodes(), taskName) {
 				v.setPreAndNext(preSet, task.Pre)
 				v.setPreAndNext(nextSet, task.Next)
 			}
@@ -202,8 +202,8 @@ func (v *TaskOrchestrationVisitor) setPreAndNext(st *set.MapSet[string], task No
 	if NodeIsNil(task) {
 		return
 	}
-	for idx := range task.AllNodeName() {
-		st.Add(task.AllNodeName()[idx])
+	for idx := range task.ChildNodes() {
+		st.Add(task.ChildNodes()[idx])
 	}
 }
 

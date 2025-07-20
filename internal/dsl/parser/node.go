@@ -10,7 +10,7 @@ func NewSimpleTask(name string) SimpleNode {
 	return SimpleNode{name: name}
 }
 
-func (s SimpleNode) NodeName(execution Execution) []string {
+func (s SimpleNode) NextNodes(execution Execution) []string {
 	// 前一个任务执行成功返回所有任务节点
 	if execution.Status.IsSuccess() {
 		return []string{s.name}
@@ -22,7 +22,7 @@ func (s SimpleNode) Type() NodeType {
 	return NodeTypeSingle
 }
 
-func (s SimpleNode) AllNodeName() []string {
+func (s SimpleNode) ChildNodes() []string {
 	return []string{s.name}
 }
 
@@ -35,7 +35,7 @@ func NewAndTask(tasks ...SimpleNode) AndNode {
 	return AndNode{tasks: tasks}
 }
 
-func (a AndNode) NodeName(execution Execution) []string {
+func (a AndNode) NextNodes(execution Execution) []string {
 	if execution.Status.IsSuccess() {
 		return slice.Map(a.tasks, func(_ int, src SimpleNode) string {
 			return src.name
@@ -49,7 +49,7 @@ func (a AndNode) Type() NodeType {
 	return NodeTypeAnd
 }
 
-func (a AndNode) AllNodeName() []string {
+func (a AndNode) ChildNodes() []string {
 	return slice.Map(a.tasks, func(_ int, src SimpleNode) string {
 		return src.name
 	})
@@ -63,7 +63,7 @@ func NewOrTask(tasks ...SimpleNode) OrNode {
 	return OrNode{tasks: tasks}
 }
 
-func (o OrNode) NodeName(execution Execution) []string {
+func (o OrNode) NextNodes(execution Execution) []string {
 	if execution.Status.IsSuccess() {
 		return slice.Map(o.tasks, func(_ int, src SimpleNode) string {
 			return src.name
@@ -76,7 +76,7 @@ func (o OrNode) Type() NodeType {
 	return NodeTypeOr
 }
 
-func (o OrNode) AllNodeName() []string {
+func (o OrNode) ChildNodes() []string {
 	return slice.Map(o.tasks, func(_ int, src SimpleNode) string {
 		return src.name
 	})
@@ -92,7 +92,7 @@ func NewEndNode(name string) EndNode {
 	}
 }
 
-func (e EndNode) NodeName(execution Execution) []string {
+func (e EndNode) NextNodes(execution Execution) []string {
 	if execution.Status.IsSuccess() {
 		return []string{
 			e.name,
@@ -105,7 +105,7 @@ func (e EndNode) Type() NodeType {
 	return NodeTypeEnd
 }
 
-func (e EndNode) AllNodeName() []string {
+func (e EndNode) ChildNodes() []string {
 	return []string{
 		e.name,
 	}
@@ -120,7 +120,7 @@ func NewConditionTask(successTask, failureTask SimpleNode) ConditionNode {
 	return ConditionNode{successTask: successTask, failureTask: failureTask}
 }
 
-func (e ConditionNode) NodeName(execution Execution) []string {
+func (e ConditionNode) NextNodes(execution Execution) []string {
 	if execution.Status.IsSuccess() {
 		return []string{
 			e.successTask.name,
@@ -135,7 +135,7 @@ func (e ConditionNode) Type() NodeType {
 	return NodeTypeCondition
 }
 
-func (e ConditionNode) AllNodeName() []string {
+func (e ConditionNode) ChildNodes() []string {
 	return []string{
 		e.successTask.name,
 		e.failureTask.name,

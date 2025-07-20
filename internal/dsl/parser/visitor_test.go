@@ -26,7 +26,7 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 				require.True(t, ok)
 				assert.NoError(t, planRes.err)
 				assert.Len(t, planRes.root, 1)
-				assert.Equal(t, "A", planRes.root[0].Node.AllNodeName()[0])
+				assert.Equal(t, "A", planRes.root[0].Node.ChildNodes()[0])
 			},
 		},
 		{
@@ -40,7 +40,7 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 
 				// 检查根节点是A
 				rootNode := planRes.root[0]
-				assert.Equal(t, "A", rootNode.Node.AllNodeName()[0])
+				assert.Equal(t, "A", rootNode.Node.ChildNodes()[0])
 
 				// 检查任务映射包含所有任务
 				taskNames := []string{"A", "B", "C", "D", "E", "F", "end"}
@@ -51,7 +51,7 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 				}
 
 				// 检查结束节点
-				assert.Equal(t, "end", planRes.end.Node.AllNodeName()[0])
+				assert.Equal(t, "end", planRes.end.Node.ChildNodes()[0])
 
 				// 详细验证每个任务的pre和next关系
 				aTask, _ := planRes.tasks.Load("A")
@@ -66,61 +66,61 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 				// A是根节点，没有pre任务
 				assert.Nil(t, aTask.Pre, "Task A should have no pre task")
 				// A的next应该是B
-				assert.Equal(t, "B", aTask.Next.AllNodeName()[0], "Task A's next should be B")
+				assert.Equal(t, "B", aTask.Next.ChildNodes()[0], "Task A's next should be B")
 				assert.Equal(t, NodeTypeSingle, aTask.Next.Type(), "Task A's next should be SingleNode")
 
 				// 验证B任务的关系
 				// B的pre应该是A
-				assert.Equal(t, "A", bTask.Pre.AllNodeName()[0], "Task B's pre should be A")
+				assert.Equal(t, "A", bTask.Pre.ChildNodes()[0], "Task B's pre should be A")
 				assert.Equal(t, NodeTypeSingle, bTask.Pre.Type(), "Task B's pre should be SingleNode")
 				// B的next应该是AndNode，包含C和D
-				bNextNames := bTask.Next.AllNodeName()
+				bNextNames := bTask.Next.ChildNodes()
 				assert.Contains(t, bNextNames, "C", "Task B's next should contain C")
 				assert.Contains(t, bNextNames, "D", "Task B's next should contain D")
 				assert.Equal(t, NodeTypeAnd, bTask.Next.Type(), "Task B's next should be AndNode")
 
 				// 验证C任务的关系
 				// C的pre应该包含B（通过AndNode）
-				cPreNames := cTask.Pre.AllNodeName()
+				cPreNames := cTask.Pre.ChildNodes()
 				assert.Contains(t, cPreNames, "B", "Task C's pre should contain B")
 				assert.Equal(t, NodeTypeSingle, cTask.Pre.Type(), "Task C's pre should be AndNode")
 				// C的next应该是OrNode，包含E和F
-				cNextNames := cTask.Next.AllNodeName()
+				cNextNames := cTask.Next.ChildNodes()
 				assert.Contains(t, cNextNames, "E", "Task C's next should contain E")
 				assert.Contains(t, cNextNames, "F", "Task C's next should contain F")
 				assert.Equal(t, NodeTypeOr, cTask.Next.Type(), "Task C's next should be OrNode")
 
 				// 验证D任务的关系
 				// D的pre应该包含B（通过AndNode）
-				dPreNames := dTask.Pre.AllNodeName()
+				dPreNames := dTask.Pre.ChildNodes()
 				assert.Contains(t, dPreNames, "B", "Task D's pre should contain B")
 				assert.Equal(t, NodeTypeSingle, dTask.Pre.Type(), "Task D's pre should be AndNode")
 				// D的next应该是E
-				assert.Equal(t, "E", dTask.Next.AllNodeName()[0], "Task D's next should be E")
+				assert.Equal(t, "E", dTask.Next.ChildNodes()[0], "Task D's next should be E")
 				assert.Equal(t, NodeTypeSingle, dTask.Next.Type(), "Task D's next should be SingleNode")
 
 				// 验证E任务的关系
 				// E的pre应该包含C和D
-				ePreNames := eTask.Pre.AllNodeName()
+				ePreNames := eTask.Pre.ChildNodes()
 				assert.Contains(t, ePreNames, "C", "Task E's pre should contain C")
 				assert.Contains(t, ePreNames, "D", "Task E's pre should contain D")
 				assert.Equal(t, NodeTypeAnd, eTask.Pre.Type(), "Task E's pre should be OrNode")
 				// E的next应该是end
-				assert.Equal(t, "end", eTask.Next.AllNodeName()[0], "Task E's next should be end")
+				assert.Equal(t, "end", eTask.Next.ChildNodes()[0], "Task E's next should be end")
 				assert.Equal(t, NodeTypeEnd, eTask.Next.Type(), "Task E's next should be EndNode")
 
 				// 验证F任务的关系
 				// F的pre应该包含C（通过OrNode）
-				fPreNames := fTask.Pre.AllNodeName()
+				fPreNames := fTask.Pre.ChildNodes()
 				assert.Contains(t, fPreNames, "C", "Task F's pre should contain C")
 				assert.Equal(t, NodeTypeSingle, fTask.Pre.Type(), "Task F's pre should be OrNode")
 				// F的next应该是end
-				assert.Equal(t, "end", fTask.Next.AllNodeName()[0], "Task F's next should be end")
+				assert.Equal(t, "end", fTask.Next.ChildNodes()[0], "Task F's next should be end")
 				assert.Equal(t, NodeTypeEnd, fTask.Next.Type(), "Task F's next should be EndNode")
 
 				// 验证end任务的关系
 				// end的pre应该包含E和F
-				endPreNames := endTask.Pre.AllNodeName()
+				endPreNames := endTask.Pre.ChildNodes()
 				assert.Contains(t, endPreNames, "E", "Task end's pre should contain E")
 				assert.Contains(t, endPreNames, "F", "Task end's pre should contain F")
 				assert.Equal(t, NodeTypeOr, endTask.Pre.Type(), "Task end's pre should be OrNode")
@@ -140,7 +140,7 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 				// 检查A的next应该是AndNode
 				aTask, _ := planRes.tasks.Load("A")
 				assert.Equal(t, NodeTypeAnd, aTask.Next.Type())
-				nextNames := aTask.Next.AllNodeName()
+				nextNames := aTask.Next.ChildNodes()
 				assert.Contains(t, nextNames, "B")
 				assert.Contains(t, nextNames, "C")
 				assert.Contains(t, nextNames, "D")
@@ -157,7 +157,7 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 				// 检查D的pre应该是OrNode
 				dTask, _ := planRes.tasks.Load("D")
 				assert.Equal(t, NodeTypeOr, dTask.Pre.Type())
-				preNames := dTask.Pre.AllNodeName()
+				preNames := dTask.Pre.ChildNodes()
 				assert.Contains(t, preNames, "A")
 				assert.Contains(t, preNames, "B")
 				assert.Contains(t, preNames, "C")
@@ -180,10 +180,10 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 				assert.True(t, exists)
 				assert.Equal(t, NodeTypeEnd, endTask.Node.Type())
 				assert.Equal(t, NodeTypeCondition, endTask.Pre.Type())
-				assert.Equal(t, []string{"B"}, endTask.Pre.NodeName(Execution{
+				assert.Equal(t, []string{"B"}, endTask.Pre.NextNodes(Execution{
 					Status: TaskExecutionStatusSuccess,
 				}))
-				assert.Equal(t, []string{"C"}, endTask.Pre.NodeName(Execution{
+				assert.Equal(t, []string{"C"}, endTask.Pre.NextNodes(Execution{
 					Status: TaskExecutionStatusFailed,
 				}))
 			},
