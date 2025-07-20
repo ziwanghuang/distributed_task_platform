@@ -25,17 +25,11 @@ type TaskOrchestrationParserVisitor interface {
 	// Visit a parse tree produced by TaskOrchestrationParser#conditionalExpression.
 	VisitConditionalExpression(ctx *ConditionalExpressionContext) interface{}
 
-	// Visit a parse tree produced by TaskOrchestrationParser#repetitionExpression.
-	VisitRepetitionExpression(ctx *RepetitionExpressionContext) interface{}
-
-	// Visit a parse tree produced by TaskOrchestrationParser#primaryExpression.
-	VisitPrimaryExpression(ctx *PrimaryExpressionContext) interface{}
+	// Visit a parse tree produced by TaskOrchestrationParser#basicExpression.
+	VisitBasicExpression(ctx *BasicExpressionContext) interface{}
 
 	// Visit a parse tree produced by TaskOrchestrationParser#task.
 	VisitTask(ctx *TaskContext) interface{}
-
-	// Visit a parse tree produced by TaskOrchestrationParser#parallelGroup.
-	VisitParallelGroup(ctx *ParallelGroupContext) interface{}
 
 	// Visit a parse tree produced by TaskOrchestrationParser#joinGroup.
 	VisitJoinGroup(ctx *JoinGroupContext) interface{}

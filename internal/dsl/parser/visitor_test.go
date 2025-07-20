@@ -130,23 +130,6 @@ func TestTaskOrchestrationVisitor_Visit(t *testing.T) {
 		},
 
 		{
-			name:  "parallel groups",
-			input: "A->[B,C,D]->end;",
-			check: func(t *testing.T, result any) {
-				planRes, ok := result.(*planRes)
-				require.True(t, ok)
-				assert.NoError(t, planRes.err)
-
-				// 检查A的next应该是AndNode
-				aTask, _ := planRes.tasks.Load("A")
-				assert.Equal(t, NodeTypeAnd, aTask.Next.Type())
-				nextNames := aTask.Next.ChildNodes()
-				assert.Contains(t, nextNames, "B")
-				assert.Contains(t, nextNames, "C")
-				assert.Contains(t, nextNames, "D")
-			},
-		},
-		{
 			name:  "join groups",
 			input: "{A,B,C}->D;",
 			check: func(t *testing.T, result any) {

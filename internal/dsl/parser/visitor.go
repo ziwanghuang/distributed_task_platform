@@ -224,39 +224,6 @@ func (v *TaskOrchestrationVisitor) VisitProgram(ctx *parser.ProgramContext) inte
 	return v.mergePlan(plans)
 }
 
-func (v *TaskOrchestrationVisitor) VisitTask(ctx *parser.TaskContext) interface{} {
-	switch {
-	case ctx.TASK_NAME() != nil:
-		taskName := ctx.TASK_NAME().GetText()
-		task := NewSimpleTask(taskName)
-		return task
-	case ctx.ParallelGroup() != nil:
-		return v.VisitParallelGroup(ctx.ParallelGroup().(*parser.ParallelGroupContext))
-	case ctx.JoinGroup() != nil:
-		return v.VisitJoinGroup(ctx.JoinGroup().(*parser.JoinGroupContext))
-	default:
-		return nil
-	}
-}
-
-func (v *TaskOrchestrationVisitor) VisitParallelGroup(ctx *parser.ParallelGroupContext) interface{} {
-	// 并行组 [A,B,C] 表示 A->[B,C]，即 A 成功后并行执行 B 和 C
-	tasks := ctx.AllTask()
-	if len(tasks) > 0 {
-		// 创建 AND 任务
-		andTasks := make([]SimpleNode, 0, len(tasks))
-		for _, taskCtx := range tasks {
-			if taskCtx.TASK_NAME() != nil {
-				taskName := taskCtx.TASK_NAME().GetText()
-				task := NewSimpleTask(taskName)
-				andTasks = append(andTasks, task)
-			}
-		}
-		return NewAndTask(andTasks...)
-	}
-	return nil
-}
-
 func (v *TaskOrchestrationVisitor) VisitJoinGroup(ctx *parser.JoinGroupContext) interface{} {
 	// 汇聚组 {A,B,C} 表示 {A,B,C}->D，即 A、B、C 都成功后执行 D
 	tasks := ctx.AllTask()
@@ -275,13 +242,13 @@ func (v *TaskOrchestrationVisitor) VisitJoinGroup(ctx *parser.JoinGroupContext) 
 }
 
 func (v *TaskOrchestrationVisitor) VisitSequenceExpression(ctx *parser.SequenceExpressionContext) interface{} {
-	expressions := ctx.AllConditionalExpression()
+	expressions := ctx.AllBasicExpression()
 	var pre *PlanNode
 	plan := make([]*PlanNode, 0, len(expressions))
 	if len(expressions) > 0 {
 		for idx := range expressions {
 			expression := expressions[idx]
-			ans := v.VisitConditionalExpression(expression.(*parser.ConditionalExpressionContext))
+			ans := v.VisitBasicExpression(expression.(*parser.BasicExpressionContext))
 			switch ta := ans.(type) {
 			case *conditionTask:
 				prePlanTask := &PlanNode{
@@ -298,11 +265,8 @@ func (v *TaskOrchestrationVisitor) VisitSequenceExpression(ctx *parser.SequenceE
 				if pre != nil {
 					pre.Next = prePlanTask
 				}
+				pre = conTask
 				plan = append(plan, prePlanTask, conTask)
-			case []*PlanNode:
-				wa := ta[len(ta)-1]
-				pre = wa
-				plan = append(plan, ta...)
 
 			case Node:
 				t := &PlanNode{
@@ -323,80 +287,76 @@ func (v *TaskOrchestrationVisitor) VisitSequenceExpression(ctx *parser.SequenceE
 	return plan
 }
 
+func (v *TaskOrchestrationVisitor) VisitBasicExpression(ctx *parser.BasicExpressionContext) interface{} {
+	switch {
+	case ctx.TASK_NAME() != nil:
+		taskName := ctx.TASK_NAME().GetText()
+		task := NewSimpleTask(taskName)
+		return task
+	case ctx.JoinGroup() != nil:
+		return v.VisitJoinGroup(ctx.JoinGroup().(*parser.JoinGroupContext))
+	case ctx.Expression() != nil:
+		return v.VisitExpression(ctx.Expression().(*parser.ExpressionContext))
+	default:
+		return nil
+	}
+}
+
 // VisitConditionalExpression 现有的分支判断只支持 单个任务
 //
 //nolint:mnd //忽略
 func (v *TaskOrchestrationVisitor) VisitConditionalExpression(ctx *parser.ConditionalExpressionContext) any {
-	if ctx.QUESTION() != nil && len(ctx.AllExpression()) >= 2 {
-		pre := ctx.GetChild(0)
-		preTask, ok1 := v.VisitRepetitionExpression(pre.(*parser.RepetitionExpressionContext)).(SimpleNode)
-		successRes := v.VisitExpression(ctx.GetChild(2).(*parser.ExpressionContext))
-		successTask, ok2 := successRes.([]*PlanNode)
-		failRes := v.VisitExpression(ctx.GetChild(4).(*parser.ExpressionContext))
-		failTask, ok3 := failRes.([]*PlanNode)
-		if ok1 && ok2 && ok3 {
-			return &conditionTask{
-				Pre:  preTask,
-				Next: NewConditionTask(successTask[0].Node.(SimpleNode), failTask[0].Node.(SimpleNode)),
-			}
+	if ctx.QUESTION() != nil && len(ctx.AllTASK_NAME()) > 0 {
+		taskPre := NewSimpleTask(ctx.TASK_NAME(0).GetText())
+		successTask := NewSimpleTask(ctx.TASK_NAME(1).GetText())
+		failureTask := NewSimpleTask(ctx.TASK_NAME(2).GetText())
+		return &conditionTask{
+			Pre:  taskPre,
+			Next: NewConditionTask(successTask, failureTask),
 		}
-	}
-	return v.VisitRepetitionExpression(ctx.GetChild(0).(*parser.RepetitionExpressionContext))
-}
-
-func (v *TaskOrchestrationVisitor) VisitRepetitionExpression(ctx *parser.RepetitionExpressionContext) interface{} {
-	if ctx.PrimaryExpression() != nil {
-		return v.VisitPrimaryExpression(ctx.PrimaryExpression().(*parser.PrimaryExpressionContext))
-	}
-	return nil
-}
-
-func (v *TaskOrchestrationVisitor) VisitPrimaryExpression(ctx *parser.PrimaryExpressionContext) interface{} {
-	if ctx.Task() != nil {
-		return v.VisitTask(ctx.Task().(*parser.TaskContext))
-	} else if ctx.Expression() != nil {
-		return v.VisitExpression(ctx.Expression().(*parser.ExpressionContext))
 	}
 	return nil
 }
 
 func (v *TaskOrchestrationVisitor) VisitExpression(ctx *parser.ExpressionContext) interface{} {
-	if ctx.OrExpression() != nil {
+	switch {
+	case ctx.SequenceExpression() != nil:
+		return v.VisitSequenceExpression(ctx.SequenceExpression().(*parser.SequenceExpressionContext))
+	case ctx.OrExpression() != nil:
 		return v.VisitOrExpression(ctx.OrExpression().(*parser.OrExpressionContext))
+	case ctx.AndExpression() != nil:
+		return v.VisitAndExpression(ctx.AndExpression().(*parser.AndExpressionContext))
+	case ctx.ConditionalExpression() != nil:
+		return v.VisitConditionalExpression(ctx.ConditionalExpression().(*parser.ConditionalExpressionContext))
+	default:
+		return nil
 	}
-	return nil
 }
 
 func (v *TaskOrchestrationVisitor) VisitOrExpression(ctx *parser.OrExpressionContext) interface{} {
 	if len(ctx.AllOR()) > 0 {
-		expressions := ctx.AllAndExpression()
-		orTask := make([]SimpleNode, 0, len(expressions))
-		for idx := range expressions {
-			ans := v.VisitAndExpression(expressions[idx].(*parser.AndExpressionContext))
-			if ts, ok := ans.([]*PlanNode); ok {
-				if len(ts) > 0 {
-					orTask = append(orTask, ts[0].Node.(SimpleNode))
-				}
-			}
+		tasks := ctx.AllTASK_NAME()
+		orTask := make([]SimpleNode, 0, len(tasks))
+		for idx := range tasks {
+			task := tasks[idx]
+			taskName := task.GetText()
+			orTask = append(orTask, NewSimpleTask(taskName))
 		}
 		return NewOrTask(orTask...)
 	}
-	return v.VisitAndExpression(ctx.GetChild(0).(*parser.AndExpressionContext))
+	return nil
 }
 
 func (v *TaskOrchestrationVisitor) VisitAndExpression(ctx *parser.AndExpressionContext) interface{} {
 	if len(ctx.AllAND()) > 0 {
-		expressions := ctx.AllSequenceExpression()
-		orTask := make([]SimpleNode, 0, len(expressions))
-		for idx := range expressions {
-			ans := v.VisitSequenceExpression(expressions[idx].(*parser.SequenceExpressionContext))
-			if ts, ok := ans.([]*PlanNode); ok {
-				if len(ts) > 0 {
-					orTask = append(orTask, ts[0].Node.(SimpleNode))
-				}
-			}
+		tasks := ctx.AllTASK_NAME()
+		andTask := make([]SimpleNode, 0, len(tasks))
+		for idx := range tasks {
+			task := tasks[idx]
+			taskName := task.GetText()
+			andTask = append(andTask, NewSimpleTask(taskName))
 		}
-		return NewAndTask(orTask...)
+		return NewAndTask(andTask...)
 	}
-	return v.VisitSequenceExpression(ctx.GetChild(0).(*parser.SequenceExpressionContext))
+	return nil
 }

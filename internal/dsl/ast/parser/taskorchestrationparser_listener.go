@@ -25,17 +25,11 @@ type TaskOrchestrationParserListener interface {
 	// EnterConditionalExpression is called when entering the conditionalExpression production.
 	EnterConditionalExpression(c *ConditionalExpressionContext)
 
-	// EnterRepetitionExpression is called when entering the repetitionExpression production.
-	EnterRepetitionExpression(c *RepetitionExpressionContext)
-
-	// EnterPrimaryExpression is called when entering the primaryExpression production.
-	EnterPrimaryExpression(c *PrimaryExpressionContext)
+	// EnterBasicExpression is called when entering the basicExpression production.
+	EnterBasicExpression(c *BasicExpressionContext)
 
 	// EnterTask is called when entering the task production.
 	EnterTask(c *TaskContext)
-
-	// EnterParallelGroup is called when entering the parallelGroup production.
-	EnterParallelGroup(c *ParallelGroupContext)
 
 	// EnterJoinGroup is called when entering the joinGroup production.
 	EnterJoinGroup(c *JoinGroupContext)
@@ -58,17 +52,11 @@ type TaskOrchestrationParserListener interface {
 	// ExitConditionalExpression is called when exiting the conditionalExpression production.
 	ExitConditionalExpression(c *ConditionalExpressionContext)
 
-	// ExitRepetitionExpression is called when exiting the repetitionExpression production.
-	ExitRepetitionExpression(c *RepetitionExpressionContext)
-
-	// ExitPrimaryExpression is called when exiting the primaryExpression production.
-	ExitPrimaryExpression(c *PrimaryExpressionContext)
+	// ExitBasicExpression is called when exiting the basicExpression production.
+	ExitBasicExpression(c *BasicExpressionContext)
 
 	// ExitTask is called when exiting the task production.
 	ExitTask(c *TaskContext)
-
-	// ExitParallelGroup is called when exiting the parallelGroup production.
-	ExitParallelGroup(c *ParallelGroupContext)
 
 	// ExitJoinGroup is called when exiting the joinGroup production.
 	ExitJoinGroup(c *JoinGroupContext)

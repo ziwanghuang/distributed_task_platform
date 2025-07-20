@@ -1,6 +1,8 @@
 package ioc
 
 import (
+	"time"
+
 	"gitee.com/flycash/distributed_task_platform/pkg/loadchecker"
 	"github.com/gotomicro/ego/core/econf"
 	prometheusapi "github.com/prometheus/client_golang/api"
@@ -8,11 +10,14 @@ import (
 )
 
 // InitClusterLoadChecker 初始化集群负载检查器
+//
+//nolint:mnd //忽略
 func InitClusterLoadChecker(nodeID string, client prometheusapi.Client) *loadchecker.ClusterLoadChecker {
-	var cfg loadchecker.ClusterLoadConfig
-	err := econf.UnmarshalKey("loadChecker.cluster", &cfg)
-	if err != nil {
-		panic(err)
+	cfg := loadchecker.ClusterLoadConfig{
+		ThresholdRatio:     1.2,
+		TimeWindow:         5 * time.Minute,
+		SlowdownMultiplier: 2,
+		MinBackoffDuration: 5 * time.Second,
 	}
 	return loadchecker.NewClusterLoadChecker(nodeID, v1.NewAPI(client), cfg)
 }

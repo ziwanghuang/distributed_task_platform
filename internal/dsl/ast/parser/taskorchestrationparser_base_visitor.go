@@ -31,19 +31,11 @@ func (v *BaseTaskOrchestrationParserVisitor) VisitConditionalExpression(ctx *Con
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseTaskOrchestrationParserVisitor) VisitRepetitionExpression(ctx *RepetitionExpressionContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTaskOrchestrationParserVisitor) VisitPrimaryExpression(ctx *PrimaryExpressionContext) interface{} {
+func (v *BaseTaskOrchestrationParserVisitor) VisitBasicExpression(ctx *BasicExpressionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *BaseTaskOrchestrationParserVisitor) VisitTask(ctx *TaskContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseTaskOrchestrationParserVisitor) VisitParallelGroup(ctx *ParallelGroupContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

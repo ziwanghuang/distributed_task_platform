@@ -11,45 +11,42 @@ program
 
 // 表达式，按优先级从低到高排列
 expression
-    : orExpression
+    : sequenceExpression
+    | orExpression
+    | andExpression
+    | conditionalExpression
+    | basicExpression
     ;
 
 orExpression
-    : andExpression (OR andExpression)*
+    : TASK_NAME OR TASK_NAME (OR TASK_NAME)*
     ;
 
 andExpression
-    : sequenceExpression (AND sequenceExpression)*
+    : TASK_NAME AND TASK_NAME (AND TASK_NAME)*
     ;
 
 sequenceExpression
-    : conditionalExpression (ARROW conditionalExpression)*
+    : basicExpression (ARROW basicExpression)+
     ;
 
 conditionalExpression
-    : repetitionExpression (QUESTION expression COLON expression)?
+    : TASK_NAME QUESTION TASK_NAME COLON TASK_NAME
     ;
 
-repetitionExpression
-    : primaryExpression (STAR)?
-    ;
-
-primaryExpression
-    : task
+basicExpression
+    : TASK_NAME
+    | joinGroup
     | LPAREN expression RPAREN
     ;
 
 // 任务节点
 task
     : TASK_NAME
-    | parallelGroup
     | joinGroup
     ;
 
-// 并行组: [A,B,C]
-parallelGroup
-    : LBRACKET task (COMMA task)* RBRACKET
-    ;
+
 
 // 汇聚组: {A,B,C}
 joinGroup

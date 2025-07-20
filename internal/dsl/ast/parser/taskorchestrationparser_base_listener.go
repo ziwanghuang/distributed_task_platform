@@ -60,31 +60,17 @@ func (s *BaseTaskOrchestrationParserListener) EnterConditionalExpression(ctx *Co
 func (s *BaseTaskOrchestrationParserListener) ExitConditionalExpression(ctx *ConditionalExpressionContext) {
 }
 
-// EnterRepetitionExpression is called when production repetitionExpression is entered.
-func (s *BaseTaskOrchestrationParserListener) EnterRepetitionExpression(ctx *RepetitionExpressionContext) {
-}
+// EnterBasicExpression is called when production basicExpression is entered.
+func (s *BaseTaskOrchestrationParserListener) EnterBasicExpression(ctx *BasicExpressionContext) {}
 
-// ExitRepetitionExpression is called when production repetitionExpression is exited.
-func (s *BaseTaskOrchestrationParserListener) ExitRepetitionExpression(ctx *RepetitionExpressionContext) {
-}
-
-// EnterPrimaryExpression is called when production primaryExpression is entered.
-func (s *BaseTaskOrchestrationParserListener) EnterPrimaryExpression(ctx *PrimaryExpressionContext) {}
-
-// ExitPrimaryExpression is called when production primaryExpression is exited.
-func (s *BaseTaskOrchestrationParserListener) ExitPrimaryExpression(ctx *PrimaryExpressionContext) {}
+// ExitBasicExpression is called when production basicExpression is exited.
+func (s *BaseTaskOrchestrationParserListener) ExitBasicExpression(ctx *BasicExpressionContext) {}
 
 // EnterTask is called when production task is entered.
 func (s *BaseTaskOrchestrationParserListener) EnterTask(ctx *TaskContext) {}
 
 // ExitTask is called when production task is exited.
 func (s *BaseTaskOrchestrationParserListener) ExitTask(ctx *TaskContext) {}
-
-// EnterParallelGroup is called when production parallelGroup is entered.
-func (s *BaseTaskOrchestrationParserListener) EnterParallelGroup(ctx *ParallelGroupContext) {}
-
-// ExitParallelGroup is called when production parallelGroup is exited.
-func (s *BaseTaskOrchestrationParserListener) ExitParallelGroup(ctx *ParallelGroupContext) {}
 
 // EnterJoinGroup is called when production joinGroup is entered.
 func (s *BaseTaskOrchestrationParserListener) EnterJoinGroup(ctx *JoinGroupContext) {}
