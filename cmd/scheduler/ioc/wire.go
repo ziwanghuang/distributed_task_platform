@@ -45,6 +45,7 @@ var (
 		ioc.InitScheduler,
 		ioc.InitMySQLTaskAcquirer,
 		ioc.InitExecutorServiceGRPCClients,
+		ioc.InitExecutorNodePicker,
 	)
 
 	compensatorSet = wire.NewSet(

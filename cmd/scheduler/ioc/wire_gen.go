@@ -39,7 +39,8 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	runner := ioc.InitRunner(string2, service, executionService, planService, taskAcquirer, invoker, completeProducer)
 	client := ioc.InitPrometheusClient()
 	clusterLoadChecker := ioc.InitClusterLoadChecker(string2, client)
-	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clientsV2, clusterLoadChecker)
+	executorNodePicker := ioc.InitExecutorNodePicker(client)
+	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clientsV2, clusterLoadChecker, executorNodePicker)
 	retryCompensator := ioc.InitRetryCompensator(runner, executionService)
 	rescheduleCompensator := ioc.InitRescheduleCompensator(runner, executionService)
 	shardingCompensator := ioc.InitShardingCompensator(string2, service, executionService, taskAcquirer)
@@ -66,7 +67,7 @@ var (
 
 	planSet = wire.NewSet(task.NewPlanService)
 
-	schedulerSet = wire.NewSet(ioc.InitNodeID, ioc.InitClusterLoadChecker, ioc.InitScheduler, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients)
+	schedulerSet = wire.NewSet(ioc.InitNodeID, ioc.InitClusterLoadChecker, ioc.InitScheduler, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients, ioc.InitExecutorNodePicker)
 
 	compensatorSet = wire.NewSet(ioc.InitRetryCompensator, ioc.InitRescheduleCompensator, ioc.InitShardingCompensator, ioc.InitInterruptCompensator)
 
