@@ -18,7 +18,7 @@ type TaskRepository interface {
 	// SchedulableTasks 获取可调度的任务列表，preemptedTimeoutMs 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
 	SchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]domain.Task, error)
 	// Acquire 抢占任务
-	Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
+	Acquire(ctx context.Context, id, version int64, scheduleNodeID string) (domain.Task, error)
 	// Release 释放任务
 	Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// Renew 续约所有抢占到的任务
@@ -75,8 +75,8 @@ func (r *taskRepository) SchedulableTasks(ctx context.Context, preemptedTimeoutM
 	}), nil
 }
 
-func (r *taskRepository) Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
-	task, err := r.dao.Acquire(ctx, id, scheduleNodeID)
+func (r *taskRepository) Acquire(ctx context.Context, id, version int64, scheduleNodeID string) (domain.Task, error) {
+	task, err := r.dao.Acquire(ctx, id, version, scheduleNodeID)
 	if err != nil {
 		return domain.Task{}, err
 	}

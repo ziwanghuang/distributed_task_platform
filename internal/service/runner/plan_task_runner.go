@@ -61,7 +61,7 @@ func (p *PlanTaskRunner) Run(ctx context.Context, task domain.Task) error {
 }
 
 func (p *PlanTaskRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
-	acquiredTask, err := p.taskAcquirer.Acquire(ctx, task.ID, p.nodeID)
+	acquiredTask, err := p.taskAcquirer.Acquire(ctx, task.ID, task.Version, p.nodeID)
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("任务抢占失败: %w", err)
 	}

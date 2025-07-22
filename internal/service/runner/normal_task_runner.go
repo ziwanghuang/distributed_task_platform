@@ -150,7 +150,7 @@ func (s *NormalTaskRunner) handleShardingTask(ctx context.Context, task domain.T
 // acquireTask 抢占任务
 func (s *NormalTaskRunner) acquireTask(ctx context.Context, task domain.Task) (domain.Task, error) {
 	// 抢占任务
-	acquiredTask, err := s.taskAcquirer.Acquire(ctx, task.ID, s.nodeID)
+	acquiredTask, err := s.taskAcquirer.Acquire(ctx, task.ID, task.Version, s.nodeID)
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("任务抢占失败: %w", err)
 	}

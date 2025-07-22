@@ -60,7 +60,7 @@ type TaskDAO interface {
 	// preemptedTimeoutMs: PREEMPTED状态任务的超时时间（毫秒），超过此时间未续约的任务可被重新抢占
 	FindSchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]*Task, error)
 	// Acquire 抢占任务
-	Acquire(ctx context.Context, id int64, scheduleNodeID string) (*Task, error)
+	Acquire(ctx context.Context, id, version int64, scheduleNodeID string) (*Task, error)
 	// Renew 续约所有被抢占的任务任务
 	Renew(ctx context.Context, scheduleNodeID string) error
 	// Release 释放任务，更新状态为ACTIVE
@@ -125,12 +125,12 @@ func (g *GORMTaskDAO) FindSchedulableTasks(ctx context.Context, preemptedTimeout
 	return tasks, nil
 }
 
-func (g *GORMTaskDAO) Acquire(ctx context.Context, id int64, scheduleNodeID string) (*Task, error) {
+func (g *GORMTaskDAO) Acquire(ctx context.Context, id, version int64, scheduleNodeID string) (*Task, error) {
 	var acquiredTask *Task
 	err := g.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 1. 在事务中执行更新
+		// 在事务中执行更新
 		result := tx.Model(&Task{}).
-			Where("id = ? AND status = ?", id, StatusActive).
+			Where("id = ? AND version = ?", id, version).
 			Updates(map[string]any{
 				"status":           StatusPreempted,
 				"schedule_node_id": scheduleNodeID,
@@ -141,14 +141,15 @@ func (g *GORMTaskDAO) Acquire(ctx context.Context, id int64, scheduleNodeID stri
 			return result.Error // 事务将自动回滚
 		}
 		if result.RowsAffected == 0 {
-			// 可能是任务已被其他节点抢占，返回特定错误以便上层识别
+			// 可能是任务已被其他节点抢占，或者任务状态已被修改（导致version变化）
+			// 无论哪种情况，都意味着本次抢占失败。
 			return errs.ErrTaskPreemptFailed
 		}
 
-		// 2. 在同一个事务中查询，保证读取到的是刚刚更新的数据快照
+		// 再次查询，以获取包括新的 version 和 utime 在内的完整任务信息
 		var task Task
 		if err := tx.Where("id = ?", id).First(&task).Error; err != nil {
-			return err // 事务将自动回滚
+			return err
 		}
 		acquiredTask = &task
 		return nil // 提交事务
