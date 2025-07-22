@@ -61,7 +61,8 @@ func InitDBAndTables() *egorm.Component {
 			return
 		}
 		econf.Set("mysql", map[string]any{
-			"dsn":   "root:root@tcp(localhost:13316)/task?collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true&interpolateParams=true&charset=utf8mb4",
+			// interpolateParams=true 会导致JSON字段发送出问题
+			"dsn":   "root:root@tcp(localhost:13316)/task?charset=utf8mb4&collation=utf8mb4_0900_ai_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true&interpolateParams=true",
 			"debug": true,
 		})
 		WaitForDBSetup(econf.GetStringMapString("mysql")["dsn"])

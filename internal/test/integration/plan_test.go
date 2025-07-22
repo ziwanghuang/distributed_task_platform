@@ -49,7 +49,7 @@ func (s *PlanSuite) SetupSuite() {
 		"TaskF":   s.mockFuncTask,
 		"TaskEnd": s.mockFuncTask,
 	})
-	s.completeConsumer = app.Consumer
+	s.completeConsumer = app.CompleteEventConsumer
 	s.execService = app.ExecutionSvc
 	s.taskService = app.TaskSvc
 	s.scheduler = app.Scheduler

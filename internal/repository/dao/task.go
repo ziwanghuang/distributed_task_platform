@@ -8,7 +8,7 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
-	"github.com/ecodeclub/ekit/sqlx"
+	"gitee.com/flycash/distributed_task_platform/pkg/sqlx"
 	"github.com/ego-component/egorm"
 	"gorm.io/gorm"
 )
@@ -25,11 +25,11 @@ type Task struct {
 	Name                string                               `gorm:"type:varchar(255);not null;uniqueIndex:uniq_idx_name;comment:'任务名称'"`
 	CronExpr            string                               `gorm:"type:varchar(100);not null;comment:'cron表达式'"`
 	ExecutionMethod     string                               `gorm:"type:ENUM('LOCAL', 'REMOTE');not null;default:'REMOTE';comment:'任务执行方式：LOCAL-本地执行，REMOTE-远程执行'"`
-	GrpcConfig          sqlx.JsonColumn[domain.GrpcConfig]   `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
-	HTTPConfig          sqlx.JsonColumn[domain.HTTPConfig]   `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
-	RetryConfig         sqlx.JsonColumn[domain.RetryConfig]  `gorm:"type:json;comment:'重试配置'"`
-	ScheduleParams      sqlx.JsonColumn[map[string]string]   `gorm:"type:json;comment:'每次执行要用到的基础调度参数'"`
-	ShardingRule        sqlx.JsonColumn[domain.ShardingRule] `gorm:"type:json;comment:'分片任务需要使用的分片规则'"`
+	GrpcConfig          sqlx.JSONColumn[domain.GrpcConfig]   `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
+	HTTPConfig          sqlx.JSONColumn[domain.HTTPConfig]   `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
+	RetryConfig         sqlx.JSONColumn[domain.RetryConfig]  `gorm:"type:json;comment:'重试配置'"`
+	ScheduleParams      sqlx.JSONColumn[map[string]string]   `gorm:"type:json;comment:'每次执行要用到的基础调度参数'"`
+	ShardingRule        sqlx.JSONColumn[domain.ShardingRule] `gorm:"type:json;comment:'分片任务需要使用的分片规则'"`
 	MaxExecutionSeconds int64                                `gorm:"type:bigint;not null;default:86400;comment:'最大执行秒数，默认24小时'"`
 	ScheduleNodeID      sql.NullString                       `gorm:"type:varchar(255);index:idx_schedule_node_id_status,priority:1;comment:'当前抢占的调度节点ID'"`
 	NextTime            int64                                `gorm:"type:bigint;not null;index:idx_next_time_status_utime,priority:1;comment:'下次执行时间'"`
@@ -239,7 +239,7 @@ func (g *GORMTaskDAO) UpdateScheduleParams(ctx context.Context, id, version int6
 		result := tx.Model(&Task{}).
 			Where("id = ? AND version = ?", id, version).
 			Updates(map[string]any{
-				"schedule_params": sqlx.JsonColumn[map[string]string]{Val: scheduleParams, Valid: scheduleParams != nil},
+				"schedule_params": sqlx.JSONColumn[map[string]string]{Val: scheduleParams, Valid: scheduleParams != nil},
 				"version":         gorm.Expr("version + 1"),
 				"utime":           time.Now().UnixMilli(),
 			})

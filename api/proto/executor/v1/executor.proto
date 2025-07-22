@@ -8,8 +8,9 @@ enum ExecutionStatus {
   UNKNOWN = 0; // 未知状态
   RUNNING = 1; // 正在执行
   FAILED_RETRYABLE = 2; // 可重试失败
-  FAILED = 3; // 不可重试失败
-  SUCCESS = 4; // 执行成功
+  FAILED_RESCHEDULABLE = 3; // 可重调度失败
+  FAILED = 4; // 不可重试失败
+  SUCCESS = 5; // 执行成功
 }
 
 message ExecutionState {

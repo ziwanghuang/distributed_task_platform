@@ -9,8 +9,8 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
+	"gitee.com/flycash/distributed_task_platform/pkg/sqlx"
 	"github.com/ecodeclub/ekit/slice"
-	"github.com/ecodeclub/ekit/sqlx"
 )
 
 type TaskExecutionRepository interface {
@@ -240,24 +240,24 @@ func (r *taskExecutionRepository) FindTimeoutExecutions(ctx context.Context, lim
 
 // toEntity 将领域模型转换为DAO模型
 func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.TaskExecution {
-	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
+	var grpcConfig sqlx.JSONColumn[domain.GrpcConfig]
 	if execution.Task.GrpcConfig != nil {
-		grpcConfig = sqlx.JsonColumn[domain.GrpcConfig]{Val: *execution.Task.GrpcConfig, Valid: true}
+		grpcConfig = sqlx.JSONColumn[domain.GrpcConfig]{Val: *execution.Task.GrpcConfig, Valid: true}
 	}
 
-	var httpConfig sqlx.JsonColumn[domain.HTTPConfig]
+	var httpConfig sqlx.JSONColumn[domain.HTTPConfig]
 	if execution.Task.HTTPConfig != nil {
-		httpConfig = sqlx.JsonColumn[domain.HTTPConfig]{Val: *execution.Task.HTTPConfig, Valid: true}
+		httpConfig = sqlx.JSONColumn[domain.HTTPConfig]{Val: *execution.Task.HTTPConfig, Valid: true}
 	}
 
-	var retryConfig sqlx.JsonColumn[domain.RetryConfig]
+	var retryConfig sqlx.JSONColumn[domain.RetryConfig]
 	if execution.Task.RetryConfig != nil {
-		retryConfig = sqlx.JsonColumn[domain.RetryConfig]{Val: *execution.Task.RetryConfig, Valid: true}
+		retryConfig = sqlx.JSONColumn[domain.RetryConfig]{Val: *execution.Task.RetryConfig, Valid: true}
 	}
 
-	var taskScheduleParams sqlx.JsonColumn[map[string]string]
+	var taskScheduleParams sqlx.JSONColumn[map[string]string]
 	if execution.Task.ScheduleParams != nil {
-		taskScheduleParams = sqlx.JsonColumn[map[string]string]{Val: execution.Task.ScheduleParams, Valid: true}
+		taskScheduleParams = sqlx.JSONColumn[map[string]string]{Val: execution.Task.ScheduleParams, Valid: true}
 	}
 
 	var shardingParentID sql.NullInt64

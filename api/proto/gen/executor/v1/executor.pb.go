@@ -25,11 +25,12 @@ const (
 type ExecutionStatus int32
 
 const (
-	ExecutionStatus_UNKNOWN          ExecutionStatus = 0 // 未知状态
-	ExecutionStatus_RUNNING          ExecutionStatus = 1 // 正在执行
-	ExecutionStatus_FAILED_RETRYABLE ExecutionStatus = 2 // 可重试失败
-	ExecutionStatus_FAILED           ExecutionStatus = 3 // 不可重试失败
-	ExecutionStatus_SUCCESS          ExecutionStatus = 4 // 执行成功
+	ExecutionStatus_UNKNOWN              ExecutionStatus = 0 // 未知状态
+	ExecutionStatus_RUNNING              ExecutionStatus = 1 // 正在执行
+	ExecutionStatus_FAILED_RETRYABLE     ExecutionStatus = 2 // 可重试失败
+	ExecutionStatus_FAILED_RESCHEDULABLE ExecutionStatus = 3 // 可重调度失败
+	ExecutionStatus_FAILED               ExecutionStatus = 4 // 不可重试失败
+	ExecutionStatus_SUCCESS              ExecutionStatus = 5 // 执行成功
 )
 
 // Enum value maps for ExecutionStatus.
@@ -38,15 +39,17 @@ var (
 		0: "UNKNOWN",
 		1: "RUNNING",
 		2: "FAILED_RETRYABLE",
-		3: "FAILED",
-		4: "SUCCESS",
+		3: "FAILED_RESCHEDULABLE",
+		4: "FAILED",
+		5: "SUCCESS",
 	}
 	ExecutionStatus_value = map[string]int32{
-		"UNKNOWN":          0,
-		"RUNNING":          1,
-		"FAILED_RETRYABLE": 2,
-		"FAILED":           3,
-		"SUCCESS":          4,
+		"UNKNOWN":              0,
+		"RUNNING":              1,
+		"FAILED_RETRYABLE":     2,
+		"FAILED_RESCHEDULABLE": 3,
+		"FAILED":               4,
+		"SUCCESS":              5,
 	}
 )
 
@@ -524,14 +527,15 @@ const file_executor_v1_executor_proto_rawDesc = "" +
 	"\fQueryRequest\x12\x10\n" +
 	"\x03eid\x18\x01 \x01(\x03R\x03eid\"U\n" +
 	"\rQueryResponse\x12D\n" +
-	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState*Z\n" +
+	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState*t\n" +
 	"\x0fExecutionStatus\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\v\n" +
 	"\aRUNNING\x10\x01\x12\x14\n" +
-	"\x10FAILED_RETRYABLE\x10\x02\x12\n" +
+	"\x10FAILED_RETRYABLE\x10\x02\x12\x18\n" +
+	"\x14FAILED_RESCHEDULABLE\x10\x03\x12\n" +
 	"\n" +
-	"\x06FAILED\x10\x03\x12\v\n" +
-	"\aSUCCESS\x10\x042\xe3\x01\n" +
+	"\x06FAILED\x10\x04\x12\v\n" +
+	"\aSUCCESS\x10\x052\xe3\x01\n" +
 	"\x0fExecutorService\x12D\n" +
 	"\aExecute\x12\x1b.executor.v1.ExecuteRequest\x1a\x1c.executor.v1.ExecuteResponse\x12J\n" +
 	"\tInterrupt\x12\x1d.executor.v1.InterruptRequest\x1a\x1e.executor.v1.InterruptResponse\x12>\n" +

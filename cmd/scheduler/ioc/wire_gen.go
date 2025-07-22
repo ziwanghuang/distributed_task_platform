@@ -45,7 +45,7 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	shardingCompensator := ioc.InitShardingCompensator(string2, service, executionService, taskAcquirer)
 	interruptCompensator := ioc.InitInterruptCompensator(scheduler, executionService)
 	batchReportEventConsumer := ioc.InitExecutionBatchReportEventConsumer(mq, string2)
-	reportEventConsumer := ioc.InitExecutionReportEventConsumer(mq, string2)
+	reportEventConsumer := ioc.InitExecutionReportEventConsumer(mq, string2, executionService)
 	v2 := ioc.InitTasks(retryCompensator, rescheduleCompensator, shardingCompensator, interruptCompensator, batchReportEventConsumer, reportEventConsumer)
 	schedulerApp := &ioc.SchedulerApp{
 		GRPC:      egrpcComponent,

@@ -5,7 +5,11 @@ package ioc
 import (
 	"context"
 
+	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
+	"gitee.com/flycash/distributed_task_platform/internal/event/reportevt"
 	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
+	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
+	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 
 	"gitee.com/flycash/distributed_task_platform/internal/repository"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
@@ -22,9 +26,10 @@ var (
 		ioc.InitEtcdClient,
 		ioc.InitMQ,
 		InitNodeID,
-		InitConsumers,
 		InitRegistry,
 		InitPrometheusClient,
+		InitExecutorServiceGRPCClients,
+		InitCompleteProducer,
 	)
 
 	taskSet = wire.NewSet(
@@ -36,7 +41,7 @@ var (
 	taskExecutionSet = wire.NewSet(
 		dao.NewGORMTaskExecutionDAO,
 		repository.NewTaskExecutionRepository,
-		InitCompleteProducer,
+
 		tasksvc.NewExecutionService,
 	)
 
@@ -47,7 +52,7 @@ var (
 	schedulerSet = wire.NewSet(
 		NewExecutors,
 		InitMySQLTaskAcquirer,
-		initDispatcherExecutor,
+		InitInvoker,
 		InitNormalTaskRunner,
 		InitPlanTaskRunner,
 		InitDispatcherRunner,
@@ -60,20 +65,19 @@ var (
 	)
 )
 
-func initDispatcherExecutor(localExecutor *invoker.LocalInvoker) invoker.Invoker {
-	return invoker.NewDispatcher(nil, nil, localExecutor)
-}
-
 type Task interface {
 	Start(ctx context.Context)
 }
 
 type SchedulerApp struct {
-	Scheduler    *scheduler.Scheduler
-	TaskSvc      tasksvc.Service
-	ExecutionSvc tasksvc.ExecutionService
-	Consumer     *CompleteConsumer
-	Tasks        []Task
+	Scheduler             *scheduler.Scheduler
+	Runner                runner.Runner
+	TaskSvc               tasksvc.Service
+	ExecutionSvc          tasksvc.ExecutionService
+	CompleteEventConsumer *CompleteConsumer
+	ReportEventConsumer   *reportevt.ReportEventConsumer
+	Clients               *grpc.ClientsV2[executorv1.ExecutorServiceClient]
+	Tasks                 []Task
 }
 
 func (a *SchedulerApp) StartTasks(ctx context.Context) {
@@ -96,6 +100,7 @@ func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerAp
 		compensatorSet,
 		InitTasks,
 		InitCompleteConsumer,
+		InitExecutionReportEventConsumer,
 		wire.Struct(new(SchedulerApp), "*"),
 	)
 

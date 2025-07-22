@@ -6,8 +6,8 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
+	"gitee.com/flycash/distributed_task_platform/pkg/sqlx"
 	"github.com/ecodeclub/ekit/slice"
-	"github.com/ecodeclub/ekit/sqlx"
 )
 
 type TaskRepository interface {
@@ -118,29 +118,29 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		scheduleNodeID = sql.NullString{String: task.ScheduleNodeID, Valid: true}
 	}
 
-	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
+	var grpcConfig sqlx.JSONColumn[domain.GrpcConfig]
 	if task.GrpcConfig != nil {
-		grpcConfig = sqlx.JsonColumn[domain.GrpcConfig]{Val: *task.GrpcConfig, Valid: true}
+		grpcConfig = sqlx.JSONColumn[domain.GrpcConfig]{Val: *task.GrpcConfig, Valid: true}
 	}
 
-	var httpConfig sqlx.JsonColumn[domain.HTTPConfig]
+	var httpConfig sqlx.JSONColumn[domain.HTTPConfig]
 	if task.HTTPConfig != nil {
-		httpConfig = sqlx.JsonColumn[domain.HTTPConfig]{Val: *task.HTTPConfig, Valid: true}
+		httpConfig = sqlx.JSONColumn[domain.HTTPConfig]{Val: *task.HTTPConfig, Valid: true}
 	}
 
-	var retryConfig sqlx.JsonColumn[domain.RetryConfig]
+	var retryConfig sqlx.JSONColumn[domain.RetryConfig]
 	if task.RetryConfig != nil {
-		retryConfig = sqlx.JsonColumn[domain.RetryConfig]{Val: *task.RetryConfig, Valid: true}
+		retryConfig = sqlx.JSONColumn[domain.RetryConfig]{Val: *task.RetryConfig, Valid: true}
 	}
 
-	var scheduleParams sqlx.JsonColumn[map[string]string]
+	var scheduleParams sqlx.JSONColumn[map[string]string]
 	if task.ScheduleParams != nil {
-		scheduleParams = sqlx.JsonColumn[map[string]string]{Val: task.ScheduleParams, Valid: true}
+		scheduleParams = sqlx.JSONColumn[map[string]string]{Val: task.ScheduleParams, Valid: true}
 	}
 
-	var shardingRule sqlx.JsonColumn[domain.ShardingRule]
+	var shardingRule sqlx.JSONColumn[domain.ShardingRule]
 	if task.ShardingRule != nil {
-		shardingRule = sqlx.JsonColumn[domain.ShardingRule]{Val: *task.ShardingRule, Valid: true}
+		shardingRule = sqlx.JSONColumn[domain.ShardingRule]{Val: *task.ShardingRule, Valid: true}
 	}
 
 	return dao.Task{

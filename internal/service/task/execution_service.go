@@ -272,14 +272,14 @@ func (s *executionService) setRunningState(ctx context.Context, state domain.Exe
 }
 
 func (s *executionService) updateRetryState(ctx context.Context, execution domain.TaskExecution, state domain.ExecutionState) error {
-	// 增加重试计数
-	execution.RetryCount++
 	// 计算出下次重试时间
 	retryStrategy, _ := retry.NewRetry(execution.Task.RetryConfig.ToRetryComponentConfig())
-	duration, shouldRetry := retryStrategy.NextWithRetries(int32(execution.RetryCount))
+	duration, shouldRetry := retryStrategy.NextWithRetries(int32(execution.RetryCount + 1))
 	if shouldRetry {
 		// 当前不是最后一次重试，计算下次重试时间
 		execution.NextRetryTime = time.Now().Add(duration).UnixMilli()
+		// 增加重试计数
+		execution.RetryCount++
 	} else if !state.Status.IsTerminalStatus() {
 		// 当前是最后一次重试，只要不是终止状态一律设置为失败
 		state.Status = domain.TaskExecutionStatusFailed

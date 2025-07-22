@@ -138,8 +138,8 @@ type HTTPConfig struct {
 }
 
 type ShardingRule struct {
-	Type   string
-	Params map[string]string
+	Type   string            `json:"type"`
+	Params map[string]string `json:"params"`
 }
 
 // ToScheduleParams 根据分片规则计算出分片任务所需要的调度参数

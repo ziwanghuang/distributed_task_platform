@@ -4,14 +4,15 @@ import (
 	"fmt"
 
 	"gitee.com/flycash/distributed_task_platform/internal/event/reportevt"
+	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 
 	"github.com/ecodeclub/mq-api"
 	"github.com/gotomicro/ego/core/econf"
 )
 
-func InitExecutionReportEventConsumer(q mq.MQ, nodeID string) *reportevt.ReportEventConsumer {
+func InitExecutionReportEventConsumer(q mq.MQ, nodeID string, execSvc task.ExecutionService) *reportevt.ReportEventConsumer {
 	topic := econf.GetString("executionReportEvent.topic")
-	return reportevt.NewReportEventConsumer(name("executionReportEvent", nodeID), q, topic)
+	return reportevt.NewReportEventConsumer(name("executionReportEvent", nodeID), q, topic, execSvc)
 }
 
 func InitExecutionBatchReportEventConsumer(q mq.MQ, nodeID string) *reportevt.BatchReportEventConsumer {

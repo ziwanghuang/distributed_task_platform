@@ -168,24 +168,27 @@ func (s *NormalTaskRunner) releaseTask(ctx context.Context, task domain.Task) {
 	}
 }
 
+//nolint:dupl //忽略
 func (s *NormalTaskRunner) Retry(ctx context.Context, execution domain.TaskExecution) error {
-	// 抢占任务
-	acquiredTask, err := s.acquireTask(ctx, execution.Task)
-	if err != nil {
-		s.logger.Error("重试：任务抢占失败",
-			elog.Int64("taskID", execution.Task.ID),
-			elog.String("taskName", execution.Task.Name),
-			elog.FieldErr(err))
-		return err
+	if !s.isShardedTaskExecution(execution) {
+		// 抢占任务
+		acquiredTask, err := s.acquireTask(ctx, execution.Task)
+		if err != nil {
+			s.logger.Error("重试：任务抢占失败",
+				elog.Int64("taskID", execution.Task.ID),
+				elog.String("taskName", execution.Task.Name),
+				elog.FieldErr(err))
+			return err
+		}
+		execution.Task = acquiredTask
 	}
-	execution.Task = acquiredTask
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
 		// 执行任务，并在 context 中设置要排除的执行节点 ID，避免重调度到同一个节点
 		state, err1 := s.invoker.Run(s.WithExcludedNodeIDContext(ctx, execution.ExecutorNodeID), execution)
 		if err1 != nil {
-			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
+			s.logger.Error("执行器执行任务失败", elog.FieldErr(err1))
 			return
 		}
 
@@ -207,24 +210,27 @@ func (s *NormalTaskRunner) WithExcludedNodeIDContext(ctx context.Context, execut
 	return ctx
 }
 
+//nolint:dupl //忽略
 func (s *NormalTaskRunner) Reschedule(ctx context.Context, execution domain.TaskExecution) error {
-	// 抢占任务
-	acquiredTask, err := s.acquireTask(ctx, execution.Task)
-	if err != nil {
-		s.logger.Error("重调度：任务抢占失败",
-			elog.Int64("taskID", execution.Task.ID),
-			elog.String("taskName", execution.Task.Name),
-			elog.FieldErr(err))
-		return err
+	if !s.isShardedTaskExecution(execution) {
+		// 抢占任务
+		acquiredTask, err := s.acquireTask(ctx, execution.Task)
+		if err != nil {
+			s.logger.Error("重调度：任务抢占失败",
+				elog.Int64("taskID", execution.Task.ID),
+				elog.String("taskName", execution.Task.Name),
+				elog.FieldErr(err))
+			return err
+		}
+		execution.Task = acquiredTask
 	}
-	execution.Task = acquiredTask
 
 	// 抢占和创建都成功，异步触发任务
 	go func() {
 		// 执行任务，并在 context 中设置要指定的执行节点ID
 		state, err1 := s.invoker.Run(balancer.WithSpecificNodeID(ctx, execution.ExecutorNodeID), execution)
 		if err1 != nil {
-			s.logger.Error("执行器执行任务失败", elog.FieldErr(err))
+			s.logger.Error("执行器执行任务失败", elog.FieldErr(err1))
 			return
 		}
 
@@ -237,4 +243,10 @@ func (s *NormalTaskRunner) Reschedule(ctx context.Context, execution domain.Task
 		}
 	}()
 	return nil
+}
+
+func (s *NormalTaskRunner) isShardedTaskExecution(execution domain.TaskExecution) bool {
+	// 分片任务的”锁“会被一只持有，直到各个子任务执行完后，会在sharding补偿任务中计算父任务的状态的同时释放抢占的task
+	// 所以这里无需再次抢占，即使抢占也是失败
+	return execution.ShardingParentID != nil && *execution.ShardingParentID > 0
 }
