@@ -2,6 +2,7 @@ package picker
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -42,13 +43,14 @@ type MockExecutorNode struct {
 
 // NewMockExecutorNode 创建模拟执行节点
 func NewMockExecutorNode(nodeID string, metricType MetricType) *MockExecutorNode {
+	const defaultTimeoutDuration = 5 * time.Second
 	node := &MockExecutorNode{
 		NodeID:     nodeID,
 		MetricType: metricType,
 		logger:     elog.DefaultLogger.With(elog.FieldComponentName("mock-executor-" + nodeID)),
 		isAlive:    true,
 		stopChan:   make(chan struct{}),
-		client:     &http.Client{Timeout: 5 * time.Second},
+		client:     &http.Client{Timeout: defaultTimeoutDuration},
 	}
 
 	// 设置初始指标值
@@ -65,12 +67,16 @@ func (n *MockExecutorNode) initializeMetrics() {
 	switch n.MetricType {
 	case CPUMetricType:
 		// CPU节点设置随机的CPU空闲率
-		n.cpuIdlePercent = 50 + rand.Float64()*40 // 50-90%
-		n.availableMemoryBytes = 0                // CPU节点不上报内存指标
+		begin, end := 50, 40
+		// #nosec G404 -- 这里只是用于负载均衡的随机选择，不需要加密级别的随机数
+		n.cpuIdlePercent = float64(begin) + rand.Float64()*float64(end) // 50-90%
+		n.availableMemoryBytes = 0                                      // CPU节点不上报内存指标
 	case MemoryMetricType:
 		// 内存节点设置随机的可用内存
-		n.availableMemoryBytes = float64(2+rand.Intn(6)) * 1024 * 1024 * 1024 // 2-8GB
-		n.cpuIdlePercent = 0                                                  // 内存节点不上报CPU指标
+		begin, end, unit := 2, 6, 1024
+		// #nosec G404 -- 这里只是用于负载均衡的随机选择，不需要加密级别的随机数
+		n.availableMemoryBytes = float64(begin+rand.Intn(end)) * float64(unit*unit*unit) // 2-8GB
+		n.cpuIdlePercent = 0                                                             // 内存节点不上报CPU指标
 	}
 
 	n.logger.Info("初始化指标数据",
@@ -106,7 +112,8 @@ func (n *MockExecutorNode) Stop() {
 
 // metricsReportingLoop 指标推送循环
 func (n *MockExecutorNode) metricsReportingLoop() {
-	ticker := time.NewTicker(5 * time.Second) // 每5秒推送一次
+	const defaultReportDuration = 5 * time.Second
+	ticker := time.NewTicker(defaultReportDuration) // 每5秒推送一次
 	defer ticker.Stop()
 
 	for {
@@ -200,7 +207,7 @@ func (n *MockExecutorNode) pushMetrics() error {
 	compressed := snappy.Encode(nil, data)
 
 	// 发送到Prometheus Remote Write API
-	req, err := http.NewRequest("POST", "http://localhost:9090/api/v1/write", bytes.NewReader(compressed))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://localhost:9090/api/v1/write", bytes.NewReader(compressed))
 	if err != nil {
 		return fmt.Errorf("创建HTTP请求失败: %w", err)
 	}
@@ -215,9 +222,10 @@ func (n *MockExecutorNode) pushMetrics() error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
+	const clientErrStatusCode = 400
+	if resp.StatusCode >= clientErrStatusCode {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Prometheus返回错误: %d, %s", resp.StatusCode, string(body))
+		return fmt.Errorf("prometheus返回错误: %d, %s", resp.StatusCode, string(body))
 	}
 
 	n.logger.Debug("成功推送指标",

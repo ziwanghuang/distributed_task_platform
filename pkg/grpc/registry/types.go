@@ -19,6 +19,7 @@ type ServiceInstance struct {
 	Name         string // im
 	Address      string // 1.1.0.129
 	ID           string // 01
+	Weight       int64
 	InitCapacity int64
 	MaxCapacity  int64
 	IncreaseStep int64

@@ -38,7 +38,3 @@ func InitNormalTaskRunner(nodeID string,
 		producer,
 	)
 }
-
-func NewExecutors(execFunc map[string]invoker.LocalExecuteFunc) *invoker.LocalInvoker {
-	return invoker.NewLocalInvoker(execFunc)
-}

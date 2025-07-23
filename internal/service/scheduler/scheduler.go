@@ -121,8 +121,8 @@ func (s *Scheduler) scheduleLoop() {
 		s.logger.Info("开始一次调度")
 
 		// 获取可调度的任务列表
-		ctx, cancelFunc := context.WithTimeout(s.ctx, s.config.BatchTimeout)
-		tasks, err := s.taskSvc.SchedulableTasks(ctx, s.config.PreemptedTimeout.Milliseconds(), s.config.BatchSize)
+		scheduleCtx, cancelFunc := context.WithTimeout(s.ctx, s.config.BatchTimeout)
+		tasks, err := s.taskSvc.SchedulableTasks(scheduleCtx, s.config.PreemptedTimeout.Milliseconds(), s.config.BatchSize)
 		cancelFunc()
 		if err != nil {
 			s.logger.Error("获取可调度任务失败", elog.FieldErr(err))
@@ -141,21 +141,7 @@ func (s *Scheduler) scheduleLoop() {
 		// 开始调度
 		successCount := 0
 		for i := range tasks {
-			// 使用智能调度选择执行节点
-			ctx := s.ctx
-			if nodeID, err := s.executorNodePicker.Pick(s.ctx); err == nil && nodeID != "" {
-				s.logger.Info("智能调度选择节点成功",
-					elog.String("selectedNodeID", nodeID),
-					elog.Int64("taskID", tasks[i].ID))
-				ctx = balancer.WithSpecificNodeID(s.ctx, nodeID)
-			} else {
-				s.logger.Error("智能调度选择节点失败，使用默认调度",
-					elog.Int64("taskID", tasks[i].ID),
-					elog.FieldErr(err))
-				// 如果智能调度失败，继续使用原始 ctx（相当于随机选择）
-			}
-
-			err1 := s.runner.Run(ctx, tasks[i])
+			err1 := s.runner.Run(s.newContext(tasks[i].ID), tasks[i])
 			if err1 != nil {
 				s.logger.Error("调度任务失败",
 					elog.Int64("taskID", tasks[i].ID),
@@ -177,6 +163,22 @@ func (s *Scheduler) scheduleLoop() {
 			time.Sleep(duration)
 			continue
 		}
+	}
+}
+
+func (s *Scheduler) newContext(taskID int64) context.Context {
+	// 使用智能调度选择执行节点
+	if nodeID, err := s.executorNodePicker.Pick(s.ctx); err == nil && nodeID != "" {
+		s.logger.Info("智能调度选择节点成功",
+			elog.String("selectedNodeID", nodeID),
+			elog.Int64("taskID", taskID))
+		return balancer.WithSpecificNodeID(s.ctx, nodeID)
+	} else {
+		s.logger.Error("智能调度选择节点失败，使用默认调度",
+			elog.Int64("taskID", taskID),
+			elog.FieldErr(err))
+		// 如果智能调度失败，继续使用原始 ctx（相当于随机选择)
+		return s.ctx
 	}
 }
 

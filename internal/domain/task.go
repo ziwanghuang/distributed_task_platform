@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"strconv"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
@@ -9,10 +8,7 @@ import (
 )
 
 // TaskStatus 任务状态
-type (
-	TaskStatus string
-	TaskType   string
-)
+type TaskStatus string
 
 const (
 	TaskStatusActive    TaskStatus = "ACTIVE"    // 可调度
@@ -29,13 +25,7 @@ type TaskExecutionMethod string
 const (
 	TaskExecutionMethodLocal  TaskExecutionMethod = "LOCAL"
 	TaskExecutionMethodRemote TaskExecutionMethod = "REMOTE"
-	NormalTaskType            TaskType            = "normal"
-	PlanTaskType              TaskType            = "plan"
 )
-
-func (t TaskType) String() string {
-	return string(t)
-}
 
 func (t TaskExecutionMethod) String() string {
 	return string(t)
@@ -47,6 +37,36 @@ func (t TaskExecutionMethod) IsRemote() bool {
 
 func (t TaskExecutionMethod) IsLocal() bool {
 	return t == TaskExecutionMethodLocal
+}
+
+type TaskType string
+
+const (
+	NormalTaskType TaskType = "normal"
+	PlanTaskType   TaskType = "plan"
+)
+
+func (t TaskType) String() string {
+	return string(t)
+}
+
+type ShardingRuleType string
+
+const (
+	ShardingRuleTypeRange                ShardingRuleType = "range"
+	ShardingRuleTypeWeightedDynamicRange ShardingRuleType = "weighted-dynamic-range"
+)
+
+func (t ShardingRuleType) String() string {
+	return string(t)
+}
+
+func (t ShardingRuleType) IsRange() bool {
+	return t == ShardingRuleTypeRange
+}
+
+func (t ShardingRuleType) IsWeightedDynamicRange() bool {
+	return t == ShardingRuleTypeWeightedDynamicRange
 }
 
 // Task 任务领域模型
@@ -138,31 +158,6 @@ type HTTPConfig struct {
 }
 
 type ShardingRule struct {
-	Type   string            `json:"type"`
+	Type   ShardingRuleType  `json:"type"`
 	Params map[string]string `json:"params"`
-}
-
-// ToScheduleParams 根据分片规则计算出分片任务所需要的调度参数
-func (s *ShardingRule) ToScheduleParams() []map[string]string {
-	// 在后台创建该任务时，应该严格校验下面的参数，此处不要再校验
-	scheduleParams := make([]map[string]string, 0)
-	if s.Type == "range" {
-		return (*RangeShardingRule)(s).ToScheduleParams()
-	}
-	return scheduleParams
-}
-
-type RangeShardingRule ShardingRule
-
-func (s *RangeShardingRule) ToScheduleParams() []map[string]string {
-	scheduleParams := make([]map[string]string, 0)
-	step, _ := strconv.ParseInt(s.Params["step"], 10, 64)
-	totalNums, _ := strconv.ParseInt(s.Params["totalNums"], 10, 64)
-	for i := range totalNums {
-		mp := make(map[string]string)
-		mp["start"] = strconv.FormatInt(i*step, 10)
-		mp["end"] = strconv.FormatInt((i+1)*step, 10)
-		scheduleParams = append(scheduleParams, mp)
-	}
-	return scheduleParams
 }

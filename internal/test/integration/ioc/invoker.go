@@ -6,9 +6,13 @@ import (
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 )
 
-func InitInvoker(clients *grpc.ClientsV2[executorv1.ExecutorServiceClient]) invoker.Invoker {
+func InitInvoker(clients *grpc.ClientsV2[executorv1.ExecutorServiceClient], localInvoker *invoker.LocalInvoker) invoker.Invoker {
 	return invoker.NewDispatcher(
 		invoker.NewHTTPInvoker(),
 		invoker.NewGRPCInvoker(clients),
-		invoker.NewLocalInvoker(map[string]invoker.LocalExecuteFunc{}))
+		localInvoker)
+}
+
+func NewExecutors(executeFuncs map[string]invoker.LocalExecuteFunc, prepareFuncs map[string]invoker.LocalPrepareFunc) *invoker.LocalInvoker {
+	return invoker.NewLocalInvoker(executeFuncs, prepareFuncs)
 }

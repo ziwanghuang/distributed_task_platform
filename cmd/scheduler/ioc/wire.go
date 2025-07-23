@@ -21,6 +21,7 @@ var (
 		ioc.InitInvoker,
 		ioc.InitRegistry,
 		ioc.InitPrometheusClient,
+		ioc.InitShardingRuleScheduleParamBuilder,
 	)
 
 	taskSet = wire.NewSet(

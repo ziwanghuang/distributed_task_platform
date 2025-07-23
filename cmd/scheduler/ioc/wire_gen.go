@@ -28,14 +28,15 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	taskAcquirer := ioc.InitMySQLTaskAcquirer(taskRepository)
 	mq := ioc.InitMQ()
 	completeProducer := ioc.InitCompleteProducer(mq)
-	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer)
-	reporterServer := grpc.NewReporterServer(executionService)
 	component := ioc.InitEtcdClient()
-	egrpcComponent := ioc.InitSchedulerNodeGRPCServer(reporterServer, component)
-	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
 	registry := ioc.InitRegistry(component)
 	clientsV2 := ioc.InitExecutorServiceGRPCClients(registry)
 	invoker := ioc.InitInvoker(clientsV2)
+	builder := ioc.InitShardingRuleScheduleParamBuilder(invoker)
+	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer, registry, builder)
+	reporterServer := grpc.NewReporterServer(executionService)
+	egrpcComponent := ioc.InitSchedulerNodeGRPCServer(reporterServer, component)
+	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
 	runner := ioc.InitRunner(string2, service, executionService, planService, taskAcquirer, invoker, completeProducer)
 	client := ioc.InitPrometheusClient()
 	clusterLoadChecker := ioc.InitClusterLoadChecker(string2, client)
@@ -59,7 +60,7 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 // wire.go:
 
 var (
-	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker, ioc.InitRegistry, ioc.InitPrometheusClient)
+	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker, ioc.InitRegistry, ioc.InitPrometheusClient, ioc.InitShardingRuleScheduleParamBuilder)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
 

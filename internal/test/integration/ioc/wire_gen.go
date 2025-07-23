@@ -27,7 +27,7 @@ import (
 
 // Injectors from wire.go:
 
-func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerApp {
+func InitSchedulerApp(executeFuncs map[string]invoker.LocalExecuteFunc, prepareFuncs map[string]invoker.LocalPrepareFunc) *SchedulerApp {
 	string2 := InitNodeID()
 	v := ioc.InitDBAndTables()
 	taskDAO := dao.NewGORMTaskDAO(v)
@@ -38,11 +38,13 @@ func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerAp
 	taskAcquirer := InitMySQLTaskAcquirer(taskRepository)
 	mq := ioc.InitMQ()
 	completeProducer := InitCompleteProducer(mq)
-	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer)
 	component := ioc.InitEtcdClient()
 	registry := InitRegistry(component)
 	clientsV2 := InitExecutorServiceGRPCClients(registry)
-	invokerInvoker := InitInvoker(clientsV2)
+	localInvoker := NewExecutors(executeFuncs, prepareFuncs)
+	invokerInvoker := InitInvoker(clientsV2, localInvoker)
+	builder := InitShardingRuleScheduleParamBuilder(invokerInvoker)
+	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer, registry, builder)
 	normalTaskRunner := InitNormalTaskRunner(string2, service, executionService, taskAcquirer, invokerInvoker, completeProducer)
 	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
 	planTaskRunner := InitPlanTaskRunner(planService, normalTaskRunner)
@@ -75,6 +77,7 @@ var (
 		InitPrometheusClient,
 		InitExecutorServiceGRPCClients,
 		InitCompleteProducer,
+		InitShardingRuleScheduleParamBuilder,
 	)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)

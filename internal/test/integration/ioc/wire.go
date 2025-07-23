@@ -30,6 +30,7 @@ var (
 		InitPrometheusClient,
 		InitExecutorServiceGRPCClients,
 		InitCompleteProducer,
+		InitShardingRuleScheduleParamBuilder,
 	)
 
 	taskSet = wire.NewSet(
@@ -88,7 +89,7 @@ func (a *SchedulerApp) StartTasks(ctx context.Context) {
 	}
 }
 
-func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerApp {
+func InitSchedulerApp(executeFuncs map[string]invoker.LocalExecuteFunc, prepareFuncs map[string]invoker.LocalPrepareFunc) *SchedulerApp {
 	wire.Build(
 		// 基础设施
 		BaseSet,

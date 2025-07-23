@@ -10,5 +10,5 @@ func InitInvoker(clients *grpc.ClientsV2[executorv1.ExecutorServiceClient]) invo
 	return invoker.NewDispatcher(
 		invoker.NewHTTPInvoker(),
 		invoker.NewGRPCInvoker(clients),
-		invoker.NewLocalInvoker(map[string]invoker.LocalExecuteFunc{}))
+		invoker.NewLocalInvoker(map[string]invoker.LocalExecuteFunc{}, map[string]invoker.LocalPrepareFunc{}))
 }

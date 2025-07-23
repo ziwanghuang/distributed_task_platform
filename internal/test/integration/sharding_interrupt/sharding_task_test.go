@@ -14,7 +14,6 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
-	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
 	"gitee.com/flycash/distributed_task_platform/internal/test/integration/ioc"
 	testioc "gitee.com/flycash/distributed_task_platform/internal/test/ioc"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc/balancer"
@@ -55,7 +54,7 @@ func (s *ShardingInterruptSuite) SetupSuite() {
 	s.registry = registry
 
 	// 初始化完整的调度器应用（传入空的local执行函数map，因为我们要测试远程执行）
-	s.schedulerApp = ioc.InitSchedulerApp(make(map[string]invoker.LocalExecuteFunc))
+	s.schedulerApp = ioc.InitSchedulerApp(nil, nil)
 
 	// 启动ReportEventConsumer来接收执行状态上报
 	go s.schedulerApp.ReportEventConsumer.Start(context.Background())
