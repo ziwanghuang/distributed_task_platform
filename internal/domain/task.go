@@ -71,6 +71,25 @@ func (t ShardingRuleType) IsWeightedDynamicRange() bool {
 	return t == ShardingRuleTypeWeightedDynamicRange
 }
 
+type SchedulingStrategy string
+
+const (
+	SchedulingStrategyCPUPriority    SchedulingStrategy = "CPU_PRIORITY"
+	SchedulingStrategyMemoryPriority SchedulingStrategy = "MEMORY_PRIORITY"
+)
+
+func (t SchedulingStrategy) String() string {
+	return string(t)
+}
+
+func (t SchedulingStrategy) IsCPUPriority() bool {
+	return t == SchedulingStrategyCPUPriority
+}
+
+func (t SchedulingStrategy) IsMemoryPriority() bool {
+	return t == SchedulingStrategyMemoryPriority
+}
+
 // Task 任务领域模型
 type Task struct {
 	ID       int64
@@ -81,6 +100,7 @@ type Task struct {
 	Type TaskType
 	// 为了方便测试，这里额外引入了一种本地运行的任务
 	ExecutionMethod     TaskExecutionMethod
+	SchedulingStrategy  SchedulingStrategy
 	GrpcConfig          *GrpcConfig
 	HTTPConfig          *HTTPConfig
 	RetryConfig         *RetryConfig

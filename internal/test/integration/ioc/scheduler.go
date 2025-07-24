@@ -5,6 +5,7 @@ import (
 	"time"
 
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
+	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/picker"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
@@ -69,7 +70,7 @@ type mockPicker struct{}
 // 确保 mockPicker 实现了 picker.ExecutorNodePicker 接口
 var _ picker.ExecutorNodePicker = &mockPicker{}
 
-func (m *mockPicker) Pick(_ context.Context) (string, error) {
+func (m *mockPicker) Pick(_ context.Context, _ domain.Task) (string, error) {
 	// 返回空字符串，让调度器使用默认的随机选择
 	return "", nil
 }

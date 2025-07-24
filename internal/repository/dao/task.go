@@ -25,6 +25,7 @@ type Task struct {
 	Name                string                               `gorm:"type:varchar(255);not null;uniqueIndex:uniq_idx_name;comment:'任务名称'"`
 	CronExpr            string                               `gorm:"type:varchar(100);not null;comment:'cron表达式'"`
 	ExecutionMethod     string                               `gorm:"type:ENUM('LOCAL', 'REMOTE');not null;default:'REMOTE';comment:'任务执行方式：LOCAL-本地执行，REMOTE-远程执行'"`
+	SchedulingStrategy  string                               `gorm:"type:ENUM('CPU_PRIORITY', 'MEMORY_PRIORITY');not null;default:'CPU_PRIORITY';comment:'调度策略：CPU_PRIORITY-CPU空闲优先，MEMORY_PRIORITY-内存空闲优先'"`
 	GrpcConfig          sqlx.JSONColumn[domain.GrpcConfig]   `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
 	HTTPConfig          sqlx.JSONColumn[domain.HTTPConfig]   `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
 	RetryConfig         sqlx.JSONColumn[domain.RetryConfig]  `gorm:"type:json;comment:'重试配置'"`

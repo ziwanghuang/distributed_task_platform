@@ -53,7 +53,6 @@ scheduler:
 
 # 智能调度配置
 intelligentScheduling:
-  strategy: "cpu_priority"      # 调度策略：cpu_priority, memory_priority
   jobName: "executors"         # Prometheus中执行节点的job名称
   topNCandidates: 3           # 从前N个候选节点中随机选择
   timeWindow: 30000000000      # 指标查询时间窗口（30秒）

@@ -141,7 +141,7 @@ func (s *Scheduler) scheduleLoop() {
 		// 开始调度
 		successCount := 0
 		for i := range tasks {
-			err1 := s.runner.Run(s.newContext(tasks[i].ID), tasks[i])
+			err1 := s.runner.Run(s.newContext(tasks[i]), tasks[i])
 			if err1 != nil {
 				s.logger.Error("调度任务失败",
 					elog.Int64("taskID", tasks[i].ID),
@@ -166,16 +166,16 @@ func (s *Scheduler) scheduleLoop() {
 	}
 }
 
-func (s *Scheduler) newContext(taskID int64) context.Context {
+func (s *Scheduler) newContext(task domain.Task) context.Context {
 	// 使用智能调度选择执行节点
-	if nodeID, err := s.executorNodePicker.Pick(s.ctx); err == nil && nodeID != "" {
+	if nodeID, err := s.executorNodePicker.Pick(s.ctx, task); err == nil && nodeID != "" {
 		s.logger.Info("智能调度选择节点成功",
 			elog.String("selectedNodeID", nodeID),
-			elog.Int64("taskID", taskID))
+			elog.Int64("taskID", task.ID))
 		return balancer.WithSpecificNodeID(s.ctx, nodeID)
 	} else {
 		s.logger.Error("智能调度选择节点失败，使用默认调度",
-			elog.Int64("taskID", taskID),
+			elog.Int64("taskID", task.ID),
 			elog.FieldErr(err))
 		// 如果智能调度失败，继续使用原始 ctx（相当于随机选择)
 		return s.ctx

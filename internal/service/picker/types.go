@@ -4,6 +4,8 @@ package picker
 import (
 	"context"
 	"time"
+
+	"gitee.com/flycash/distributed_task_platform/internal/domain"
 )
 
 // ExecutorNodePicker 是执行节点选择器的通用接口。
@@ -11,25 +13,18 @@ import (
 type ExecutorNodePicker interface {
 	// Name 返回选择器的可读名称，主要用于日志和监控。
 	Name() string
-	// Pick 根据内部策略选择一个最优的执行节点。
+	// Pick 根据 task 的调度策略选择一个最优的执行节点。
 	// 如果没有可用的节点或发生错误，将返回错误。
-	Pick(ctx context.Context) (nodeID string, err error)
+	Pick(ctx context.Context, task domain.Task) (nodeID string, err error)
 }
 
 // Config 定义了智能调度所需的全部配置。
 type Config struct {
-	Strategy       string        `yaml:"strategy"`       // 调度策略，决定使用哪种算法，如：cpu_priority, memory_priority
 	JobName        string        `yaml:"jobName"`        // Prometheus中执行节点关联的job名称，用于过滤和关联指标
 	TopNCandidates int           `yaml:"topNCandidates"` // 从资源最优的前N个候选节点中随机选择一个，以实现负载均衡
 	TimeWindow     time.Duration `yaml:"timeWindow"`     // 查询指标时使用的时间窗口，例如 '1m'，用于平滑瞬时抖动
 	QueryTimeout   time.Duration `yaml:"queryTimeout"`   // 执行Prometheus查询的超时时间
 }
-
-// 调度策略常量定义
-const (
-	StrategyCPUPriority    = "cpu_priority"
-	StrategyMemoryPriority = "memory_priority"
-)
 
 // 指标名称常量定义
 const (

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/service/picker"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -83,6 +84,7 @@ func (s *PickerIntegrationSuite) TestPickerStrategies() {
 	testCases := []struct {
 		name                 string
 		config               picker.Config
+		task                 domain.Task
 		setupMetrics         func()   // 用于设置本次测试指标的函数
 		expectedCandidates   []string // 期望被选中的节点池
 		unexpectedCandidates []string // 明确不应该被选中的节点
@@ -90,12 +92,12 @@ func (s *PickerIntegrationSuite) TestPickerStrategies() {
 		{
 			name: "CPU优先策略应只选择Top2节点",
 			config: picker.Config{
-				Strategy:       picker.StrategyCPUPriority,
 				JobName:        "executors",
 				TopNCandidates: 2,
 				TimeWindow:     testTimeWindow, // 使用为测试优化的短窗口
 				QueryTimeout:   5 * time.Second,
 			},
+			task: domain.Task{SchedulingStrategy: domain.SchedulingStrategyCPUPriority},
 			setupMetrics: func() {
 				s.findNode("cpu-node-01").SetCPUIdlePercent(95) // 最优
 				s.findNode("cpu-node-02").SetCPUIdlePercent(85) // 次优
@@ -107,12 +109,12 @@ func (s *PickerIntegrationSuite) TestPickerStrategies() {
 		{
 			name: "内存优先策略应只选择Top2节点",
 			config: picker.Config{
-				Strategy:       picker.StrategyMemoryPriority,
 				JobName:        "executors",
 				TopNCandidates: 2,
 				TimeWindow:     testTimeWindow, // 使用为测试优化的短窗口
 				QueryTimeout:   5 * time.Second,
 			},
+			task: domain.Task{SchedulingStrategy: domain.SchedulingStrategyMemoryPriority},
 			setupMetrics: func() {
 				s.findNode("memory-node-01").SetAvailableMemoryBytes(8e9) // 8GB - 最优
 				s.findNode("memory-node-02").SetAvailableMemoryBytes(4e9) // 4GB - 次优
@@ -124,12 +126,12 @@ func (s *PickerIntegrationSuite) TestPickerStrategies() {
 		{
 			name: "无效策略应降级为CPU优先并选择Top2节点",
 			config: picker.Config{
-				Strategy:       "invalid_strategy", // 无效策略
 				JobName:        "executors",
 				TopNCandidates: 2,
 				TimeWindow:     testTimeWindow, // 使用为测试优化的短窗口
 				QueryTimeout:   5 * time.Second,
 			},
+			task: domain.Task{SchedulingStrategy: domain.SchedulingStrategy("unknown")},
 			setupMetrics: func() {
 				s.findNode("cpu-node-01").SetCPUIdlePercent(99) // 确保CPU节点有明确的排序
 				s.findNode("cpu-node-02").SetCPUIdlePercent(88)
@@ -158,7 +160,7 @@ func (s *PickerIntegrationSuite) TestPickerStrategies() {
 			require.Eventually(t, func() bool {
 				selectedNodes := make(map[string]int)
 				for i := 0; i < iterations; i++ {
-					nodeID, err := dispatcher.Pick(context.Background())
+					nodeID, err := dispatcher.Pick(t.Context(), tc.task)
 					if err != nil {
 						t.Logf("轮询中... Pick失败: %v", err)
 						return false // 在Eventually中，任何错误都应视为“还未就绪”，返回false让其继续尝试
