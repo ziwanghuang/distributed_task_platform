@@ -30,7 +30,6 @@ var (
 		InitPrometheusClient,
 		InitExecutorServiceGRPCClients,
 		InitCompleteProducer,
-		InitShardingRuleScheduleParamBuilder,
 	)
 
 	taskSet = wire.NewSet(

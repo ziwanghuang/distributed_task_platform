@@ -32,8 +32,7 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	registry := ioc.InitRegistry(component)
 	clientsV2 := ioc.InitExecutorServiceGRPCClients(registry)
 	invoker := ioc.InitInvoker(clientsV2)
-	builder := ioc.InitShardingRuleScheduleParamBuilder(invoker)
-	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer, registry, builder)
+	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer, registry, invoker)
 	reporterServer := grpc.NewReporterServer(executionService)
 	egrpcComponent := ioc.InitSchedulerNodeGRPCServer(reporterServer, component)
 	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
@@ -60,7 +59,7 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 // wire.go:
 
 var (
-	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker, ioc.InitRegistry, ioc.InitPrometheusClient, ioc.InitShardingRuleScheduleParamBuilder)
+	BaseSet = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitMQ, ioc.InitRunner, ioc.InitInvoker, ioc.InitRegistry, ioc.InitPrometheusClient)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
 

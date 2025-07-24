@@ -1,8 +1,10 @@
 package domain
 
 import (
+	"strconv"
 	"time"
 
+	"gitee.com/flycash/distributed_task_platform/pkg/grpc/registry"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
 	"github.com/robfig/cron/v3"
 )
@@ -158,6 +160,81 @@ type HTTPConfig struct {
 }
 
 type ShardingRule struct {
-	Type   ShardingRuleType  `json:"type"`
-	Params map[string]string `json:"params"`
+	Type                  ShardingRuleType           `json:"type"`
+	Params                map[string]string          `json:"params"`
+	ExecutorNodeInstances []registry.ServiceInstance `json:"-"`
+}
+
+// ToScheduleParams 根据分片规则计算出分片任务所需要的调度参数
+func (s *ShardingRule) ToScheduleParams() []map[string]string {
+	// 在后台创建该任务时，应该严格校验下面的参数，此处不要再校验
+	switch {
+	case s.Type.IsRange():
+		return (*RangeShardingRule)(s).ToScheduleParams()
+	case s.Type.IsWeightedDynamicRange():
+		return (*WeightedDynamicRangeShardingRule)(s).ToScheduleParams()
+	default:
+		return nil
+	}
+}
+
+type RangeShardingRule ShardingRule
+
+func (s *RangeShardingRule) ToScheduleParams() []map[string]string {
+	scheduleParams := make([]map[string]string, 0)
+	step, _ := strconv.ParseInt(s.Params["step"], 10, 64)
+	totalNums, _ := strconv.ParseInt(s.Params["totalNums"], 10, 64)
+	for i := range totalNums {
+		mp := make(map[string]string)
+		mp["start"] = strconv.FormatInt(i*step, 10)
+		mp["end"] = strconv.FormatInt((i+1)*step, 10)
+		scheduleParams = append(scheduleParams, mp)
+	}
+	return scheduleParams
+}
+
+type WeightedDynamicRangeShardingRule ShardingRule
+
+func (w *WeightedDynamicRangeShardingRule) ToScheduleParams() []map[string]string {
+	// 解析业务方总任务数
+	totalTasks, err := strconv.ParseInt(w.Params["total_tasks"], 10, 64)
+	if err != nil {
+		return nil
+	}
+
+	// 计算总权重
+	var totalWeight int64
+	for i := range w.ExecutorNodeInstances {
+		totalWeight += w.ExecutorNodeInstances[i].Weight
+	}
+	if totalWeight == 0 {
+		// 所有执行节点的总权重为0，无法进行分片
+		return nil
+	}
+
+	// 计算每个执行节点对应的分片区w
+	scheduleParams := make([]map[string]string, 0, len(w.ExecutorNodeInstances))
+
+	var start, step, end int64
+	// 遍历 N-1 个节点，计算它们的分片
+	for i := 0; i < len(w.ExecutorNodeInstances)-1; i++ {
+		// 根据权重计算当前节点应处理的任务数
+		// 使用浮点数保证精度，然后转换为整数
+		share := float64(totalTasks) * (float64(w.ExecutorNodeInstances[i].Weight) / float64(totalWeight))
+		step = int64(share)
+		end = start + step
+
+		scheduleParams = append(scheduleParams, map[string]string{
+			"start": strconv.FormatInt(start, 10),
+			"end":   strconv.FormatInt(end, 10),
+		})
+		start = end // 下一个分片的起点是当前分片的终点
+	}
+
+	// 最后一个节点获得所有剩余的任务，以避免舍入误差导致任务丢失
+	scheduleParams = append(scheduleParams, map[string]string{
+		"start": strconv.FormatInt(start, 10),
+		"end":   strconv.FormatInt(totalTasks, 10), // 终点即为任务总数
+	})
+	return scheduleParams
 }

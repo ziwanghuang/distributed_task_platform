@@ -43,8 +43,7 @@ func InitSchedulerApp(executeFuncs map[string]invoker.LocalExecuteFunc, prepareF
 	clientsV2 := InitExecutorServiceGRPCClients(registry)
 	localInvoker := NewExecutors(executeFuncs, prepareFuncs)
 	invokerInvoker := InitInvoker(clientsV2, localInvoker)
-	builder := InitShardingRuleScheduleParamBuilder(invokerInvoker)
-	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer, registry, builder)
+	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer, registry, invokerInvoker)
 	normalTaskRunner := InitNormalTaskRunner(string2, service, executionService, taskAcquirer, invokerInvoker, completeProducer)
 	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
 	planTaskRunner := InitPlanTaskRunner(planService, normalTaskRunner)
@@ -77,7 +76,6 @@ var (
 		InitPrometheusClient,
 		InitExecutorServiceGRPCClients,
 		InitCompleteProducer,
-		InitShardingRuleScheduleParamBuilder,
 	)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)

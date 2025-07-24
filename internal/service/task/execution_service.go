@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/event"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
+	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc/registry"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc/registry/etcd"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
-	"gitee.com/flycash/distributed_task_platform/pkg/scheduleparams"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gotomicro/ego/core/elog"
 	"go.uber.org/multierr"
@@ -58,14 +59,14 @@ type ExecutionService interface {
 }
 
 type executionService struct {
-	nodeID                            string
-	repo                              repository.TaskExecutionRepository
-	taskSvc                           Service
-	taskAcquirer                      acquirer.TaskAcquirer  // 任务抢占器
-	producer                          event.CompleteProducer // 任务完成事件生产者
-	registry                          registry.Registry
-	shardingRuleScheduleParamsBuilder scheduleparams.Builder
-	logger                            *elog.Component
+	nodeID       string
+	repo         repository.TaskExecutionRepository
+	taskSvc      Service
+	taskAcquirer acquirer.TaskAcquirer  // 任务抢占器
+	producer     event.CompleteProducer // 任务完成事件生产者
+	registry     registry.Registry
+	invoker      invoker.Invoker
+	logger       *elog.Component
 }
 
 // NewExecutionService 创建任务执行服务实例
@@ -76,17 +77,17 @@ func NewExecutionService(
 	taskAcquirer acquirer.TaskAcquirer,
 	producer event.CompleteProducer,
 	registry *etcd.Registry,
-	shardingRuleScheduleParamsBuilder scheduleparams.Builder,
+	invoker invoker.Invoker,
 ) ExecutionService {
 	return &executionService{
-		nodeID:                            nodeID,
-		repo:                              repo,
-		taskSvc:                           taskSvc,
-		taskAcquirer:                      taskAcquirer,
-		producer:                          producer,
-		registry:                          registry,
-		shardingRuleScheduleParamsBuilder: shardingRuleScheduleParamsBuilder,
-		logger:                            elog.DefaultLogger.With(elog.FieldComponentName("service.execution")),
+		nodeID:       nodeID,
+		repo:         repo,
+		taskSvc:      taskSvc,
+		taskAcquirer: taskAcquirer,
+		producer:     producer,
+		registry:     registry,
+		invoker:      invoker,
+		logger:       elog.DefaultLogger.With(elog.FieldComponentName("service.execution")),
 	}
 }
 
@@ -98,16 +99,40 @@ func (s *executionService) CreateShardingChildren(ctx context.Context, parent do
 	if parent.Task.ID == 0 {
 		return nil, errors.New("Task.ID不能为空")
 	}
-	if parent.Task.ShardingRule == nil {
+	shardingRule := parent.Task.ShardingRule
+	if shardingRule == nil {
 		return nil, errs.ErrTaskShardingRuleNotFound
 	}
 
-	// 计算分片任务需要的分片调度参数
-	executorNodeIDs, scheduleParams, err := s.buildScheduleParams(ctx, parent)
-	if err != nil || len(scheduleParams) == 0 {
-		s.logger.Error("构建分片规则调度参数失败", elog.FieldErr(err))
-		return nil, errs.ErrInvalidTaskShardingRule
+	var executorNodeIDs []string
+
+	if shardingRule.Type.IsWeightedDynamicRange() {
+		// 发起Prepare调用
+		params, err := s.invoker.Prepare(ctx, parent)
+		if err != nil {
+			return nil, fmt.Errorf("发送GRPC请求失败: %w", err)
+		}
+		// 将获取到的返回参数合并到分片规则中
+		maps.Copy(shardingRule.Params, params)
+
+		// 调用Registry组件获取，执行节点信息列表（信息内含有权重）
+		serviceInstances, err := s.registry.ListServices(ctx, parent.Task.GrpcConfig.ServiceName)
+		if err != nil {
+			return nil, fmt.Errorf("获取执行节点注册信息失败: %w", err)
+		}
+		if len(serviceInstances) == 0 {
+			return nil, fmt.Errorf("未找到任何可用的执行节点")
+		}
+		// 将执行节点的信息注入分片规则中
+		shardingRule.ExecutorNodeInstances = serviceInstances
+		// 按照顺序获取执行节点ID
+		executorNodeIDs = slice.Map(serviceInstances, func(_ int, src registry.ServiceInstance) string {
+			return src.ID
+		})
 	}
+
+	// 计算分片任务需要的分片调度参数
+	scheduleParams := shardingRule.ToScheduleParams()
 
 	s.logger.Info("构建分片规则调度参数成功",
 		elog.Any("executorNodeIDs", executorNodeIDs),
@@ -119,29 +144,8 @@ func (s *executionService) CreateShardingChildren(ctx context.Context, parent do
 	if err != nil {
 		return nil, err
 	}
+	// 这里有一个要求： executorNodeIDs[i] 与 scheduleParams[i] 是对应关系
 	return s.repo.CreateShardingChildren(ctx, created, executorNodeIDs, scheduleParams)
-}
-
-func (s *executionService) buildScheduleParams(ctx context.Context, parent domain.TaskExecution) (executorNodeIDs []string, scheduleParams []map[string]string, err error) {
-	info := scheduleparams.Info{Rule: *parent.Task.ShardingRule}
-	if info.Rule.Type.IsWeightedDynamicRange() {
-		// 调用Registry组件获取，执行节点信息列表（信息内含有权重）
-		serviceInstances, err := s.registry.ListServices(ctx, parent.Task.GrpcConfig.ServiceName)
-		if err != nil {
-			return nil, nil, fmt.Errorf("获取执行节点注册信息失败: %w", err)
-		}
-		if len(serviceInstances) == 0 {
-			return nil, nil, fmt.Errorf("未找到任何可用的执行节点")
-		}
-		info.ExecutorNodeInstances = serviceInstances
-		info.TaskExecution = parent
-		executorNodeIDs = slice.Map(serviceInstances, func(_ int, src registry.ServiceInstance) string {
-			return src.ID
-		})
-	}
-	// 计算分片任务需要的分片调度参数
-	scheduleParams, err = s.shardingRuleScheduleParamsBuilder.Build(ctx, info)
-	return executorNodeIDs, scheduleParams, err
 }
 
 func (s *executionService) FindByID(ctx context.Context, id int64) (domain.TaskExecution, error) {
