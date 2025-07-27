@@ -7,17 +7,18 @@ import (
 	"fmt"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
-	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
+	"gitee.com/flycash/distributed_task_platform/pkg/sqlx"
 	"github.com/ecodeclub/ekit/slice"
-	"github.com/ecodeclub/ekit/sqlx"
 )
 
 type TaskExecutionRepository interface {
 	// Create 创建任务执行实例
 	Create(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error)
+	// CreateShardingParent 创建分片任务父执行记录
+	CreateShardingParent(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error)
 	// CreateShardingChildren 创建分片子任务执行实例
-	CreateShardingChildren(ctx context.Context, parent domain.TaskExecution) ([]domain.TaskExecution, error)
+	CreateShardingChildren(ctx context.Context, parent domain.TaskExecution, executorNodeIDs []string, scheduleParams []map[string]string) ([]domain.TaskExecution, error)
 	// UpdateStatus 更新执行状态
 	UpdateStatus(ctx context.Context, id int64, status domain.TaskExecutionStatus) error
 	// GetByID 根据ID获取执行实例
@@ -113,26 +114,15 @@ func (r *taskExecutionRepository) Create(ctx context.Context, execution domain.T
 	return r.toDomain(created), nil
 }
 
-func (r *taskExecutionRepository) CreateShardingChildren(ctx context.Context, parent domain.TaskExecution) ([]domain.TaskExecution, error) {
-	if parent.Task.ID == 0 {
-		return nil, errors.New("Task.ID不能为空")
-	}
-
-	if parent.Task.ShardingRule == nil {
-		return nil, errs.ErrTaskShardingRuleNotFound
-	}
-	// 计算分片任务需要的分片调度参数
-	scheduleParams := parent.Task.ShardingRule.ToScheduleParams()
-	if len(scheduleParams) == 0 {
-		return nil, errs.ErrInvalidTaskShardingRule
-	}
-	parent.Status = domain.TaskExecutionStatusRunning
-	// 创建父任务执行记录
-	p, err := r.dao.CreateShardingParent(ctx, r.toEntity(parent))
+func (r *taskExecutionRepository) CreateShardingParent(ctx context.Context, execution domain.TaskExecution) (domain.TaskExecution, error) {
+	created, err := r.dao.CreateShardingParent(ctx, r.toEntity(execution))
 	if err != nil {
-		return nil, err
+		return domain.TaskExecution{}, err
 	}
-	createdParent := r.toDomain(p)
+	return r.toDomain(created), nil
+}
+
+func (r *taskExecutionRepository) CreateShardingChildren(ctx context.Context, createdParent domain.TaskExecution, executorNodeIDs []string, scheduleParams []map[string]string) ([]domain.TaskExecution, error) {
 	// 填充子任务执行记录信息
 	children := make([]domain.TaskExecution, 0, len(scheduleParams))
 	for i := range scheduleParams {
@@ -144,6 +134,10 @@ func (r *taskExecutionRepository) CreateShardingChildren(ctx context.Context, pa
 		// 必须为每个子任务设置其父任务的ID
 		parentID := createdParent.ID
 		child.ShardingParentID = &parentID
+		// 如果创建时就已经知道执行节点ID顺带设置
+		if i < len(executorNodeIDs) {
+			child.ExecutorNodeID = executorNodeIDs[i]
+		}
 		// 覆盖或添加父任务中的基础调度信息
 		child.MergeTaskScheduleParams(scheduleParams[i])
 		children = append(children, child)
@@ -240,24 +234,24 @@ func (r *taskExecutionRepository) FindTimeoutExecutions(ctx context.Context, lim
 
 // toEntity 将领域模型转换为DAO模型
 func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.TaskExecution {
-	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
+	var grpcConfig sqlx.JSONColumn[domain.GrpcConfig]
 	if execution.Task.GrpcConfig != nil {
-		grpcConfig = sqlx.JsonColumn[domain.GrpcConfig]{Val: *execution.Task.GrpcConfig, Valid: true}
+		grpcConfig = sqlx.JSONColumn[domain.GrpcConfig]{Val: *execution.Task.GrpcConfig, Valid: true}
 	}
 
-	var httpConfig sqlx.JsonColumn[domain.HTTPConfig]
+	var httpConfig sqlx.JSONColumn[domain.HTTPConfig]
 	if execution.Task.HTTPConfig != nil {
-		httpConfig = sqlx.JsonColumn[domain.HTTPConfig]{Val: *execution.Task.HTTPConfig, Valid: true}
+		httpConfig = sqlx.JSONColumn[domain.HTTPConfig]{Val: *execution.Task.HTTPConfig, Valid: true}
 	}
 
-	var retryConfig sqlx.JsonColumn[domain.RetryConfig]
+	var retryConfig sqlx.JSONColumn[domain.RetryConfig]
 	if execution.Task.RetryConfig != nil {
-		retryConfig = sqlx.JsonColumn[domain.RetryConfig]{Val: *execution.Task.RetryConfig, Valid: true}
+		retryConfig = sqlx.JSONColumn[domain.RetryConfig]{Val: *execution.Task.RetryConfig, Valid: true}
 	}
 
-	var taskScheduleParams sqlx.JsonColumn[map[string]string]
+	var taskScheduleParams sqlx.JSONColumn[map[string]string]
 	if execution.Task.ScheduleParams != nil {
-		taskScheduleParams = sqlx.JsonColumn[map[string]string]{Val: execution.Task.ScheduleParams, Valid: true}
+		taskScheduleParams = sqlx.JSONColumn[map[string]string]{Val: execution.Task.ScheduleParams, Valid: true}
 	}
 
 	var shardingParentID sql.NullInt64

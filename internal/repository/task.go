@@ -6,8 +6,8 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
+	"gitee.com/flycash/distributed_task_platform/pkg/sqlx"
 	"github.com/ecodeclub/ekit/slice"
-	"github.com/ecodeclub/ekit/sqlx"
 )
 
 type TaskRepository interface {
@@ -18,7 +18,7 @@ type TaskRepository interface {
 	// SchedulableTasks 获取可调度的任务列表，preemptedTimeoutMs 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
 	SchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]domain.Task, error)
 	// Acquire 抢占任务
-	Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
+	Acquire(ctx context.Context, id, version int64, scheduleNodeID string) (domain.Task, error)
 	// Release 释放任务
 	Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
 	// Renew 续约所有抢占到的任务
@@ -75,8 +75,8 @@ func (r *taskRepository) SchedulableTasks(ctx context.Context, preemptedTimeoutM
 	}), nil
 }
 
-func (r *taskRepository) Acquire(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error) {
-	task, err := r.dao.Acquire(ctx, id, scheduleNodeID)
+func (r *taskRepository) Acquire(ctx context.Context, id, version int64, scheduleNodeID string) (domain.Task, error) {
+	task, err := r.dao.Acquire(ctx, id, version, scheduleNodeID)
 	if err != nil {
 		return domain.Task{}, err
 	}
@@ -118,29 +118,29 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		scheduleNodeID = sql.NullString{String: task.ScheduleNodeID, Valid: true}
 	}
 
-	var grpcConfig sqlx.JsonColumn[domain.GrpcConfig]
+	var grpcConfig sqlx.JSONColumn[domain.GrpcConfig]
 	if task.GrpcConfig != nil {
-		grpcConfig = sqlx.JsonColumn[domain.GrpcConfig]{Val: *task.GrpcConfig, Valid: true}
+		grpcConfig = sqlx.JSONColumn[domain.GrpcConfig]{Val: *task.GrpcConfig, Valid: true}
 	}
 
-	var httpConfig sqlx.JsonColumn[domain.HTTPConfig]
+	var httpConfig sqlx.JSONColumn[domain.HTTPConfig]
 	if task.HTTPConfig != nil {
-		httpConfig = sqlx.JsonColumn[domain.HTTPConfig]{Val: *task.HTTPConfig, Valid: true}
+		httpConfig = sqlx.JSONColumn[domain.HTTPConfig]{Val: *task.HTTPConfig, Valid: true}
 	}
 
-	var retryConfig sqlx.JsonColumn[domain.RetryConfig]
+	var retryConfig sqlx.JSONColumn[domain.RetryConfig]
 	if task.RetryConfig != nil {
-		retryConfig = sqlx.JsonColumn[domain.RetryConfig]{Val: *task.RetryConfig, Valid: true}
+		retryConfig = sqlx.JSONColumn[domain.RetryConfig]{Val: *task.RetryConfig, Valid: true}
 	}
 
-	var scheduleParams sqlx.JsonColumn[map[string]string]
+	var scheduleParams sqlx.JSONColumn[map[string]string]
 	if task.ScheduleParams != nil {
-		scheduleParams = sqlx.JsonColumn[map[string]string]{Val: task.ScheduleParams, Valid: true}
+		scheduleParams = sqlx.JSONColumn[map[string]string]{Val: task.ScheduleParams, Valid: true}
 	}
 
-	var shardingRule sqlx.JsonColumn[domain.ShardingRule]
+	var shardingRule sqlx.JSONColumn[domain.ShardingRule]
 	if task.ShardingRule != nil {
-		shardingRule = sqlx.JsonColumn[domain.ShardingRule]{Val: *task.ShardingRule, Valid: true}
+		shardingRule = sqlx.JSONColumn[domain.ShardingRule]{Val: *task.ShardingRule, Valid: true}
 	}
 
 	return dao.Task{
@@ -149,6 +149,7 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 		CronExpr:            task.CronExpr,
 		PlanID:              task.PlanID,
 		ExecutionMethod:     task.ExecutionMethod.String(),
+		SchedulingStrategy:  task.SchedulingStrategy.String(),
 		GrpcConfig:          grpcConfig,
 		HTTPConfig:          httpConfig,
 		RetryConfig:         retryConfig,
@@ -203,6 +204,7 @@ func (r *taskRepository) toDomain(daoTask *dao.Task) domain.Task {
 		ExecExpr:            daoTask.ExecExpr,
 		Type:                domain.TaskType(daoTask.Type),
 		ExecutionMethod:     domain.TaskExecutionMethod(daoTask.ExecutionMethod),
+		SchedulingStrategy:  domain.SchedulingStrategy(daoTask.SchedulingStrategy),
 		GrpcConfig:          grpcConfig,
 		HTTPConfig:          httpConfig,
 		RetryConfig:         retryConfig,

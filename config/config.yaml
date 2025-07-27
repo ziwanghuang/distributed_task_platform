@@ -2,7 +2,7 @@ log:
   debug: true
 
 mysql:
-  dsn: "root:root@tcp(localhost:13316)/task?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true"
+  dsn: "root:root@tcp(localhost:13316)/task?charset=utf8mb4&collation=utf8mb4_0900_ai_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true&interpolateParams=true"
 
 redis:
   addr: "localhost:6379"
@@ -50,6 +50,13 @@ scheduler:
   tokenAcquireTimeout: 3000000000
   pollInterval: 1000000000
   reportTimeout: 10000000000
+
+# 智能调度配置
+intelligentScheduling:
+  jobName: "executors"         # Prometheus中执行节点的job名称
+  topNCandidates: 3           # 从前N个候选节点中随机选择
+  timeWindow: 30000000000      # 指标查询时间窗口（30秒）
+  queryTimeout: 5000000000     # Prometheus查询超时时间（5秒）
 
 # 负载检查器配置
 loadChecker:

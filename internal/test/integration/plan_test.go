@@ -48,8 +48,8 @@ func (s *PlanSuite) SetupSuite() {
 		"TaskE":   s.mockFuncTask,
 		"TaskF":   s.mockFuncTask,
 		"TaskEnd": s.mockFuncTask,
-	})
-	s.completeConsumer = app.Consumer
+	}, nil)
+	s.completeConsumer = app.CompleteEventConsumer
 	s.execService = app.ExecutionSvc
 	s.taskService = app.TaskSvc
 	s.scheduler = app.Scheduler
@@ -180,7 +180,7 @@ func (s *PlanSuite) setUpTasks() int64 {
 
 	_, err = s.taskService.Create(ctx, taskEnd)
 	s.Require().NoError(err)
-	return int64(plan.ID)
+	return plan.ID
 }
 
 // TestPlanExecution 测试计划执行

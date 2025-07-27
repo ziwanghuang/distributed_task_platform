@@ -8,7 +8,7 @@ import (
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
-	"github.com/ecodeclub/ekit/sqlx"
+	"gitee.com/flycash/distributed_task_platform/pkg/sqlx"
 	"github.com/ego-component/egorm"
 )
 
@@ -29,13 +29,13 @@ type TaskExecution struct {
 	TaskName                string                              `gorm:"type:varchar(255);not null;comment:'任务名称'"`
 	TaskCronExpr            string                              `gorm:"type:varchar(100);not null;comment:'cron表达式'"`
 	TaskExecutionMethod     string                              `gorm:"type:ENUM('LOCAL', 'REMOTE');not null;default:'REMOTE';comment:'任务执行方式：LOCAL-本地执行，REMOTE-远程执行'"`
-	TaskGrpcConfig          sqlx.JsonColumn[domain.GrpcConfig]  `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
-	TaskHTTPConfig          sqlx.JsonColumn[domain.HTTPConfig]  `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
-	TaskRetryConfig         sqlx.JsonColumn[domain.RetryConfig] `gorm:"type:json;comment:'重试配置'"`
+	TaskGrpcConfig          sqlx.JSONColumn[domain.GrpcConfig]  `gorm:"type:json;comment:'gRPC配置：{\"serviceName\": \"user-service\"}'"`
+	TaskHTTPConfig          sqlx.JSONColumn[domain.HTTPConfig]  `gorm:"type:json;comment:'HTTP配置：{\"endpoint\": \"https://host:port/api\"}'"`
+	TaskRetryConfig         sqlx.JSONColumn[domain.RetryConfig] `gorm:"type:json;comment:'重试配置'"`
 	TaskMaxExecutionSeconds int64                               `gorm:"type:bigint;not null;default:86400;comment:'最大执行秒数，默认24小时'"`
 	TaskVersion             int64                               `gorm:"type:bigint;not null;comment:'创建时Task的版本号'"`
 	TaskScheduleNodeID      string                              `gorm:"type:varchar(255);not null;comment:'创建此执行的调度节点ID'"`
-	TaskScheduleParams      sqlx.JsonColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
+	TaskScheduleParams      sqlx.JSONColumn[map[string]string]  `gorm:"type:json;comment:'创建时Task的调度参数快照'"`
 	TaskPlanExecID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
 	TaskPlanID              int64                               `gorm:"type:bigint;not null;comment:'对应Plan的ID'"`
 	// 下面这些是 TaskExecution 的自身信息
@@ -333,7 +333,7 @@ func (g *GORMTaskExecutionDAO) UpdateScheduleResult(ctx context.Context, id int6
 			"status":               status,
 			"running_progress":     progress,
 			"etime":                endTime,
-			"task_schedule_params": sqlx.JsonColumn[map[string]string]{Val: scheduleParams, Valid: scheduleParams != nil},
+			"task_schedule_params": sqlx.JSONColumn[map[string]string]{Val: scheduleParams, Valid: scheduleParams != nil},
 			"executor_node_id":     sql.NullString{String: executorNodeID, Valid: executorNodeID != ""},
 			"utime":                time.Now().UnixMilli(),
 		})

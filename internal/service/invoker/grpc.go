@@ -46,3 +46,18 @@ func (r *GRPCInvoker) Run(ctx context.Context, exec domain.TaskExecution) (domai
 	}
 	return domain.ExecutionStateFromProto(resp.GetExecutionState()), nil
 }
+
+func (r *GRPCInvoker) Prepare(ctx context.Context, exec domain.TaskExecution) (map[string]string, error) {
+	client := r.grpcClients.Get(exec.Task.GrpcConfig.ServiceName)
+	// 发送执行请求
+	resp, err := client.Prepare(ctx, &executorv1.PrepareRequest{
+		Eid:      exec.ID,
+		TaskId:   exec.Task.ID,
+		TaskName: exec.Task.Name,
+		Params:   exec.GRPCParams(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("发送gRPC请求失败: %w", err)
+	}
+	return resp.GetParams(), nil
+}
