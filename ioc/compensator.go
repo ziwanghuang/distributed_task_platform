@@ -1,11 +1,12 @@
 package ioc
 
 import (
+	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	"gitee.com/flycash/distributed_task_platform/internal/compensator"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
-	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
+	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 	"github.com/gotomicro/ego/core/econf"
 )
 
@@ -60,7 +61,7 @@ func InitShardingCompensator(
 }
 
 func InitInterruptCompensator(
-	scheduler *scheduler.Scheduler,
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient],
 	execSvc task.ExecutionService,
 ) *compensator.InterruptCompensator {
 	var cfg compensator.InterruptConfig
@@ -69,7 +70,7 @@ func InitInterruptCompensator(
 		panic(err)
 	}
 	return compensator.NewInterruptCompensator(
-		scheduler,
+		grpcClients,
 		execSvc,
 		cfg,
 	)

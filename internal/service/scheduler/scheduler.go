@@ -8,8 +8,6 @@ import (
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
-	"gitee.com/flycash/distributed_task_platform/internal/domain"
-	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
@@ -176,25 +174,6 @@ func (s *Scheduler) renewLoop() {
 			}
 		}
 	}
-}
-
-// InterruptTaskExecution 中断任务执行
-func (s *Scheduler) InterruptTaskExecution(ctx context.Context, execution domain.TaskExecution) error {
-	if execution.Task.GrpcConfig == nil {
-		return fmt.Errorf("未找到GPRC配置，无法执行中断任务")
-	}
-	client := s.grpcClients.Get(execution.Task.GrpcConfig.ServiceName)
-	resp, err := client.Interrupt(ctx, &executorv1.InterruptRequest{
-		Eid: execution.ID,
-	})
-	if err != nil {
-		return fmt.Errorf("发送中断请求失败：%w", err)
-	}
-	if !resp.GetSuccess() {
-		// 中断失败，忽略状态
-		return errs.ErrInterruptTaskExecutionFailed
-	}
-	return s.execSvc.UpdateState(ctx, domain.ExecutionStateFromProto(resp.GetExecutionState()))
 }
 
 // Stop 停止调度器

@@ -3,9 +3,12 @@ package compensator
 import (
 	"context"
 	"fmt"
+	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
+	"gitee.com/flycash/distributed_task_platform/internal/domain"
+	"gitee.com/flycash/distributed_task_platform/internal/errs"
+	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
 	"time"
 
-	"gitee.com/flycash/distributed_task_platform/internal/service/scheduler"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"github.com/gotomicro/ego/core/elog"
 )
@@ -18,23 +21,23 @@ type InterruptConfig struct {
 
 // InterruptCompensator 中断补偿器
 type InterruptCompensator struct {
-	scheduler *scheduler.Scheduler
-	execSvc   task.ExecutionService
-	config    InterruptConfig
-	logger    *elog.Component
+	execSvc     task.ExecutionService
+	config      InterruptConfig
+	logger      *elog.Component
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池
 }
 
 // NewInterruptCompensator 创建中断补偿器
 func NewInterruptCompensator(
-	scheduler *scheduler.Scheduler,
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient],
 	execSvc task.ExecutionService,
 	config InterruptConfig,
 ) *InterruptCompensator {
 	return &InterruptCompensator{
-		scheduler: scheduler,
-		execSvc:   execSvc,
-		config:    config,
-		logger:    elog.DefaultLogger.With(elog.FieldComponentName("compensator.interrupt")),
+		grpcClients: grpcClients,
+		execSvc:     execSvc,
+		config:      config,
+		logger:      elog.DefaultLogger.With(elog.FieldComponentName("compensator.interrupt")),
 	}
 }
 
@@ -85,7 +88,7 @@ func (t *InterruptCompensator) interruptTimeoutTasks(ctx context.Context) error 
 
 	// 处理每个超时的执行
 	for i := range executions {
-		err = t.scheduler.InterruptTaskExecution(ctx, executions[i])
+		err = t.interruptTaskExecution(ctx, executions[i])
 		if err != nil {
 			t.logger.Error("中断超时任务失败",
 				elog.Int64("executionId", executions[i].ID),
@@ -98,4 +101,22 @@ func (t *InterruptCompensator) interruptTimeoutTasks(ctx context.Context) error 
 			elog.String("taskName", executions[i].Task.Name))
 	}
 	return nil
+}
+
+func (s *InterruptCompensator) interruptTaskExecution(ctx context.Context, execution domain.TaskExecution) error {
+	if execution.Task.GrpcConfig == nil {
+		return fmt.Errorf("未找到GPRC配置，无法执行中断任务")
+	}
+	client := s.grpcClients.Get(execution.Task.GrpcConfig.ServiceName)
+	resp, err := client.Interrupt(ctx, &executorv1.InterruptRequest{
+		Eid: execution.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("发送中断请求失败：%w", err)
+	}
+	if !resp.GetSuccess() {
+		// 中断失败，忽略状态
+		return errs.ErrInterruptTaskExecutionFailed
+	}
+	return s.execSvc.UpdateState(ctx, domain.ExecutionStateFromProto(resp.GetExecutionState()))
 }
