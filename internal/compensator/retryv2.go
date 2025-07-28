@@ -3,6 +3,7 @@ package compensator
 import (
 	"context"
 	"fmt"
+
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/pkg/loopjob"
@@ -11,7 +12,6 @@ import (
 	"github.com/meoying/dlock-go"
 )
 
-
 // RetryCompensatorV2 重试补偿器
 type RetryCompensatorV2 struct {
 	runner  runner.Runner
@@ -19,8 +19,8 @@ type RetryCompensatorV2 struct {
 	config  RetryConfig
 	logger  *elog.Component
 
-	dlockClient dlock.Client
-	sem         loopjob.ResourceSemaphore
+	dlockClient  dlock.Client
+	sem          loopjob.ResourceSemaphore
 	executionStr sharding.ShardingStrategy
 }
 
@@ -34,12 +34,12 @@ func NewRetryCompensatorV2(
 	executionStr sharding.ShardingStrategy,
 ) *RetryCompensatorV2 {
 	return &RetryCompensatorV2{
-		runner:  runner,
-		execSvc: execSvc,
-		config:  config,
-		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.retry")),
-		dlockClient: dlockClient,
-		sem:         sem,
+		runner:       runner,
+		execSvc:      execSvc,
+		config:       config,
+		logger:       elog.DefaultLogger.With(elog.FieldComponentName("compensator.retry")),
+		dlockClient:  dlockClient,
+		sem:          sem,
 		executionStr: executionStr,
 	}
 }
@@ -47,7 +47,7 @@ func NewRetryCompensatorV2(
 // Start 启动补偿器
 func (r *RetryCompensatorV2) Start(ctx context.Context) {
 	const rescheduleKey = "retryKey"
-	loopjob.NewShardingLoopJob(r.dlockClient,rescheduleKey,r.retry,r.executionStr,r.sem).Run(ctx)
+	loopjob.NewShardingLoopJob(r.dlockClient, rescheduleKey, r.retry, r.executionStr, r.sem).Run(ctx)
 }
 
 // retry 执行一轮补偿

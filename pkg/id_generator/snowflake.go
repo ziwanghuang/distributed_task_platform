@@ -8,17 +8,17 @@ import (
 const (
 	// 位数分配常量
 	timestampBits = 41 // 时间戳位数
-	bizIdBits     = 12 // 业务ID位数
+	bizIDBits     = 12 // 业务ID位数
 	sequenceBits  = 12 // 序列号位数
 
 	// 位移常量
 	timestampShift = 0
 	sequenceShift  = timestampBits
-	bizIdShift     = sequenceBits + timestampBits
+	bizIDShift     = sequenceBits + timestampBits
 
 	// 掩码常量
 	sequenceMask   = (1 << sequenceBits) - 1
-	shardingIdMask = (1 << bizIdBits) - 1
+	shardingIDMask = (1 << bizIDBits) - 1
 	timestampMask  = (1 << timestampBits) - 1
 
 	// 基准时间 - 2024年1月1日，可以根据实际需求调整
@@ -49,12 +49,12 @@ func NewGenerator() *Generator {
 func (g *Generator) GenerateID(shardingID int64) int64 {
 	timestamp := time.Now().UnixMilli() - epochMillis
 	// 确保bizID在10位范围内
-	shardingValue := shardingID & shardingIdMask
+	shardingValue := shardingID & shardingIDMask
 	// 使用原子操作安全地递增序列号
 	sequence := atomic.AddInt64(&g.sequence, 1) - 1 // 减1是因为AddInt64返回递增后的值
 
 	// 组装最终ID
-	id := (shardingValue)<<bizIdShift | // 业务ID部分
+	id := (shardingValue)<<bizIDShift | // 业务ID部分
 		(sequence&sequenceMask)<<sequenceShift | // 序列号部分
 		(timestamp & timestampMask) // 时间戳部分
 	return id
@@ -68,7 +68,7 @@ func ExtractTimestamp(id int64) time.Time {
 
 // ExtractShardingID 从ID中提取业务ID
 func ExtractShardingID(id int64) int64 {
-	return (id >> bizIdShift) & shardingIdMask
+	return (id >> bizIDShift) & shardingIDMask
 }
 
 // ExtractSequence 从ID中提取序列号部分

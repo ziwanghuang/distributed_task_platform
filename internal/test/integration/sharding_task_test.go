@@ -41,7 +41,6 @@ func (suite *ShardingTaskSuite) TearDownSuite() {
 
 // cleanupTestData removes all test data with the specified bizID from all databases and tables
 func (suite *ShardingTaskSuite) cleanupTestData(bizID int64) {
-
 	// For each database
 	for dbName, db := range suite.dbs {
 		// Clean up task tables

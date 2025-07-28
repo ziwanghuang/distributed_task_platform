@@ -3,9 +3,6 @@ package compensator
 import (
 	"context"
 	"fmt"
-	"gitee.com/flycash/distributed_task_platform/pkg/loopjob"
-	"gitee.com/flycash/distributed_task_platform/pkg/sharding"
-	"github.com/meoying/dlock-go"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
@@ -25,10 +22,6 @@ type RescheduleCompensator struct {
 	execSvc task.ExecutionService
 	config  RescheduleConfig
 	logger  *elog.Component
-
-	dlockClient dlock.Client
-	sem         loopjob.ResourceSemaphore
-	executionStr sharding.ShardingStrategy
 }
 
 // NewRescheduleCompensator 创建重调度补偿器
@@ -74,8 +67,6 @@ func (r *RescheduleCompensator) Start(ctx context.Context) {
 		}
 	}
 }
-
-
 
 // reschedule 执行一轮补偿
 func (r *RescheduleCompensator) reschedule(ctx context.Context) error {

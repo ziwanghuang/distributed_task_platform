@@ -29,5 +29,5 @@ var (
 	ErrExecutionStateHandlerNotFound = errors.New("执行状态处理器未找到")
 
 	ErrInitPlanFailed = errors.New("plan和实际创建的任务不符")
-	ErrExceedLimit = errors.New("抢资源超出限制")
+	ErrExceedLimit    = errors.New("抢资源超出限制")
 )

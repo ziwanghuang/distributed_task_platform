@@ -97,6 +97,8 @@ func (r *ShardingCompensator) Start(ctx context.Context) {
 }
 
 // handle 执行一轮补偿
+//
+//nolint:dupl //忽略
 func (r *ShardingCompensator) handle(ctx context.Context, parent domain.TaskExecution) error {
 	// 取该父任务下的【所有】子任务
 	children, err := r.execSvc.FindShardingChildren(ctx, parent.ID)

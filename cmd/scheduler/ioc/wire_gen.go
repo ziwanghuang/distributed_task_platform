@@ -44,7 +44,7 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	retryCompensator := ioc.InitRetryCompensator(runner, executionService)
 	rescheduleCompensator := ioc.InitRescheduleCompensator(runner, executionService)
 	shardingCompensator := ioc.InitShardingCompensator(string2, service, executionService, taskAcquirer)
-	interruptCompensator := ioc.InitInterruptCompensator(scheduler, executionService)
+	interruptCompensator := ioc.InitInterruptCompensator(clientsV2, executionService)
 	batchReportEventConsumer := ioc.InitExecutionBatchReportEventConsumer(mq, string2)
 	reportEventConsumer := ioc.InitExecutionReportEventConsumer(mq, string2, executionService)
 	v2 := ioc.InitTasks(retryCompensator, rescheduleCompensator, shardingCompensator, interruptCompensator, batchReportEventConsumer, reportEventConsumer)

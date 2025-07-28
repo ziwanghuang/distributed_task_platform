@@ -17,13 +17,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	dbNumber   = 4
-	tabNumber  = 4
-	dbNamePre  = "task_db"
-	tabNamePre = "task"
-)
-
 type ShardingTaskDAO struct {
 	dbs              map[string]*egorm.Component
 	idGen            *idPkg.Generator
@@ -69,7 +62,10 @@ func (s ShardingTaskDAO) Create(ctx context.Context, task Task) (*Task, error) {
 		return nil, fmt.Errorf("database %s not found", dst.DB)
 	}
 
-	if err := db.Table(dst.Table).Create(&task).Error; err != nil {
+	if err := db.
+		WithContext(ctx).
+		Table(dst.Table).
+		Create(&task).Error; err != nil {
 		return nil, err
 	}
 
@@ -85,7 +81,9 @@ func (s ShardingTaskDAO) GetByID(ctx context.Context, id int64) (*Task, error) {
 	}
 
 	var task Task
-	if err := db.Table(dst.Table).Where("id = ?", id).First(&task).Error; err != nil {
+	if err := db.Table(dst.Table).
+		WithContext(ctx).
+		Where("id = ?", id).First(&task).Error; err != nil {
 		return nil, err
 	}
 
@@ -107,7 +105,6 @@ func (s ShardingTaskDAO) FindByPlanID(ctx context.Context, planID int64) ([]*Tas
 		return nil, err
 	}
 	return tasks, nil
-
 }
 
 func (s ShardingTaskDAO) Acquire(ctx context.Context, id int64, scheduleNodeID string) (*Task, error) {
@@ -167,9 +164,6 @@ func (s ShardingTaskDAO) Renew(ctx context.Context, scheduleNodeID string) error
 
 	var g errgroup.Group
 	for dbName, tables := range dbTables {
-		dbName := dbName
-		tables := tables
-
 		g.Go(func() error {
 			db, ok := s.dbs[dbName]
 			if !ok {
@@ -264,7 +258,6 @@ func (s ShardingTaskDAO) UpdateNextTime(ctx context.Context, id, version, nextTi
 		updatedTask = &task
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +296,6 @@ func (s ShardingTaskDAO) UpdateScheduleParams(ctx context.Context, id, version i
 		updatedTask = &task
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}

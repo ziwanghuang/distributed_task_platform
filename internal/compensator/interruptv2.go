@@ -3,6 +3,7 @@ package compensator
 import (
 	"context"
 	"fmt"
+
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
@@ -14,15 +15,14 @@ import (
 	"github.com/meoying/dlock-go"
 )
 
-
 // InterruptCompensatorV2 中断补偿器
 type InterruptCompensatorV2 struct {
-	execSvc     task.ExecutionService
-	config      InterruptConfig
-	logger      *elog.Component
-	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池
-	dlockClient dlock.Client
-	sem         loopjob.ResourceSemaphore
+	execSvc      task.ExecutionService
+	config       InterruptConfig
+	logger       *elog.Component
+	grpcClients  *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池
+	dlockClient  dlock.Client
+	sem          loopjob.ResourceSemaphore
 	executionStr sharding.ShardingStrategy
 }
 
@@ -36,12 +36,12 @@ func NewInterruptCompensatorV2(
 	executionStr sharding.ShardingStrategy,
 ) *InterruptCompensatorV2 {
 	return &InterruptCompensatorV2{
-		grpcClients: grpcClients,
-		execSvc:     execSvc,
-		config:      config,
-		logger:      elog.DefaultLogger.With(elog.FieldComponentName("compensator.interrupt")),
-		dlockClient: dlockClient,
-		sem:         sem,
+		grpcClients:  grpcClients,
+		execSvc:      execSvc,
+		config:       config,
+		logger:       elog.DefaultLogger.With(elog.FieldComponentName("compensator.interrupt")),
+		dlockClient:  dlockClient,
+		sem:          sem,
 		executionStr: executionStr,
 	}
 }
@@ -49,12 +49,12 @@ func NewInterruptCompensatorV2(
 // Start 启动补偿器
 func (t *InterruptCompensatorV2) Start(ctx context.Context) {
 	const interruptKey = "interruptKey"
-	loopjob.NewShardingLoopJob(t.dlockClient,interruptKey,t.interruptTimeoutTasks,t.executionStr,t.sem).Run(ctx)
+	loopjob.NewShardingLoopJob(t.dlockClient, interruptKey, t.interruptTimeoutTasks, t.executionStr, t.sem).Run(ctx)
 }
 
-
-
 // interruptTimeoutTasks 中断超时任务
+//
+//nolint:dupl //忽略
 func (t *InterruptCompensatorV2) interruptTimeoutTasks(ctx context.Context) error {
 	// 查找超时的执行记录
 	executions, err := t.execSvc.FindTimeoutExecutions(ctx, t.config.BatchSize)
@@ -86,11 +86,11 @@ func (t *InterruptCompensatorV2) interruptTimeoutTasks(ctx context.Context) erro
 	return nil
 }
 
-func (s *InterruptCompensatorV2) interruptTaskExecution(ctx context.Context, execution domain.TaskExecution) error {
+func (t *InterruptCompensatorV2) interruptTaskExecution(ctx context.Context, execution domain.TaskExecution) error {
 	if execution.Task.GrpcConfig == nil {
 		return fmt.Errorf("未找到GPRC配置，无法执行中断任务")
 	}
-	client := s.grpcClients.Get(execution.Task.GrpcConfig.ServiceName)
+	client := t.grpcClients.Get(execution.Task.GrpcConfig.ServiceName)
 	resp, err := client.Interrupt(ctx, &executorv1.InterruptRequest{
 		Eid: execution.ID,
 	})
@@ -101,5 +101,5 @@ func (s *InterruptCompensatorV2) interruptTaskExecution(ctx context.Context, exe
 		// 中断失败，忽略状态
 		return errs.ErrInterruptTaskExecutionFailed
 	}
-	return s.execSvc.UpdateState(ctx, domain.ExecutionStateFromProto(resp.GetExecutionState()))
+	return t.execSvc.UpdateState(ctx, domain.ExecutionStateFromProto(resp.GetExecutionState()))
 }

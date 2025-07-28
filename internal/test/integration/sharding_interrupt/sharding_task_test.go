@@ -379,7 +379,7 @@ func (s *ShardingInterruptSuite) TestShardingTaskInterrupt() {
 	time.Sleep(10 * time.Second)
 
 	// 准备中断用的context
-	//ctxWithNodeID := balancer.WithSpecificNodeID(ctx, execution.ExecutorNodeID)
+	// ctxWithNodeID := balancer.WithSpecificNodeID(ctx, execution.ExecutorNodeID)
 
 	// 多次尝试中断，直到成功
 	t.Log("开始尝试中断...")

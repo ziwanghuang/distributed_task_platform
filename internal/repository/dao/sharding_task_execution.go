@@ -140,32 +140,31 @@ func CheckErrIsIDDuplicate(id int64, err error) bool {
 func (s ShardingTaskExecutionDAO) genSQLs(db *egorm.Component, exections []TaskExecution) (sqls []string, args []any, executions []TaskExecution) {
 	now := time.Now().UnixMilli()
 	sessionDB := db.Session(&gorm.Session{DryRun: true})
-	const sqlRate = 2
 	sqls = make([]string, 0, len(exections))
 	// notification 的字段数量 + callback log 的字段数量
 	const paramsRate = 25
 	args = make([]any, 0, len(exections)*paramsRate)
 	for idx := range exections {
-		exection := exections[idx]
+		execution := exections[idx]
 		var (
 			id  int64
 			dst sharding.Dst
 		)
-		if exection.TaskID > 0 {
-			taskIDHash := exection.TaskID % shardingNumber
+		if execution.TaskID > 0 {
+			taskIDHash := execution.TaskID % shardingNumber
 			id = s.idGen.GenerateID(taskIDHash)
 			dst = s.shardingStrategy.Shard(taskIDHash)
 		}
-		if exection.ShardingParentID.Int64 > 0 {
-			taskIDHash := exection.ShardingParentID.Int64 % shardingNumber
-			id = s.idGen.GenerateID(exection.ShardingParentID.Int64 % shardingNumber)
+		if execution.ShardingParentID.Int64 > 0 {
+			taskIDHash := execution.ShardingParentID.Int64 % shardingNumber
+			id = s.idGen.GenerateID(execution.ShardingParentID.Int64 % shardingNumber)
 			dst = s.shardingStrategy.Shard(taskIDHash)
 		}
-		exection.Ctime = now
-		exection.Utime = now
-		exection.ID = id
-		exections[idx] = exection
-		stmt := sessionDB.Table(dst.Table).Create(&exection).Statement
+		execution.Ctime = now
+		execution.Utime = now
+		execution.ID = id
+		exections[idx] = execution
+		stmt := sessionDB.Table(dst.Table).Create(&execution).Statement
 		sqls = append(sqls, stmt.SQL.String())
 		args = append(args, stmt.Vars...)
 	}
@@ -449,7 +448,7 @@ func (s ShardingTaskExecutionDAO) FindReschedulableExecutions(ctx context.Contex
 }
 
 func (s ShardingTaskExecutionDAO) FindExecutionByPlanID(ctx context.Context, planExecID int64) (map[int64]TaskExecution, error) {
-	// plan和plan对应的任务的执行计划的id都是将planid%1024取余后的值编码进exection的id所以plan所有任务的执行计划都在同一张表里
+	// plan和plan对应的任务的执行计划的id都是将planid%1024取余后的值编码进execution的id所以plan所有任务的执行计划都在同一张表里
 	shardingID := idPkg.ExtractShardingID(planExecID)
 	dst := s.shardingStrategy.Shard(shardingID)
 	db, ok := s.dbs[dst.DB]
@@ -492,8 +491,8 @@ func (s ShardingTaskExecutionDAO) FindByTaskID(ctx context.Context, taskID int64
 	return executions, nil
 }
 
-func (s ShardingTaskExecutionDAO) FindExecutionByTaskIDAndPlanExecID(ctx context.Context, taskID int64, planExecID int64) (TaskExecution, error) {
-	//TODO implement me
+func (s ShardingTaskExecutionDAO) FindExecutionByTaskIDAndPlanExecID(_ context.Context, _, _ int64) (TaskExecution, error) {
+	// TODO implement me
 	panic("implement me")
 }
 

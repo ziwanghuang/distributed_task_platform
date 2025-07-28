@@ -3,11 +3,12 @@ package compensator
 import (
 	"context"
 	"fmt"
+	"time"
+
 	executorv1 "gitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1"
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/pkg/grpc"
-	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"github.com/gotomicro/ego/core/elog"
@@ -72,6 +73,8 @@ func (t *InterruptCompensator) Start(ctx context.Context) {
 }
 
 // interruptTimeoutTasks 中断超时任务
+//
+//nolint:dupl //忽略
 func (t *InterruptCompensator) interruptTimeoutTasks(ctx context.Context) error {
 	// 查找超时的执行记录
 	executions, err := t.execSvc.FindTimeoutExecutions(ctx, t.config.BatchSize)
@@ -103,11 +106,11 @@ func (t *InterruptCompensator) interruptTimeoutTasks(ctx context.Context) error 
 	return nil
 }
 
-func (s *InterruptCompensator) interruptTaskExecution(ctx context.Context, execution domain.TaskExecution) error {
+func (t *InterruptCompensator) interruptTaskExecution(ctx context.Context, execution domain.TaskExecution) error {
 	if execution.Task.GrpcConfig == nil {
 		return fmt.Errorf("未找到GPRC配置，无法执行中断任务")
 	}
-	client := s.grpcClients.Get(execution.Task.GrpcConfig.ServiceName)
+	client := t.grpcClients.Get(execution.Task.GrpcConfig.ServiceName)
 	resp, err := client.Interrupt(ctx, &executorv1.InterruptRequest{
 		Eid: execution.ID,
 	})
@@ -118,5 +121,5 @@ func (s *InterruptCompensator) interruptTaskExecution(ctx context.Context, execu
 		// 中断失败，忽略状态
 		return errs.ErrInterruptTaskExecutionFailed
 	}
-	return s.execSvc.UpdateState(ctx, domain.ExecutionStateFromProto(resp.GetExecutionState()))
+	return t.execSvc.UpdateState(ctx, domain.ExecutionStateFromProto(resp.GetExecutionState()))
 }

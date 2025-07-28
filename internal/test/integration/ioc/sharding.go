@@ -3,27 +3,30 @@ package ioc
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"gitee.com/flycash/distributed_task_platform/internal/repository/dao"
 	idPkg "gitee.com/flycash/distributed_task_platform/pkg/id_generator"
 	"gitee.com/flycash/distributed_task_platform/pkg/sharding"
 	"github.com/ecodeclub/ekit/retry"
 	"github.com/ego-component/egorm"
 	"github.com/gotomicro/ego/core/econf"
-	"time"
 )
 
-func InitIDGenerator()*idPkg.Generator{
+func InitIDGenerator() *idPkg.Generator {
 	return idPkg.NewGenerator()
 }
 
-func InitShardingTaskDAO(dbs map[string]*egorm.Component,idgen *idPkg.Generator) dao.ShardingTaskDAO {
-	str := sharding.NewShardingStrategy("task","task",2,2)
-	return dao.NewShardingTaskDAO(dbs,idgen,str)
+//nolint:mnd //忽略测试用
+func InitShardingTaskDAO(dbs map[string]*egorm.Component, idgen *idPkg.Generator) dao.ShardingTaskDAO {
+	str := sharding.NewShardingStrategy("task", "task", 2, 2)
+	return dao.NewShardingTaskDAO(dbs, idgen, str)
 }
 
-func InitShardingTaskExecutionDAO(dbs map[string]*egorm.Component,idgen *idPkg.Generator)dao.ShardingTaskExecutionDAO {
-	str := sharding.NewShardingStrategy("task","task_execution",2,4)
-	return dao.NewShardingTaskExecution(dbs,idgen,str)
+//nolint:mnd //忽略测试用
+func InitShardingTaskExecutionDAO(dbs map[string]*egorm.Component, idgen *idPkg.Generator) dao.ShardingTaskExecutionDAO {
+	str := sharding.NewShardingStrategy("task", "task_execution", 2, 4)
+	return dao.NewShardingTaskExecution(dbs, idgen, str)
 }
 
 func InitDBs() map[string]*egorm.Component {

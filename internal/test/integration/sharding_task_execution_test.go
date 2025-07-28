@@ -28,7 +28,7 @@ type ShardingTaskExecutionSuite struct {
 }
 
 func (suite *ShardingTaskExecutionSuite) SetupSuite() {
-	suite.app = ioc.InitSchedulerApp(map[string]invoker.LocalExecuteFunc{},map[string]invoker.LocalPrepareFunc{})
+	suite.app = ioc.InitSchedulerApp(map[string]invoker.LocalExecuteFunc{}, map[string]invoker.LocalPrepareFunc{})
 	suite.shardingTaskDAO = suite.app.ShardingTaskDAO
 	suite.shardingTaskExecutionDAO = suite.app.TaskExecutionDAO
 	suite.dbs = ioc.InitDBs()

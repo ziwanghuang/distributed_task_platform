@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/distributed_task_platform/pkg/loopjob"
 	"gitee.com/flycash/distributed_task_platform/pkg/sharding"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/meoying/dlock-go"
-	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/domain"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
@@ -16,7 +17,6 @@ import (
 	"github.com/gotomicro/ego/core/elog"
 	"go.uber.org/multierr"
 )
-
 
 // ShardingCompensatorV2 分片任务补偿器
 type ShardingCompensatorV2 struct {
@@ -27,10 +27,10 @@ type ShardingCompensatorV2 struct {
 	config       ShardingConfig
 	logger       *elog.Component
 
-	dlockClient dlock.Client
-	sem         loopjob.ResourceSemaphore
+	dlockClient  dlock.Client
+	sem          loopjob.ResourceSemaphore
 	executionStr sharding.ShardingStrategy
-	offsetMap *syncx.Map[string, int]
+	offsetMap    *syncx.Map[string, int]
 }
 
 // NewShardingCompensator 创建分片任务补偿器
@@ -51,10 +51,10 @@ func NewShardingCompensatorV2(
 		taskAcquirer: taskAcquirer,
 		config:       config,
 		logger:       elog.DefaultLogger.With(elog.FieldComponentName("compensator.sharding")),
-		dlockClient: dlockClient,
-		sem:         sem,
+		dlockClient:  dlockClient,
+		sem:          sem,
 		executionStr: executionStr,
-		offsetMap: &syncx.Map[string, int]{},
+		offsetMap:    &syncx.Map[string, int]{},
 	}
 }
 
@@ -62,18 +62,18 @@ func NewShardingCompensatorV2(
 func (r *ShardingCompensatorV2) Start(ctx context.Context) {
 	r.logger.Info("分片任务补偿器启动")
 	const shardingKey = "shardingKey"
-	loopjob.NewShardingLoopJob(r.dlockClient,shardingKey,r.oneloop,r.executionStr,r.sem).Run(ctx)
+	loopjob.NewShardingLoopJob(r.dlockClient, shardingKey, r.oneloop, r.executionStr, r.sem).Run(ctx)
 }
 
-func (r *ShardingCompensatorV2)oneloop(ctx context.Context) error{
+func (r *ShardingCompensatorV2) oneloop(ctx context.Context) error {
 	// 查找可重调度的执行记录
 	// 加载对应表的offset
-	dst,ok := sharding.DstFromCtx(ctx)
+	dst, ok := sharding.DstFromCtx(ctx)
 	if !ok {
 		return errors.New("ctx中未含有表")
 	}
-	tableName := fmt.Sprintf("%s.%s",dst.DB,dst.Table)
-	offset,_ := r.offsetMap.LoadOrStore(tableName, 0)
+	tableName := fmt.Sprintf("%s.%s", dst.DB, dst.Table)
+	offset, _ := r.offsetMap.LoadOrStore(tableName, 0)
 
 	executions, err := r.execSvc.FindShardingParents(
 		ctx,
@@ -116,6 +116,8 @@ func (r *ShardingCompensatorV2)oneloop(ctx context.Context) error{
 }
 
 // handle 执行一轮补偿
+//
+//nolint:dupl //忽略
 func (r *ShardingCompensatorV2) handle(ctx context.Context, parent domain.TaskExecution) error {
 	// 取该父任务下的【所有】子任务
 	children, err := r.execSvc.FindShardingChildren(ctx, parent.ID)

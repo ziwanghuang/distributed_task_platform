@@ -3,10 +3,11 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/distributed_task_platform/pkg/loopjob"
 	"gitee.com/flycash/distributed_task_platform/pkg/sharding"
 	"github.com/meoying/dlock-go"
-	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 
@@ -45,8 +46,6 @@ type SchedulerV2 struct {
 	sem                loopjob.ResourceSemaphore
 	taskStr            sharding.ShardingStrategy
 }
-
-
 
 // NewSchedulerV2 创建调度器实例
 func NewSchedulerV2(
@@ -111,10 +110,11 @@ func (s *SchedulerV2) Start() error {
 	return nil
 }
 
+//nolint:contextcheck //忽略
 func (s *SchedulerV2) scheduleOneLoop(ctx context.Context) error {
 	if ctx.Err() != nil {
 		s.logger.Info("调度循环结束")
-		return nil
+		return ctx.Err()
 	}
 
 	stopRecordExecutionTimeFunc := s.metrics.StartRecordExecutionTime()

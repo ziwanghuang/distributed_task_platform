@@ -11,7 +11,8 @@ type ShardingStrategy struct {
 	tableSharding int64
 	dbSharding    int64
 }
-func NewShardingStrategy(dbPrefix , tablePrefix string, tableSharding,dbSharding int64) ShardingStrategy {
+
+func NewShardingStrategy(dbPrefix, tablePrefix string, tableSharding, dbSharding int64) ShardingStrategy {
 	return ShardingStrategy{
 		dbPrefix:      dbPrefix,
 		tablePrefix:   tablePrefix,
@@ -57,7 +58,6 @@ func (s ShardingStrategy) Broadcast() []Dst {
 func (s ShardingStrategy) TablePrefix() string {
 	return s.tablePrefix
 }
-
 
 type dstKey struct{}
 

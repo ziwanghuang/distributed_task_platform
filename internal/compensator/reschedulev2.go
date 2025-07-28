@@ -3,6 +3,7 @@ package compensator
 import (
 	"context"
 	"fmt"
+
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
 	"gitee.com/flycash/distributed_task_platform/pkg/loopjob"
@@ -11,8 +12,6 @@ import (
 	"github.com/meoying/dlock-go"
 )
 
-
-
 // RescheduleCompensatorV2 重调度补偿器
 type RescheduleCompensatorV2 struct {
 	runner  runner.Runner
@@ -20,8 +19,8 @@ type RescheduleCompensatorV2 struct {
 	config  RescheduleConfig
 	logger  *elog.Component
 
-	dlockClient dlock.Client
-	sem         loopjob.ResourceSemaphore
+	dlockClient  dlock.Client
+	sem          loopjob.ResourceSemaphore
 	executionStr sharding.ShardingStrategy
 }
 
@@ -35,12 +34,12 @@ func NewRescheduleCompensatorV2(
 	executionStr sharding.ShardingStrategy,
 ) *RescheduleCompensatorV2 {
 	return &RescheduleCompensatorV2{
-		runner:  runner,
-		execSvc: execSvc,
-		config:  config,
-		logger:  elog.DefaultLogger.With(elog.FieldComponentName("compensator.reschedule")),
-		dlockClient: dlockClient,
-		sem:         sem,
+		runner:       runner,
+		execSvc:      execSvc,
+		config:       config,
+		logger:       elog.DefaultLogger.With(elog.FieldComponentName("compensator.reschedule")),
+		dlockClient:  dlockClient,
+		sem:          sem,
 		executionStr: executionStr,
 	}
 }
@@ -48,10 +47,8 @@ func NewRescheduleCompensatorV2(
 // Start 启动补偿器
 func (r *RescheduleCompensatorV2) Start(ctx context.Context) {
 	const rescheduleKey = "rescheduleKey"
-	loopjob.NewShardingLoopJob(r.dlockClient,rescheduleKey,r.reschedule,r.executionStr,r.sem).Run(ctx)
+	loopjob.NewShardingLoopJob(r.dlockClient, rescheduleKey, r.reschedule, r.executionStr, r.sem).Run(ctx)
 }
-
-
 
 // reschedule 执行一轮补偿
 func (r *RescheduleCompensatorV2) reschedule(ctx context.Context) error {
