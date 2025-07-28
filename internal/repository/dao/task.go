@@ -21,7 +21,9 @@ const (
 
 // Task 任务表DAO对象
 type Task struct {
-	ID                  int64                                `gorm:"type:bigint;primaryKey;autoIncrement;"`
+	ID    int64 `gorm:"type:bigint;primaryKey;autoIncrement;"`
+	BizID int64 `gorm:"type:bigint unsigned;not null;default:0;comment:biz_id"`
+
 	Name                string                               `gorm:"type:varchar(255);not null;uniqueIndex:uniq_idx_name;comment:'任务名称'"`
 	CronExpr            string                               `gorm:"type:varchar(100);not null;comment:'cron表达式'"`
 	ExecutionMethod     string                               `gorm:"type:ENUM('LOCAL', 'REMOTE');not null;default:'REMOTE';comment:'任务执行方式：LOCAL-本地执行，REMOTE-远程执行'"`

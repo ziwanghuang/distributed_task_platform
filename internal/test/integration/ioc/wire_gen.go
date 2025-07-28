@@ -43,14 +43,20 @@ func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerAp
 	clusterLoadChecker := InitClusterLoadChecker(string2, client)
 	scheduler := InitScheduler(string2, runner, service, executionService, taskAcquirer, registry, clusterLoadChecker)
 	completeConsumer := InitCompleteConsumer(mq, planTaskRunner, service, executionService, taskAcquirer, string2)
+	v2 := InitDBs()
+	generator := InitIDGenerator()
+	shardingTaskDAO := InitShardingTaskDAO(v2, generator)
+	shardingTaskExecutionDAO := InitShardingTaskExecutionDAO(v2, generator)
 	retryCompensator := InitRetryCompensator(executionService, runner)
-	v2 := InitTasks(retryCompensator)
+	v3 := InitTasks(retryCompensator)
 	schedulerApp := &SchedulerApp{
-		Scheduler:    scheduler,
-		TaskSvc:      service,
-		ExecutionSvc: executionService,
-		Consumer:     completeConsumer,
-		Tasks:        v2,
+		Scheduler:        scheduler,
+		TaskSvc:          service,
+		ExecutionSvc:     executionService,
+		Consumer:         completeConsumer,
+		ShardingTaskDAO:  shardingTaskDAO,
+		TaskExecutionDAO: shardingTaskExecutionDAO,
+		Tasks:            v3,
 	}
 	return schedulerApp
 }
@@ -62,6 +68,12 @@ var (
 		InitConsumers,
 		InitRegistry,
 		InitPrometheusClient,
+	)
+	shardingSet = wire.NewSet(
+		InitDBs,
+		InitIDGenerator,
+		InitShardingTaskDAO,
+		InitShardingTaskExecutionDAO,
 	)
 
 	taskSet = wire.NewSet(dao.NewGORMTaskDAO, repository.NewTaskRepository, task.NewService)
@@ -95,11 +107,13 @@ type Task interface {
 }
 
 type SchedulerApp struct {
-	Scheduler    *scheduler.Scheduler
-	TaskSvc      task.Service
-	ExecutionSvc task.ExecutionService
-	Consumer     *CompleteConsumer
-	Tasks        []Task
+	Scheduler        *scheduler.Scheduler
+	TaskSvc          task.Service
+	ExecutionSvc     task.ExecutionService
+	Consumer         *CompleteConsumer
+	ShardingTaskDAO  dao.ShardingTaskDAO
+	TaskExecutionDAO dao.ShardingTaskExecutionDAO
+	Tasks            []Task
 }
 
 func (a *SchedulerApp) StartTasks(ctx context.Context) {

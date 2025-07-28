@@ -39,7 +39,7 @@ type TaskExecution struct {
 	TaskPlanExecID          int64                               `gorm:"type:bigint;not null;comment:'对应Plan的执行计划'"`
 	TaskPlanID              int64                               `gorm:"type:bigint;not null;comment:'对应Plan的ID'"`
 	// 下面这些是 TaskExecution 的自身信息
-	ShardingParentID sql.NullInt64  `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的hardingParentID=父任务ID'"`
+	ShardingParentID sql.NullInt64  `gorm:"type:bigint;comment:'分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID'"`
 	ExecutorNodeID   sql.NullString `gorm:"type:varchar(255);comment:'执行节点的 nodeID，用于记录是哪个节点处理了任务'"`
 	Deadline         int64          `gorm:"type:bigint;not null;comment:'任务执行截止时间（毫秒时间戳）'"`
 	Stime            int64          `gorm:"type:bigint;comment:'开始时间'"`

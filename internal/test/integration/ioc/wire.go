@@ -4,7 +4,6 @@ package ioc
 
 import (
 	"context"
-
 	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
 
 	"gitee.com/flycash/distributed_task_platform/internal/repository"
@@ -26,6 +25,13 @@ var (
 		InitRegistry,
 		InitPrometheusClient,
 	)
+	shardingSet = wire.NewSet(
+		InitDBs,
+		InitIDGenerator,
+		InitShardingTaskDAO,
+		InitShardingTaskExecutionDAO,
+
+		)
 
 	taskSet = wire.NewSet(
 		dao.NewGORMTaskDAO,
@@ -69,12 +75,15 @@ type Task interface {
 }
 
 type SchedulerApp struct {
-	Scheduler    *scheduler.Scheduler
-	TaskSvc      tasksvc.Service
-	ExecutionSvc tasksvc.ExecutionService
-	Consumer     *CompleteConsumer
-	Tasks        []Task
+	Scheduler       *scheduler.Scheduler
+	TaskSvc         tasksvc.Service
+	ExecutionSvc    tasksvc.ExecutionService
+	Consumer        *CompleteConsumer
+	ShardingTaskDAO dao.ShardingTaskDAO
+	TaskExecutionDAO dao.ShardingTaskExecutionDAO
+	Tasks           []Task
 }
+
 
 func (a *SchedulerApp) StartTasks(ctx context.Context) {
 	for _, t := range a.Tasks {
@@ -88,7 +97,7 @@ func InitSchedulerApp(execFunc map[string]invoker.LocalExecuteFunc) *SchedulerAp
 	wire.Build(
 		// 基础设施
 		BaseSet,
-
+		shardingSet,
 		taskSet,
 		taskExecutionSet,
 		planSet,

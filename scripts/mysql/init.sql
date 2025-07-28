@@ -1,20 +1,402 @@
 -- create the databases
-CREATE
-DATABASE IF NOT EXISTS `task`;
+CREATE DATABASE IF NOT EXISTS `task`;
+CREATE DATABASE IF NOT EXISTS `task_0`;
+CREATE DATABASE IF NOT EXISTS `task_1`;
 
 -- create the users for each database
-CREATE
-USER 'task'@'%' IDENTIFIED BY 'task';
-GRANT CREATE
-, ALTER
-, INDEX, LOCK TABLES, REFERENCES,
-UPDATE,
-DELETE
-, DROP
-,
-SELECT,
-INSERT
-ON `task`.* TO 'task'@'%';
+CREATE USER 'task'@'%' IDENTIFIED BY 'task';
+GRANT CREATE, ALTER, INDEX, LOCK TABLES, REFERENCES, UPDATE, DELETE, DROP, SELECT, INSERT
+ON `task_0`.* TO 'task'@'%';
+GRANT CREATE, ALTER, INDEX, LOCK TABLES, REFERENCES, UPDATE, DELETE, DROP, SELECT, INSERT
+ON `task_1`.* TO 'task'@'%';
 
-FLUSH
-PRIVILEGES;
+FLUSH PRIVILEGES;
+
+-- Create tables in task_0 database
+USE `task_0`;
+
+CREATE TABLE IF NOT EXISTS `task_0` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `biz_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'biz_id',
+  `name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `retry_config` JSON COMMENT '重试配置',
+  `schedule_params` JSON COMMENT '每次执行要用到的基础调度参数',
+  `sharding_rule` JSON COMMENT '分片任务需要使用的分片规则',
+  `max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `schedule_node_id` VARCHAR(255) DEFAULT NULL COMMENT '当前抢占的调度节点ID',
+  `next_time` BIGINT NOT NULL COMMENT '下次执行时间',
+  `status` ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE' COMMENT '任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行。处于INACTIVE也可以被再次 ACTIVE',
+  `version` BIGINT NOT NULL DEFAULT 1 COMMENT '版本号，用于乐观锁',
+  `plan_id` BIGINT NOT NULL DEFAULT 0 COMMENT 'planID >0 就说明是 plan中的任务',
+  `type` ENUM('normal', 'plan') NOT NULL DEFAULT 'normal',
+  `exec_expr` VARCHAR(2048) NOT NULL DEFAULT '' COMMENT '执行表达式',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uniq_idx_name` (`name`),
+  INDEX `idx_schedule_node_id_status` (`schedule_node_id`, `status`),
+  INDEX `idx_next_time_status_utime` (`next_time`, `status`, `utime`),
+  INDEX `idx_plan_id` (`plan_id`),
+  INDEX `idx_type` (`type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `task_1` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `biz_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'biz_id',
+  `name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `retry_config` JSON COMMENT '重试配置',
+  `schedule_params` JSON COMMENT '每次执行要用到的基础调度参数',
+  `sharding_rule` JSON COMMENT '分片任务需要使用的分片规则',
+  `max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `schedule_node_id` VARCHAR(255) DEFAULT NULL COMMENT '当前抢占的调度节点ID',
+  `next_time` BIGINT NOT NULL COMMENT '下次执行时间',
+  `status` ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE' COMMENT '任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行。处于INACTIVE也可以被再次 ACTIVE',
+  `version` BIGINT NOT NULL DEFAULT 1 COMMENT '版本号，用于乐观锁',
+  `plan_id` BIGINT NOT NULL DEFAULT 0 COMMENT 'planID >0 就说明是 plan中的任务',
+  `type` ENUM('normal', 'plan') NOT NULL DEFAULT 'normal',
+  `exec_expr` VARCHAR(2048) NOT NULL DEFAULT '' COMMENT '执行表达式',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uniq_idx_name` (`name`),
+  INDEX `idx_schedule_node_id_status` (`schedule_node_id`, `status`),
+  INDEX `idx_next_time_status_utime` (`next_time`, `status`, `utime`),
+  INDEX `idx_plan_id` (`plan_id`),
+  INDEX `idx_type` (`type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create tables in task_1 database
+USE `task_1`;
+
+CREATE TABLE IF NOT EXISTS `task_0` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `biz_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'biz_id',
+  `name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `retry_config` JSON COMMENT '重试配置',
+  `schedule_params` JSON COMMENT '每次执行要用到的基础调度参数',
+  `sharding_rule` JSON COMMENT '分片任务需要使用的分片规则',
+  `max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `schedule_node_id` VARCHAR(255) DEFAULT NULL COMMENT '当前抢占的调度节点ID',
+  `next_time` BIGINT NOT NULL COMMENT '下次执行时间',
+  `status` ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE' COMMENT '任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行。处于INACTIVE也可以被再次 ACTIVE',
+  `version` BIGINT NOT NULL DEFAULT 1 COMMENT '版本号，用于乐观锁',
+  `plan_id` BIGINT NOT NULL DEFAULT 0 COMMENT 'planID >0 就说明是 plan中的任务',
+  `type` ENUM('normal', 'plan') NOT NULL DEFAULT 'normal',
+  `exec_expr` VARCHAR(2048) NOT NULL DEFAULT '' COMMENT '执行表达式',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uniq_idx_name` (`name`),
+  INDEX `idx_schedule_node_id_status` (`schedule_node_id`, `status`),
+  INDEX `idx_next_time_status_utime` (`next_time`, `status`, `utime`),
+  INDEX `idx_plan_id` (`plan_id`),
+  INDEX `idx_type` (`type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `task_1` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `biz_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'biz_id',
+  `name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `retry_config` JSON COMMENT '重试配置',
+  `schedule_params` JSON COMMENT '每次执行要用到的基础调度参数',
+  `sharding_rule` JSON COMMENT '分片任务需要使用的分片规则',
+  `max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `schedule_node_id` VARCHAR(255) DEFAULT NULL COMMENT '当前抢占的调度节点ID',
+  `next_time` BIGINT NOT NULL COMMENT '下次执行时间',
+  `status` ENUM('ACTIVE', 'PREEMPTED', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE' COMMENT '任务状态: ACTIVE-可调度, PREEMPTED-已抢占, INACTIVE-停止执行。处于INACTIVE也可以被再次 ACTIVE',
+  `version` BIGINT NOT NULL DEFAULT 1 COMMENT '版本号，用于乐观锁',
+  `plan_id` BIGINT NOT NULL DEFAULT 0 COMMENT 'planID >0 就说明是 plan中的任务',
+  `type` ENUM('normal', 'plan') NOT NULL DEFAULT 'normal',
+  `exec_expr` VARCHAR(2048) NOT NULL DEFAULT '' COMMENT '执行表达式',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uniq_idx_name` (`name`),
+  INDEX `idx_schedule_node_id_status` (`schedule_node_id`, `status`),
+  INDEX `idx_next_time_status_utime` (`next_time`, `status`, `utime`),
+  INDEX `idx_plan_id` (`plan_id`),
+  INDEX `idx_type` (`type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create task_execution tables in task_0 database
+USE `task_0`;
+
+CREATE TABLE IF NOT EXISTS `task_execution_0` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `task_name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `task_cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `task_execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `task_grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `task_http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `task_retry_config` JSON COMMENT '重试配置',
+  `task_max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `task_version` BIGINT NOT NULL COMMENT '创建时Task的版本号',
+  `task_schedule_node_id` VARCHAR(255) NOT NULL COMMENT '创建此执行的调度节点ID',
+  `task_schedule_params` JSON COMMENT '创建时Task的调度参数快照',
+  `task_plan_exec_id` BIGINT NOT NULL COMMENT '对应Plan的执行计划',
+  `task_plan_id` BIGINT NOT NULL COMMENT '对应Plan的ID',
+  `sharding_parent_id` BIGINT DEFAULT NULL COMMENT '分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID',
+  `executor_node_id` VARCHAR(255) DEFAULT NULL COMMENT '执行节点的 nodeID，用于记录是哪个节点处理了任务',
+  `deadline` BIGINT NOT NULL COMMENT '任务执行截止时间（毫秒时间戳）',
+  `stime` BIGINT COMMENT '开始时间',
+  `etime` BIGINT COMMENT '结束时间',
+  `retry_count` BIGINT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `next_retry_time` BIGINT COMMENT '下次重试时间',
+  `running_progress` INT DEFAULT 0 COMMENT '执行进度0-100，RUNNING状态下有效',
+  `status` ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS') NOT NULL DEFAULT 'PREPARE' COMMENT '执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_task_id` (`task_id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_sharding_parent_id` (`sharding_parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `task_execution_1` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `task_name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `task_cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `task_execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `task_grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `task_http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `task_retry_config` JSON COMMENT '重试配置',
+  `task_max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `task_version` BIGINT NOT NULL COMMENT '创建时Task的版本号',
+  `task_schedule_node_id` VARCHAR(255) NOT NULL COMMENT '创建此执行的调度节点ID',
+  `task_schedule_params` JSON COMMENT '创建时Task的调度参数快照',
+  `task_plan_exec_id` BIGINT NOT NULL COMMENT '对应Plan的执行计划',
+  `task_plan_id` BIGINT NOT NULL COMMENT '对应Plan的ID',
+  `sharding_parent_id` BIGINT DEFAULT NULL COMMENT '分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID',
+  `executor_node_id` VARCHAR(255) DEFAULT NULL COMMENT '执行节点的 nodeID，用于记录是哪个节点处理了任务',
+  `deadline` BIGINT NOT NULL COMMENT '任务执行截止时间（毫秒时间戳）',
+  `stime` BIGINT COMMENT '开始时间',
+  `etime` BIGINT COMMENT '结束时间',
+  `retry_count` BIGINT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `next_retry_time` BIGINT COMMENT '下次重试时间',
+  `running_progress` INT DEFAULT 0 COMMENT '执行进度0-100，RUNNING状态下有效',
+  `status` ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS') NOT NULL DEFAULT 'PREPARE' COMMENT '执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_task_id` (`task_id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_sharding_parent_id` (`sharding_parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `task_execution_2` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `task_name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `task_cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `task_execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `task_grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `task_http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `task_retry_config` JSON COMMENT '重试配置',
+  `task_max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `task_version` BIGINT NOT NULL COMMENT '创建时Task的版本号',
+  `task_schedule_node_id` VARCHAR(255) NOT NULL COMMENT '创建此执行的调度节点ID',
+  `task_schedule_params` JSON COMMENT '创建时Task的调度参数快照',
+  `task_plan_exec_id` BIGINT NOT NULL COMMENT '对应Plan的执行计划',
+  `task_plan_id` BIGINT NOT NULL COMMENT '对应Plan的ID',
+  `sharding_parent_id` BIGINT DEFAULT NULL COMMENT '分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID',
+  `executor_node_id` VARCHAR(255) DEFAULT NULL COMMENT '执行节点的 nodeID，用于记录是哪个节点处理了任务',
+  `deadline` BIGINT NOT NULL COMMENT '任务执行截止时间（毫秒时间戳）',
+  `stime` BIGINT COMMENT '开始时间',
+  `etime` BIGINT COMMENT '结束时间',
+  `retry_count` BIGINT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `next_retry_time` BIGINT COMMENT '下次重试时间',
+  `running_progress` INT DEFAULT 0 COMMENT '执行进度0-100，RUNNING状态下有效',
+  `status` ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS') NOT NULL DEFAULT 'PREPARE' COMMENT '执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_task_id` (`task_id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_sharding_parent_id` (`sharding_parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `task_execution_3` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `task_name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `task_cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `task_execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `task_grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `task_http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `task_retry_config` JSON COMMENT '重试配置',
+  `task_max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `task_version` BIGINT NOT NULL COMMENT '创建时Task的版本号',
+  `task_schedule_node_id` VARCHAR(255) NOT NULL COMMENT '创建此执行的调度节点ID',
+  `task_schedule_params` JSON COMMENT '创建时Task的调度参数快照',
+  `task_plan_exec_id` BIGINT NOT NULL COMMENT '对应Plan的执行计划',
+  `task_plan_id` BIGINT NOT NULL COMMENT '对应Plan的ID',
+  `sharding_parent_id` BIGINT DEFAULT NULL COMMENT '分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID',
+  `executor_node_id` VARCHAR(255) DEFAULT NULL COMMENT '执行节点的 nodeID，用于记录是哪个节点处理了任务',
+  `deadline` BIGINT NOT NULL COMMENT '任务执行截止时间（毫秒时间戳）',
+  `stime` BIGINT COMMENT '开始时间',
+  `etime` BIGINT COMMENT '结束时间',
+  `retry_count` BIGINT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `next_retry_time` BIGINT COMMENT '下次重试时间',
+  `running_progress` INT DEFAULT 0 COMMENT '执行进度0-100，RUNNING状态下有效',
+  `status` ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS') NOT NULL DEFAULT 'PREPARE' COMMENT '执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_task_id` (`task_id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_sharding_parent_id` (`sharding_parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create task_execution tables in task_1 database
+USE `task_1`;
+
+CREATE TABLE IF NOT EXISTS `task_execution_0` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `task_name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `task_cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `task_execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `task_grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `task_http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `task_retry_config` JSON COMMENT '重试配置',
+  `task_max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `task_version` BIGINT NOT NULL COMMENT '创建时Task的版本号',
+  `task_schedule_node_id` VARCHAR(255) NOT NULL COMMENT '创建此执行的调度节点ID',
+  `task_schedule_params` JSON COMMENT '创建时Task的调度参数快照',
+  `task_plan_exec_id` BIGINT NOT NULL COMMENT '对应Plan的执行计划',
+  `task_plan_id` BIGINT NOT NULL COMMENT '对应Plan的ID',
+  `sharding_parent_id` BIGINT DEFAULT NULL COMMENT '分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID',
+  `executor_node_id` VARCHAR(255) DEFAULT NULL COMMENT '执行节点的 nodeID，用于记录是哪个节点处理了任务',
+  `deadline` BIGINT NOT NULL COMMENT '任务执行截止时间（毫秒时间戳）',
+  `stime` BIGINT COMMENT '开始时间',
+  `etime` BIGINT COMMENT '结束时间',
+  `retry_count` BIGINT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `next_retry_time` BIGINT COMMENT '下次重试时间',
+  `running_progress` INT DEFAULT 0 COMMENT '执行进度0-100，RUNNING状态下有效',
+  `status` ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS') NOT NULL DEFAULT 'PREPARE' COMMENT '执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_task_id` (`task_id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_sharding_parent_id` (`sharding_parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `task_execution_1` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `task_name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `task_cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `task_execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `task_grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `task_http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `task_retry_config` JSON COMMENT '重试配置',
+  `task_max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `task_version` BIGINT NOT NULL COMMENT '创建时Task的版本号',
+  `task_schedule_node_id` VARCHAR(255) NOT NULL COMMENT '创建此执行的调度节点ID',
+  `task_schedule_params` JSON COMMENT '创建时Task的调度参数快照',
+  `task_plan_exec_id` BIGINT NOT NULL COMMENT '对应Plan的执行计划',
+  `task_plan_id` BIGINT NOT NULL COMMENT '对应Plan的ID',
+  `sharding_parent_id` BIGINT DEFAULT NULL COMMENT '分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID',
+  `executor_node_id` VARCHAR(255) DEFAULT NULL COMMENT '执行节点的 nodeID，用于记录是哪个节点处理了任务',
+  `deadline` BIGINT NOT NULL COMMENT '任务执行截止时间（毫秒时间戳）',
+  `stime` BIGINT COMMENT '开始时间',
+  `etime` BIGINT COMMENT '结束时间',
+  `retry_count` BIGINT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `next_retry_time` BIGINT COMMENT '下次重试时间',
+  `running_progress` INT DEFAULT 0 COMMENT '执行进度0-100，RUNNING状态下有效',
+  `status` ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS') NOT NULL DEFAULT 'PREPARE' COMMENT '执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_task_id` (`task_id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_sharding_parent_id` (`sharding_parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `task_execution_2` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `task_name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `task_cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `task_execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `task_grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `task_http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `task_retry_config` JSON COMMENT '重试配置',
+  `task_max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `task_version` BIGINT NOT NULL COMMENT '创建时Task的版本号',
+  `task_schedule_node_id` VARCHAR(255) NOT NULL COMMENT '创建此执行的调度节点ID',
+  `task_schedule_params` JSON COMMENT '创建时Task的调度参数快照',
+  `task_plan_exec_id` BIGINT NOT NULL COMMENT '对应Plan的执行计划',
+  `task_plan_id` BIGINT NOT NULL COMMENT '对应Plan的ID',
+  `sharding_parent_id` BIGINT DEFAULT NULL COMMENT '分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID',
+  `executor_node_id` VARCHAR(255) DEFAULT NULL COMMENT '执行节点的 nodeID，用于记录是哪个节点处理了任务',
+  `deadline` BIGINT NOT NULL COMMENT '任务执行截止时间（毫秒时间戳）',
+  `stime` BIGINT COMMENT '开始时间',
+  `etime` BIGINT COMMENT '结束时间',
+  `retry_count` BIGINT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `next_retry_time` BIGINT COMMENT '下次重试时间',
+  `running_progress` INT DEFAULT 0 COMMENT '执行进度0-100，RUNNING状态下有效',
+  `status` ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS') NOT NULL DEFAULT 'PREPARE' COMMENT '执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_task_id` (`task_id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_sharding_parent_id` (`sharding_parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `task_execution_3` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `task_name` VARCHAR(255) NOT NULL COMMENT '任务名称',
+  `task_cron_expr` VARCHAR(100) NOT NULL COMMENT 'cron表达式',
+  `task_execution_method` ENUM('LOCAL', 'REMOTE') NOT NULL DEFAULT 'REMOTE' COMMENT '任务执行方式：LOCAL-本地执行，REMOTE-远程执行',
+  `task_grpc_config` JSON COMMENT 'gRPC配置：{"serviceName": "user-service"}',
+  `task_http_config` JSON COMMENT 'HTTP配置：{"endpoint": "https://host:port/api"}',
+  `task_retry_config` JSON COMMENT '重试配置',
+  `task_max_execution_seconds` BIGINT NOT NULL DEFAULT 86400 COMMENT '最大执行秒数，默认24小时',
+  `task_version` BIGINT NOT NULL COMMENT '创建时Task的版本号',
+  `task_schedule_node_id` VARCHAR(255) NOT NULL COMMENT '创建此执行的调度节点ID',
+  `task_schedule_params` JSON COMMENT '创建时Task的调度参数快照',
+  `task_plan_exec_id` BIGINT NOT NULL COMMENT '对应Plan的执行计划',
+  `task_plan_id` BIGINT NOT NULL COMMENT '对应Plan的ID',
+  `sharding_parent_id` BIGINT DEFAULT NULL COMMENT '分片任务的父任务ID：非分片任务的ShardingParentID=NULL，分片任务的父任务的ShardingParentID=0，分片任务的所有子任务的shardingParentID=父任务ID',
+  `executor_node_id` VARCHAR(255) DEFAULT NULL COMMENT '执行节点的 nodeID，用于记录是哪个节点处理了任务',
+  `deadline` BIGINT NOT NULL COMMENT '任务执行截止时间（毫秒时间戳）',
+  `stime` BIGINT COMMENT '开始时间',
+  `etime` BIGINT COMMENT '结束时间',
+  `retry_count` BIGINT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `next_retry_time` BIGINT COMMENT '下次重试时间',
+  `running_progress` INT DEFAULT 0 COMMENT '执行进度0-100，RUNNING状态下有效',
+  `status` ENUM('PREPARE', 'RUNNING', 'FAILED_RETRYABLE', 'FAILED_RESCHEDULED', 'FAILED', 'SUCCESS') NOT NULL DEFAULT 'PREPARE' COMMENT '执行状态: PREPARE-初始化(没有执行节点在执行）, RUNNING-执行中（有执行节点在执行）, FAILED_RETRYABLE-可重试失败, FAILED_RESCHEDULED-重调度失败， FAILED-失败, SUCCESS-成功',
+  `ctime` BIGINT COMMENT '创建时间',
+  `utime` BIGINT COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_task_id` (`task_id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_sharding_parent_id` (`sharding_parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+

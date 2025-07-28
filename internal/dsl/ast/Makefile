@@ -42,16 +42,9 @@ clean:
 	rm -f $(GENERATED_FILES)
 	@echo "清理完成"
 
-# 测试语法
-test: ast
-	@echo "语法文件测试完成"
 
-# 验证语法文件
-validate:
-	@echo "验证语法文件..."
-	@if [ ! -f $(LEXER) ]; then echo "错误: 找不到词法分析器文件 $(LEXER)"; exit 1; fi
-	@if [ ! -f $(PARSER) ]; then echo "错误: 找不到语法分析器文件 $(PARSER)"; exit 1; fi
-	@echo "语法文件验证通过"
+
+
 
 # 安装ANTLR4 (macOS)
 install-antlr4-mac:
@@ -72,9 +65,6 @@ help:
 	@echo "  all              - 生成所有代码到当前目录 (默认)"
 	@echo "  ast              - 生成ANTLR代码到ast目录"
 	@echo "  generate         - 生成ANTLR代码到当前目录"
-	@echo "  clean            - 清理生成的文件"
-	@echo "  test             - 测试语法文件"
-	@echo "  validate         - 验证语法文件"
 	@echo "  install-antlr4-mac    - 在macOS上安装ANTLR4"
 	@echo "  install-antlr4-ubuntu - 在Ubuntu/Debian上安装ANTLR4"
 	@echo "  help             - 显示此帮助信息" 
