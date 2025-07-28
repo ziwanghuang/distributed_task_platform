@@ -25,11 +25,12 @@ const (
 type ExecutionStatus int32
 
 const (
-	ExecutionStatus_UNKNOWN          ExecutionStatus = 0 // 未知状态
-	ExecutionStatus_RUNNING          ExecutionStatus = 1 // 正在执行
-	ExecutionStatus_FAILED_RETRYABLE ExecutionStatus = 2 // 可重试失败
-	ExecutionStatus_FAILED           ExecutionStatus = 3 // 不可重试失败
-	ExecutionStatus_SUCCESS          ExecutionStatus = 4 // 执行成功
+	ExecutionStatus_UNKNOWN              ExecutionStatus = 0 // 未知状态
+	ExecutionStatus_RUNNING              ExecutionStatus = 1 // 正在执行
+	ExecutionStatus_FAILED_RETRYABLE     ExecutionStatus = 2 // 可重试失败
+	ExecutionStatus_FAILED_RESCHEDULABLE ExecutionStatus = 3 // 可重调度失败
+	ExecutionStatus_FAILED               ExecutionStatus = 4 // 不可重试失败
+	ExecutionStatus_SUCCESS              ExecutionStatus = 5 // 执行成功
 )
 
 // Enum value maps for ExecutionStatus.
@@ -38,15 +39,17 @@ var (
 		0: "UNKNOWN",
 		1: "RUNNING",
 		2: "FAILED_RETRYABLE",
-		3: "FAILED",
-		4: "SUCCESS",
+		3: "FAILED_RESCHEDULABLE",
+		4: "FAILED",
+		5: "SUCCESS",
 	}
 	ExecutionStatus_value = map[string]int32{
-		"UNKNOWN":          0,
-		"RUNNING":          1,
-		"FAILED_RETRYABLE": 2,
-		"FAILED":           3,
-		"SUCCESS":          4,
+		"UNKNOWN":              0,
+		"RUNNING":              1,
+		"FAILED_RETRYABLE":     2,
+		"FAILED_RESCHEDULABLE": 3,
+		"FAILED":               4,
+		"SUCCESS":              5,
 	}
 )
 
@@ -489,6 +492,122 @@ func (x *QueryResponse) GetExecutionState() *ExecutionState {
 	return nil
 }
 
+type PrepareRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Eid      int64                  `protobuf:"varint,1,opt,name=eid,proto3" json:"eid,omitempty"` // execution id
+	TaskId   int64                  `protobuf:"varint,2,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	TaskName string                 `protobuf:"bytes,3,opt,name=task_name,json=taskName,proto3" json:"task_name,omitempty"`
+	// 这里有两部分
+	// 1 一部分是通过管理后台，业务方自己搞的参数
+	// 2. 另外一部分是我们调度用的，比如说 offset, limit
+	// 即包含了业务参数和调度参数 (e.g., offset, limit)
+	Params        map[string]string `protobuf:"bytes,4,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrepareRequest) Reset() {
+	*x = PrepareRequest{}
+	mi := &file_executor_v1_executor_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrepareRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareRequest) ProtoMessage() {}
+
+func (x *PrepareRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_executor_v1_executor_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareRequest.ProtoReflect.Descriptor instead.
+func (*PrepareRequest) Descriptor() ([]byte, []int) {
+	return file_executor_v1_executor_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *PrepareRequest) GetEid() int64 {
+	if x != nil {
+		return x.Eid
+	}
+	return 0
+}
+
+func (x *PrepareRequest) GetTaskId() int64 {
+	if x != nil {
+		return x.TaskId
+	}
+	return 0
+}
+
+func (x *PrepareRequest) GetTaskName() string {
+	if x != nil {
+		return x.TaskName
+	}
+	return ""
+}
+
+func (x *PrepareRequest) GetParams() map[string]string {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+type PrepareResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Params        map[string]string      `protobuf:"bytes,1,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrepareResponse) Reset() {
+	*x = PrepareResponse{}
+	mi := &file_executor_v1_executor_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrepareResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareResponse) ProtoMessage() {}
+
+func (x *PrepareResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_executor_v1_executor_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareResponse.ProtoReflect.Descriptor instead.
+func (*PrepareResponse) Descriptor() ([]byte, []int) {
+	return file_executor_v1_executor_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *PrepareResponse) GetParams() map[string]string {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
 var File_executor_v1_executor_proto protoreflect.FileDescriptor
 
 const file_executor_v1_executor_proto_rawDesc = "" +
@@ -524,18 +643,33 @@ const file_executor_v1_executor_proto_rawDesc = "" +
 	"\fQueryRequest\x12\x10\n" +
 	"\x03eid\x18\x01 \x01(\x03R\x03eid\"U\n" +
 	"\rQueryResponse\x12D\n" +
-	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState*Z\n" +
+	"\x0fexecution_state\x18\x01 \x01(\v2\x1b.executor.v1.ExecutionStateR\x0eexecutionState\"\xd4\x01\n" +
+	"\x0ePrepareRequest\x12\x10\n" +
+	"\x03eid\x18\x01 \x01(\x03R\x03eid\x12\x17\n" +
+	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12\x1b\n" +
+	"\ttask_name\x18\x03 \x01(\tR\btaskName\x12?\n" +
+	"\x06params\x18\x04 \x03(\v2'.executor.v1.PrepareRequest.ParamsEntryR\x06params\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8e\x01\n" +
+	"\x0fPrepareResponse\x12@\n" +
+	"\x06params\x18\x01 \x03(\v2(.executor.v1.PrepareResponse.ParamsEntryR\x06params\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*t\n" +
 	"\x0fExecutionStatus\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\v\n" +
 	"\aRUNNING\x10\x01\x12\x14\n" +
-	"\x10FAILED_RETRYABLE\x10\x02\x12\n" +
+	"\x10FAILED_RETRYABLE\x10\x02\x12\x18\n" +
+	"\x14FAILED_RESCHEDULABLE\x10\x03\x12\n" +
 	"\n" +
-	"\x06FAILED\x10\x03\x12\v\n" +
-	"\aSUCCESS\x10\x042\xe3\x01\n" +
+	"\x06FAILED\x10\x04\x12\v\n" +
+	"\aSUCCESS\x10\x052\xa9\x02\n" +
 	"\x0fExecutorService\x12D\n" +
 	"\aExecute\x12\x1b.executor.v1.ExecuteRequest\x1a\x1c.executor.v1.ExecuteResponse\x12J\n" +
 	"\tInterrupt\x12\x1d.executor.v1.InterruptRequest\x1a\x1e.executor.v1.InterruptResponse\x12>\n" +
-	"\x05Query\x12\x19.executor.v1.QueryRequest\x1a\x1a.executor.v1.QueryResponseB\xbf\x01\n" +
+	"\x05Query\x12\x19.executor.v1.QueryRequest\x1a\x1a.executor.v1.QueryResponse\x12D\n" +
+	"\aPrepare\x12\x1b.executor.v1.PrepareRequest\x1a\x1c.executor.v1.PrepareResponseB\xbf\x01\n" +
 	"\x0fcom.executor.v1B\rExecutorProtoP\x01ZPgitee.com/flycash/distributed_task_platform/api/proto/gen/executor/v1;executorv1\xa2\x02\x03EXX\xaa\x02\vExecutor.V1\xca\x02\vExecutor\\V1\xe2\x02\x17Executor\\V1\\GPBMetadata\xea\x02\fExecutor::V1b\x06proto3"
 
 var (
@@ -552,7 +686,7 @@ func file_executor_v1_executor_proto_rawDescGZIP() []byte {
 
 var (
 	file_executor_v1_executor_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-	file_executor_v1_executor_proto_msgTypes  = make([]protoimpl.MessageInfo, 9)
+	file_executor_v1_executor_proto_msgTypes  = make([]protoimpl.MessageInfo, 13)
 	file_executor_v1_executor_proto_goTypes   = []any{
 		(ExecutionStatus)(0),      // 0: executor.v1.ExecutionStatus
 		(*ExecutionState)(nil),    // 1: executor.v1.ExecutionState
@@ -562,29 +696,37 @@ var (
 		(*InterruptResponse)(nil), // 5: executor.v1.InterruptResponse
 		(*QueryRequest)(nil),      // 6: executor.v1.QueryRequest
 		(*QueryResponse)(nil),     // 7: executor.v1.QueryResponse
-		nil,                       // 8: executor.v1.ExecutionState.RescheduledParamsEntry
-		nil,                       // 9: executor.v1.ExecuteRequest.ParamsEntry
+		(*PrepareRequest)(nil),    // 8: executor.v1.PrepareRequest
+		(*PrepareResponse)(nil),   // 9: executor.v1.PrepareResponse
+		nil,                       // 10: executor.v1.ExecutionState.RescheduledParamsEntry
+		nil,                       // 11: executor.v1.ExecuteRequest.ParamsEntry
+		nil,                       // 12: executor.v1.PrepareRequest.ParamsEntry
+		nil,                       // 13: executor.v1.PrepareResponse.ParamsEntry
 	}
 )
 
 var file_executor_v1_executor_proto_depIdxs = []int32{
-	0, // 0: executor.v1.ExecutionState.status:type_name -> executor.v1.ExecutionStatus
-	8, // 1: executor.v1.ExecutionState.rescheduled_params:type_name -> executor.v1.ExecutionState.RescheduledParamsEntry
-	9, // 2: executor.v1.ExecuteRequest.params:type_name -> executor.v1.ExecuteRequest.ParamsEntry
-	1, // 3: executor.v1.ExecuteResponse.execution_state:type_name -> executor.v1.ExecutionState
-	1, // 4: executor.v1.InterruptResponse.execution_state:type_name -> executor.v1.ExecutionState
-	1, // 5: executor.v1.QueryResponse.execution_state:type_name -> executor.v1.ExecutionState
-	2, // 6: executor.v1.ExecutorService.Execute:input_type -> executor.v1.ExecuteRequest
-	4, // 7: executor.v1.ExecutorService.Interrupt:input_type -> executor.v1.InterruptRequest
-	6, // 8: executor.v1.ExecutorService.Query:input_type -> executor.v1.QueryRequest
-	3, // 9: executor.v1.ExecutorService.Execute:output_type -> executor.v1.ExecuteResponse
-	5, // 10: executor.v1.ExecutorService.Interrupt:output_type -> executor.v1.InterruptResponse
-	7, // 11: executor.v1.ExecutorService.Query:output_type -> executor.v1.QueryResponse
-	9, // [9:12] is the sub-list for method output_type
-	6, // [6:9] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	0,  // 0: executor.v1.ExecutionState.status:type_name -> executor.v1.ExecutionStatus
+	10, // 1: executor.v1.ExecutionState.rescheduled_params:type_name -> executor.v1.ExecutionState.RescheduledParamsEntry
+	11, // 2: executor.v1.ExecuteRequest.params:type_name -> executor.v1.ExecuteRequest.ParamsEntry
+	1,  // 3: executor.v1.ExecuteResponse.execution_state:type_name -> executor.v1.ExecutionState
+	1,  // 4: executor.v1.InterruptResponse.execution_state:type_name -> executor.v1.ExecutionState
+	1,  // 5: executor.v1.QueryResponse.execution_state:type_name -> executor.v1.ExecutionState
+	12, // 6: executor.v1.PrepareRequest.params:type_name -> executor.v1.PrepareRequest.ParamsEntry
+	13, // 7: executor.v1.PrepareResponse.params:type_name -> executor.v1.PrepareResponse.ParamsEntry
+	2,  // 8: executor.v1.ExecutorService.Execute:input_type -> executor.v1.ExecuteRequest
+	4,  // 9: executor.v1.ExecutorService.Interrupt:input_type -> executor.v1.InterruptRequest
+	6,  // 10: executor.v1.ExecutorService.Query:input_type -> executor.v1.QueryRequest
+	8,  // 11: executor.v1.ExecutorService.Prepare:input_type -> executor.v1.PrepareRequest
+	3,  // 12: executor.v1.ExecutorService.Execute:output_type -> executor.v1.ExecuteResponse
+	5,  // 13: executor.v1.ExecutorService.Interrupt:output_type -> executor.v1.InterruptResponse
+	7,  // 14: executor.v1.ExecutorService.Query:output_type -> executor.v1.QueryResponse
+	9,  // 15: executor.v1.ExecutorService.Prepare:output_type -> executor.v1.PrepareResponse
+	12, // [12:16] is the sub-list for method output_type
+	8,  // [8:12] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_executor_v1_executor_proto_init() }
@@ -598,7 +740,7 @@ func file_executor_v1_executor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_executor_v1_executor_proto_rawDesc), len(file_executor_v1_executor_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

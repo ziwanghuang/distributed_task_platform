@@ -3,6 +3,9 @@ package compensator
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/distributed_task_platform/pkg/loopjob"
+	"gitee.com/flycash/distributed_task_platform/pkg/sharding"
+	"github.com/meoying/dlock-go"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
@@ -16,12 +19,16 @@ type RescheduleConfig struct {
 	MinDuration time.Duration // 最小等待时间，防止空转
 }
 
-// RescheduleCompensator 重调度补偿器
+// RescheduleCompensatorV2 重调度补偿器
 type RescheduleCompensator struct {
 	runner  runner.Runner
 	execSvc task.ExecutionService
 	config  RescheduleConfig
 	logger  *elog.Component
+
+	dlockClient dlock.Client
+	sem         loopjob.ResourceSemaphore
+	executionStr sharding.ShardingStrategy
 }
 
 // NewRescheduleCompensator 创建重调度补偿器
@@ -67,6 +74,8 @@ func (r *RescheduleCompensator) Start(ctx context.Context) {
 		}
 	}
 }
+
+
 
 // reschedule 执行一轮补偿
 func (r *RescheduleCompensator) reschedule(ctx context.Context) error {

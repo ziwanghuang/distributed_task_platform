@@ -74,6 +74,8 @@ func TaskExecutionStatusFromProto(status executorv1.ExecutionStatus) TaskExecuti
 		return TaskExecutionStatusFailed
 	case executorv1.ExecutionStatus_FAILED_RETRYABLE:
 		return TaskExecutionStatusFailedRetryable
+	case executorv1.ExecutionStatus_FAILED_RESCHEDULABLE:
+		return TaskExecutionStatusFailedRescheduled
 	default:
 		return TaskExecutionStatusUnknown
 	}

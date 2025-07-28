@@ -17,14 +17,13 @@ type JSONColumn[T any] struct {
 	Valid bool
 }
 
-// Value 返回一个 json 串。类型是 []byte
+// Value 返回一个 json 串。类型是 string
 //
-//nolint:nilnil // 忽略
+//nolint:nilnil //忽略
 func (j JSONColumn[T]) Value() (driver.Value, error) {
 	if !j.Valid {
 		return nil, nil
 	}
-
 	res, err := json.Marshal(j.Val)
 	return string(res), err
 }

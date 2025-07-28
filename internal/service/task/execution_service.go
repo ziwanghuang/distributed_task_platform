@@ -4,12 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"gitee.com/flycash/distributed_task_platform/internal/errs"
 	"gitee.com/flycash/distributed_task_platform/internal/event"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
+	"gitee.com/flycash/distributed_task_platform/internal/service/invoker"
+	"gitee.com/flycash/distributed_task_platform/pkg/grpc/registry"
+	"gitee.com/flycash/distributed_task_platform/pkg/grpc/registry/etcd"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
+	"github.com/ecodeclub/ekit/slice"
 	"github.com/gotomicro/ego/core/elog"
 	"go.uber.org/multierr"
 
@@ -59,6 +64,8 @@ type executionService struct {
 	taskSvc      Service
 	taskAcquirer acquirer.TaskAcquirer  // 任务抢占器
 	producer     event.CompleteProducer // 任务完成事件生产者
+	registry     registry.Registry
+	invoker      invoker.Invoker
 	logger       *elog.Component
 }
 
@@ -69,6 +76,8 @@ func NewExecutionService(
 	taskSvc Service,
 	taskAcquirer acquirer.TaskAcquirer,
 	producer event.CompleteProducer,
+	registry *etcd.Registry,
+	invoker invoker.Invoker,
 ) ExecutionService {
 	return &executionService{
 		nodeID:       nodeID,
@@ -76,6 +85,8 @@ func NewExecutionService(
 		taskSvc:      taskSvc,
 		taskAcquirer: taskAcquirer,
 		producer:     producer,
+		registry:     registry,
+		invoker:      invoker,
 		logger:       elog.DefaultLogger.With(elog.FieldComponentName("service.execution")),
 	}
 }
@@ -85,7 +96,56 @@ func (s *executionService) Create(ctx context.Context, execution domain.TaskExec
 }
 
 func (s *executionService) CreateShardingChildren(ctx context.Context, parent domain.TaskExecution) ([]domain.TaskExecution, error) {
-	return s.repo.CreateShardingChildren(ctx, parent)
+	if parent.Task.ID == 0 {
+		return nil, errors.New("Task.ID不能为空")
+	}
+	shardingRule := parent.Task.ShardingRule
+	if shardingRule == nil {
+		return nil, errs.ErrTaskShardingRuleNotFound
+	}
+
+	var executorNodeIDs []string
+
+	if shardingRule.Type.IsWeightedDynamicRange() {
+		// 发起Prepare调用
+		params, err := s.invoker.Prepare(ctx, parent)
+		if err != nil {
+			return nil, fmt.Errorf("发送GRPC请求失败: %w", err)
+		}
+		// 将获取到的返回参数合并到分片规则中
+		maps.Copy(shardingRule.Params, params)
+
+		// 调用Registry组件获取，执行节点信息列表（信息内含有权重）
+		serviceInstances, err := s.registry.ListServices(ctx, parent.Task.GrpcConfig.ServiceName)
+		if err != nil {
+			return nil, fmt.Errorf("获取执行节点注册信息失败: %w", err)
+		}
+		if len(serviceInstances) == 0 {
+			return nil, fmt.Errorf("未找到任何可用的执行节点")
+		}
+		// 将执行节点的信息注入分片规则中
+		shardingRule.ExecutorNodeInstances = serviceInstances
+		// 按照顺序获取执行节点ID
+		executorNodeIDs = slice.Map(serviceInstances, func(_ int, src registry.ServiceInstance) string {
+			return src.ID
+		})
+	}
+
+	// 计算分片任务需要的分片调度参数
+	scheduleParams := shardingRule.ToScheduleParams()
+
+	s.logger.Info("构建分片规则调度参数成功",
+		elog.Any("executorNodeIDs", executorNodeIDs),
+		elog.Any("scheduleParams", scheduleParams))
+
+	// 创建父任务执行记录
+	parent.Status = domain.TaskExecutionStatusRunning
+	created, err := s.repo.CreateShardingParent(ctx, parent)
+	if err != nil {
+		return nil, err
+	}
+	// 这里有一个要求： executorNodeIDs[i] 与 scheduleParams[i] 是对应关系
+	return s.repo.CreateShardingChildren(ctx, created, executorNodeIDs, scheduleParams)
 }
 
 func (s *executionService) FindByID(ctx context.Context, id int64) (domain.TaskExecution, error) {
@@ -272,14 +332,14 @@ func (s *executionService) setRunningState(ctx context.Context, state domain.Exe
 }
 
 func (s *executionService) updateRetryState(ctx context.Context, execution domain.TaskExecution, state domain.ExecutionState) error {
-	// 增加重试计数
-	execution.RetryCount++
 	// 计算出下次重试时间
 	retryStrategy, _ := retry.NewRetry(execution.Task.RetryConfig.ToRetryComponentConfig())
-	duration, shouldRetry := retryStrategy.NextWithRetries(int32(execution.RetryCount))
+	duration, shouldRetry := retryStrategy.NextWithRetries(int32(execution.RetryCount + 1))
 	if shouldRetry {
 		// 当前不是最后一次重试，计算下次重试时间
 		execution.NextRetryTime = time.Now().Add(duration).UnixMilli()
+		// 增加重试计数
+		execution.RetryCount++
 	} else if !state.Status.IsTerminalStatus() {
 		// 当前是最后一次重试，只要不是终止状态一律设置为失败
 		state.Status = domain.TaskExecutionStatusFailed

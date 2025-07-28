@@ -4,15 +4,13 @@ import (
 	"strconv"
 	"time"
 
+	"gitee.com/flycash/distributed_task_platform/pkg/grpc/registry"
 	"gitee.com/flycash/distributed_task_platform/pkg/retry"
 	"github.com/robfig/cron/v3"
 )
 
 // TaskStatus 任务状态
-type (
-	TaskStatus string
-	TaskType   string
-)
+type TaskStatus string
 
 const (
 	TaskStatusActive    TaskStatus = "ACTIVE"    // 可调度
@@ -29,13 +27,7 @@ type TaskExecutionMethod string
 const (
 	TaskExecutionMethodLocal  TaskExecutionMethod = "LOCAL"
 	TaskExecutionMethodRemote TaskExecutionMethod = "REMOTE"
-	NormalTaskType            TaskType            = "normal"
-	PlanTaskType              TaskType            = "plan"
 )
-
-func (t TaskType) String() string {
-	return string(t)
-}
 
 func (t TaskExecutionMethod) String() string {
 	return string(t)
@@ -49,6 +41,55 @@ func (t TaskExecutionMethod) IsLocal() bool {
 	return t == TaskExecutionMethodLocal
 }
 
+type TaskType string
+
+const (
+	NormalTaskType TaskType = "normal"
+	PlanTaskType   TaskType = "plan"
+)
+
+func (t TaskType) String() string {
+	return string(t)
+}
+
+type ShardingRuleType string
+
+const (
+	ShardingRuleTypeRange                ShardingRuleType = "range"
+	ShardingRuleTypeWeightedDynamicRange ShardingRuleType = "weighted-dynamic-range"
+)
+
+func (t ShardingRuleType) String() string {
+	return string(t)
+}
+
+func (t ShardingRuleType) IsRange() bool {
+	return t == ShardingRuleTypeRange
+}
+
+func (t ShardingRuleType) IsWeightedDynamicRange() bool {
+	return t == ShardingRuleTypeWeightedDynamicRange
+}
+
+type SchedulingStrategy string
+
+const (
+	SchedulingStrategyCPUPriority    SchedulingStrategy = "CPU_PRIORITY"
+	SchedulingStrategyMemoryPriority SchedulingStrategy = "MEMORY_PRIORITY"
+)
+
+func (t SchedulingStrategy) String() string {
+	return string(t)
+}
+
+func (t SchedulingStrategy) IsCPUPriority() bool {
+	return t == SchedulingStrategyCPUPriority
+}
+
+func (t SchedulingStrategy) IsMemoryPriority() bool {
+	return t == SchedulingStrategyMemoryPriority
+}
+
 // Task 任务领域模型
 type Task struct {
 	ID       int64
@@ -59,6 +100,7 @@ type Task struct {
 	Type TaskType
 	// 为了方便测试，这里额外引入了一种本地运行的任务
 	ExecutionMethod     TaskExecutionMethod
+	SchedulingStrategy  SchedulingStrategy
 	GrpcConfig          *GrpcConfig
 	HTTPConfig          *HTTPConfig
 	RetryConfig         *RetryConfig
@@ -138,18 +180,22 @@ type HTTPConfig struct {
 }
 
 type ShardingRule struct {
-	Type   string
-	Params map[string]string
+	Type                  ShardingRuleType           `json:"type"`
+	Params                map[string]string          `json:"params"`
+	ExecutorNodeInstances []registry.ServiceInstance `json:"-"`
 }
 
 // ToScheduleParams 根据分片规则计算出分片任务所需要的调度参数
 func (s *ShardingRule) ToScheduleParams() []map[string]string {
 	// 在后台创建该任务时，应该严格校验下面的参数，此处不要再校验
-	scheduleParams := make([]map[string]string, 0)
-	if s.Type == "range" {
+	switch {
+	case s.Type.IsRange():
 		return (*RangeShardingRule)(s).ToScheduleParams()
+	case s.Type.IsWeightedDynamicRange():
+		return (*WeightedDynamicRangeShardingRule)(s).ToScheduleParams()
+	default:
+		return nil
 	}
-	return scheduleParams
 }
 
 type RangeShardingRule ShardingRule
@@ -164,5 +210,51 @@ func (s *RangeShardingRule) ToScheduleParams() []map[string]string {
 		mp["end"] = strconv.FormatInt((i+1)*step, 10)
 		scheduleParams = append(scheduleParams, mp)
 	}
+	return scheduleParams
+}
+
+type WeightedDynamicRangeShardingRule ShardingRule
+
+func (w *WeightedDynamicRangeShardingRule) ToScheduleParams() []map[string]string {
+	// 解析业务方总任务数
+	totalTasks, err := strconv.ParseInt(w.Params["total_tasks"], 10, 64)
+	if err != nil {
+		return nil
+	}
+
+	// 计算总权重
+	var totalWeight int64
+	for i := range w.ExecutorNodeInstances {
+		totalWeight += w.ExecutorNodeInstances[i].Weight
+	}
+	if totalWeight == 0 {
+		// 所有执行节点的总权重为0，无法进行分片
+		return nil
+	}
+
+	// 计算每个执行节点对应的分片区w
+	scheduleParams := make([]map[string]string, 0, len(w.ExecutorNodeInstances))
+
+	var start, step, end int64
+	// 遍历 N-1 个节点，计算它们的分片
+	for i := 0; i < len(w.ExecutorNodeInstances)-1; i++ {
+		// 根据权重计算当前节点应处理的任务数
+		// 使用浮点数保证精度，然后转换为整数
+		share := float64(totalTasks) * (float64(w.ExecutorNodeInstances[i].Weight) / float64(totalWeight))
+		step = int64(share)
+		end = start + step
+
+		scheduleParams = append(scheduleParams, map[string]string{
+			"start": strconv.FormatInt(start, 10),
+			"end":   strconv.FormatInt(end, 10),
+		})
+		start = end // 下一个分片的起点是当前分片的终点
+	}
+
+	// 最后一个节点获得所有剩余的任务，以避免舍入误差导致任务丢失
+	scheduleParams = append(scheduleParams, map[string]string{
+		"start": strconv.FormatInt(start, 10),
+		"end":   strconv.FormatInt(totalTasks, 10), // 终点即为任务总数
+	})
 	return scheduleParams
 }

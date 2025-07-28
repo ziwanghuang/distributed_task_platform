@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gitee.com/flycash/distributed_task_platform/internal/event/complete"
+	"gitee.com/flycash/distributed_task_platform/internal/event/reportevt"
 	"gitee.com/flycash/distributed_task_platform/internal/service/acquirer"
 	"gitee.com/flycash/distributed_task_platform/internal/service/runner"
 	"gitee.com/flycash/distributed_task_platform/internal/service/task"
@@ -40,21 +41,9 @@ func (c *CompleteConsumer) Start() {
 	}
 }
 
-func InitConsumers(q mq.MQ, nodeID string) map[string]*mqx.Consumer {
-	return map[string]*mqx.Consumer{
-		"executionReportEvent":      initPushMessageConsumer(q, nodeID),
-		"executionBatchReportEvent": initScaleUpConsumer(q, nodeID),
-	}
-}
-
-func initPushMessageConsumer(q mq.MQ, nodeID string) *mqx.Consumer {
+func InitExecutionReportEventConsumer(q mq.MQ, nodeID string, execSvc task.ExecutionService) *reportevt.ReportEventConsumer {
 	topic := "execution_report"
-	return mqx.NewConsumer(name("executionReportEvent", nodeID), q, topic)
-}
-
-func initScaleUpConsumer(q mq.MQ, nodeID string) *mqx.Consumer {
-	topic := "execution_batch_report"
-	return mqx.NewConsumer(name("executionBatchReportEvent", nodeID), q, topic)
+	return reportevt.NewReportEventConsumer(name("executionReportEvent", nodeID), q, topic, execSvc)
 }
 
 func name(eventName, nodeID string) string {

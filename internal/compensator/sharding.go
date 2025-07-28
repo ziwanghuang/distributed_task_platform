@@ -18,7 +18,7 @@ type ShardingConfig struct {
 	MinDuration time.Duration // 最小等待时间，防止空转
 }
 
-// ShardingCompensator 分片任务补偿器
+// ShardingCompensatorV2 分片任务补偿器
 type ShardingCompensator struct {
 	nodeID       string
 	taskSvc      task.Service
@@ -163,7 +163,7 @@ func (r *ShardingCompensator) handle(ctx context.Context, parent domain.TaskExec
 	return errs
 }
 
-// 在 ShardingCompensator 中也需要一个 releaseTask 的辅助方法
+// 在 ShardingCompensatorV2 中也需要一个 releaseTask 的辅助方法
 func (r *ShardingCompensator) releaseTask(ctx context.Context, task domain.Task) {
 	if err := r.taskAcquirer.Release(ctx, task.ID, r.nodeID); err != nil {
 		r.logger.Error("释放任务失败",

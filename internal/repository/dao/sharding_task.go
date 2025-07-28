@@ -167,7 +167,7 @@ func (s ShardingTaskDAO) Renew(ctx context.Context, scheduleNodeID string) error
 
 	var g errgroup.Group
 	for dbName, tables := range dbTables {
-		dbName := dbName // Create local variables to avoid closure issues
+		dbName := dbName
 		tables := tables
 
 		g.Go(func() error {

@@ -18,7 +18,7 @@ type RetryConfig struct {
 	MinDuration            time.Duration `yaml:"minDuration"`            // 最小等待时间，防止空转
 }
 
-// RetryCompensator 重试补偿器
+// RetryCompensatorV2 重试补偿器
 type RetryCompensator struct {
 	runner  runner.Runner
 	execSvc task.ExecutionService

@@ -852,3 +852,213 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = QueryResponseValidationError{}
+
+// Validate checks the field values on PrepareRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *PrepareRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on PrepareRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in PrepareRequestMultiError,
+// or nil if none found.
+func (m *PrepareRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *PrepareRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Eid
+
+	// no validation rules for TaskId
+
+	// no validation rules for TaskName
+
+	// no validation rules for Params
+
+	if len(errors) > 0 {
+		return PrepareRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// PrepareRequestMultiError is an error wrapping multiple validation errors
+// returned by PrepareRequest.ValidateAll() if the designated constraints
+// aren't met.
+type PrepareRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m PrepareRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m PrepareRequestMultiError) AllErrors() []error { return m }
+
+// PrepareRequestValidationError is the validation error returned by
+// PrepareRequest.Validate if the designated constraints aren't met.
+type PrepareRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e PrepareRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e PrepareRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e PrepareRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e PrepareRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e PrepareRequestValidationError) ErrorName() string { return "PrepareRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e PrepareRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sPrepareRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = PrepareRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = PrepareRequestValidationError{}
+
+// Validate checks the field values on PrepareResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *PrepareResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on PrepareResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// PrepareResponseMultiError, or nil if none found.
+func (m *PrepareResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *PrepareResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Params
+
+	if len(errors) > 0 {
+		return PrepareResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// PrepareResponseMultiError is an error wrapping multiple validation errors
+// returned by PrepareResponse.ValidateAll() if the designated constraints
+// aren't met.
+type PrepareResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m PrepareResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m PrepareResponseMultiError) AllErrors() []error { return m }
+
+// PrepareResponseValidationError is the validation error returned by
+// PrepareResponse.Validate if the designated constraints aren't met.
+type PrepareResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e PrepareResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e PrepareResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e PrepareResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e PrepareResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e PrepareResponseValidationError) ErrorName() string { return "PrepareResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e PrepareResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sPrepareResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = PrepareResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = PrepareResponseValidationError{}

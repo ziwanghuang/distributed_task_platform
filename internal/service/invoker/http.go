@@ -13,6 +13,8 @@ import (
 	"github.com/gotomicro/ego/core/elog"
 )
 
+var _ Invoker = &HTTPInvoker{}
+
 type HTTPInvoker struct {
 	logger *elog.Component
 	client *http.Client
@@ -77,4 +79,9 @@ func (i *HTTPInvoker) Run(ctx context.Context, exec domain.TaskExecution) (domai
 		elog.Int("statusCode", resp.StatusCode))
 
 	return domain.ExecutionState{}, nil
+}
+
+func (i *HTTPInvoker) Prepare(_ context.Context, _ domain.TaskExecution) (map[string]string, error) {
+	// TODO implement me
+	panic("implement me")
 }

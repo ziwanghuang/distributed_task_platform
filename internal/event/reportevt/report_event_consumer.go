@@ -13,14 +13,16 @@ import (
 )
 
 type ReportEventConsumer struct {
-	logger   *elog.Component
-	svc      task.ExecutionService
+	execSvc  task.ExecutionService
 	consumer *mqx.Consumer
+	logger   *elog.Component
 }
 
-func NewReportEventConsumer(name string, mq mq.MQ, topic string) *ReportEventConsumer {
+func NewReportEventConsumer(name string, mq mq.MQ, topic string, execSvc task.ExecutionService) *ReportEventConsumer {
 	return &ReportEventConsumer{
 		consumer: mqx.NewConsumer(name, mq, topic),
+		execSvc:  execSvc,
+		logger:   elog.DefaultLogger.With(elog.FieldComponentName("reportevt.ReportEventConsumer")),
 	}
 }
 
@@ -53,7 +55,7 @@ func (c *ReportEventConsumer) consumeExecutionReportEvent(ctx context.Context, m
 		return err
 	}
 
-	err = c.svc.HandleReports(ctx, []*domain.Report{report})
+	err = c.execSvc.HandleReports(ctx, []*domain.Report{report})
 	if err != nil {
 		c.logger.Error("处理异步上报失败",
 			elog.String("step", "consumeExecutionReportEvent"),

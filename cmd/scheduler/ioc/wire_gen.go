@@ -28,24 +28,25 @@ func InitSchedulerApp() *ioc.SchedulerApp {
 	taskAcquirer := ioc.InitMySQLTaskAcquirer(taskRepository)
 	mq := ioc.InitMQ()
 	completeProducer := ioc.InitCompleteProducer(mq)
-	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer)
-	reporterServer := grpc.NewReporterServer(executionService)
 	component := ioc.InitEtcdClient()
-	egrpcComponent := ioc.InitSchedulerNodeGRPCServer(reporterServer, component)
-	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
 	registry := ioc.InitRegistry(component)
 	clientsV2 := ioc.InitExecutorServiceGRPCClients(registry)
 	invoker := ioc.InitInvoker(clientsV2)
+	executionService := task.NewExecutionService(string2, taskExecutionRepository, service, taskAcquirer, completeProducer, registry, invoker)
+	reporterServer := grpc.NewReporterServer(executionService)
+	egrpcComponent := ioc.InitSchedulerNodeGRPCServer(reporterServer, component)
+	planService := task.NewPlanService(taskRepository, taskExecutionRepository)
 	runner := ioc.InitRunner(string2, service, executionService, planService, taskAcquirer, invoker, completeProducer)
 	client := ioc.InitPrometheusClient()
 	clusterLoadChecker := ioc.InitClusterLoadChecker(string2, client)
-	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clientsV2, clusterLoadChecker)
+	executorNodePicker := ioc.InitExecutorNodePicker(client)
+	scheduler := ioc.InitScheduler(string2, runner, service, executionService, taskAcquirer, clientsV2, clusterLoadChecker, executorNodePicker)
 	retryCompensator := ioc.InitRetryCompensator(runner, executionService)
 	rescheduleCompensator := ioc.InitRescheduleCompensator(runner, executionService)
 	shardingCompensator := ioc.InitShardingCompensator(string2, service, executionService, taskAcquirer)
 	interruptCompensator := ioc.InitInterruptCompensator(scheduler, executionService)
 	batchReportEventConsumer := ioc.InitExecutionBatchReportEventConsumer(mq, string2)
-	reportEventConsumer := ioc.InitExecutionReportEventConsumer(mq, string2)
+	reportEventConsumer := ioc.InitExecutionReportEventConsumer(mq, string2, executionService)
 	v2 := ioc.InitTasks(retryCompensator, rescheduleCompensator, shardingCompensator, interruptCompensator, batchReportEventConsumer, reportEventConsumer)
 	schedulerApp := &ioc.SchedulerApp{
 		GRPC:      egrpcComponent,
@@ -66,7 +67,7 @@ var (
 
 	planSet = wire.NewSet(task.NewPlanService)
 
-	schedulerSet = wire.NewSet(ioc.InitNodeID, ioc.InitClusterLoadChecker, ioc.InitScheduler, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients)
+	schedulerSet = wire.NewSet(ioc.InitNodeID, ioc.InitClusterLoadChecker, ioc.InitScheduler, ioc.InitMySQLTaskAcquirer, ioc.InitExecutorServiceGRPCClients, ioc.InitExecutorNodePicker)
 
 	compensatorSet = wire.NewSet(ioc.InitRetryCompensator, ioc.InitRescheduleCompensator, ioc.InitShardingCompensator, ioc.InitInterruptCompensator)
 
