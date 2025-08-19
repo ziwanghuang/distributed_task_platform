@@ -95,7 +95,7 @@ func (s *Executor) runTask(ctx context.Context, eid int64, start, end int) {
 					}
 					return
 				}
-				s.logger.Info(fmt.Sprintf("10000 现进度：%d", progressUnits))
+				s.logger.Info(fmt.Sprintf("现进度：%d", progressUnits))
 				s.states.Store(eid, cur)
 			}
 		case <-reportTicker.C:
