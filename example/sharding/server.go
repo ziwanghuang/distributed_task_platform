@@ -22,7 +22,7 @@ const (
 	serverName          = "shardingJob"
 )
 
-// ExecutorNode 执行节点，封装了MockExecutorService、gRPC服务器和Registry注册
+// ExecutorNode 执行节点
 type ExecutorNode struct {
 	nodeID   string
 	port     int
