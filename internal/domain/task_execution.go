@@ -103,6 +103,9 @@ type TaskExecution struct {
 	Task Task // 创建时刻从Task冗余的信息
 }
 
+// MergeTaskScheduleParams 将新的调度参数合并到执行记录中。
+// 用于重调度场景：执行节点可以在请求重调度时传入新的参数（如 offset、progress），
+// 这些参数会覆盖或追加到原有的调度参数中。
 func (te *TaskExecution) MergeTaskScheduleParams(scheduleParams map[string]string) {
 	if len(scheduleParams) == 0 {
 		return

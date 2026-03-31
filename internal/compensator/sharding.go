@@ -18,12 +18,24 @@ type ShardingConfig struct {
 	MinDuration time.Duration // 最小等待时间，防止空转
 }
 
-// ShardingCompensatorV2 分片任务补偿器
+// ShardingCompensator 分片任务补偿器。
+// 职责：定期扫描所有处于 Running 状态的分片父任务，检查其所有子任务是否都已完成。
+//
+// 补偿逻辑：
+//  1. 分批查询分片父任务（带 offset 分页遍历）
+//  2. 对每个父任务，查询其所有子任务的状态
+//  3. 如果有任何子任务还未完成（非 Success/Failed），跳过本轮等待下次补偿
+//  4. 如果所有子任务都已完成：
+//     - 任一子任务失败 → 父任务标记为 Failed
+//     - 全部成功 → 父任务标记为 Success
+//  5. 释放父任务的抢占锁，更新下次执行时间
+//
+// 边界处理：如果父任务没有任何子任务（创建异常），直接标记为 Failed。
 type ShardingCompensator struct {
 	nodeID       string
 	taskSvc      task.Service
 	execSvc      task.ExecutionService
-	taskAcquirer acquirer.TaskAcquirer // 任务抢占器
+	taskAcquirer acquirer.TaskAcquirer // 任务抢占器，补偿完成后释放锁
 	config       ShardingConfig
 	logger       *elog.Component
 }
@@ -46,7 +58,12 @@ func NewShardingCompensator(
 	}
 }
 
-// Start 启动补偿器
+// Start 启动分片任务补偿器。
+// 采用 offset 分页遍历模式：
+//   - 每轮查询 batchSize 个父任务
+//   - 处理完一批后 offset += len(executions) 继续下一批
+//   - 当没有更多数据时，重置 offset = 0 从头开始，并 sleep 防止空转
+//   - 出错时也递增 offset，避免卡在同一批数据上
 func (r *ShardingCompensator) Start(ctx context.Context) {
 	r.logger.Info("分片任务补偿器启动")
 	offset := 0
@@ -96,7 +113,14 @@ func (r *ShardingCompensator) Start(ctx context.Context) {
 	}
 }
 
-// handle 执行一轮补偿
+// handle 处理单个分片父任务的补偿逻辑。
+// 核心算法：
+//  1. 查询该父任务的所有子任务
+//  2. 遍历子任务状态：发现任何非终止状态的子任务则提前返回（等下次补偿）
+//  3. 所有子任务都已终止后，汇总结果：
+//     - 计算成功百分比作为 progress
+//     - 任一失败 → 父任务 Failed，全部成功 → 父任务 Success
+//  4. 释放任务锁，更新下次执行时间
 //
 //nolint:dupl //忽略
 func (r *ShardingCompensator) handle(ctx context.Context, parent domain.TaskExecution) error {

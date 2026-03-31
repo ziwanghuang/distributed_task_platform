@@ -184,7 +184,9 @@ func (r *ShardingCompensatorV2) handle(ctx context.Context, parent domain.TaskEx
 	return errs
 }
 
-// 在 ShardingCompensatorV2 中也需要一个 releaseTask 的辅助方法
+// releaseTask 释放任务的 CAS 抢占锁。
+// 分片父任务处理完毕后（无论成功或失败），都需要释放任务的 CAS 抢占，
+// 使得任务可以在下一个调度周期被重新抢占和执行。
 func (r *ShardingCompensatorV2) releaseTask(ctx context.Context, task domain.Task) {
 	if err := r.taskAcquirer.Release(ctx, task.ID, r.nodeID); err != nil {
 		r.logger.Error("释放任务失败",

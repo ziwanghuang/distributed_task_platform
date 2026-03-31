@@ -79,6 +79,8 @@ func (p planService) getPlanData(ctx context.Context, planID int64) (plan domain
 	return plan, planExection, planTasks, planTaskExecs, err
 }
 
+// GetPlan 构建并返回完整的 DAG 工作流模型。
+// 流程：并发获取数据 → 转换为 Plan 领域模型（含 DAG 图结构）。
 func (p planService) GetPlan(ctx context.Context, planID int64) (domain.Plan, error) {
 	// 并发获取 Plan 相关的所有数据
 	repoPlan, repoPlanExec, tasks, executions, err := p.getPlanData(ctx, planID)

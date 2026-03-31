@@ -1,0 +1,106 @@
+# ============================================================
+# Docker 环境专用配置文件
+# ============================================================
+# 与 config.yaml 的区别：
+#   - 所有中间件地址从 localhost 替换为 Docker Compose 服务名
+#   - MySQL 端口使用容器内部端口 3306（而非宿主机映射的 13316）
+#   - Prometheus targets 使用 Docker 内部网络地址
+# ============================================================
+
+log:
+  debug: true
+
+mysql:
+  dsn: "root:root@tcp(mysql:3306)/task?charset=utf8mb4&collation=utf8mb4_0900_ai_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true&interpolateParams=true"
+
+redis:
+  addr: "redis:6379"
+
+mq:
+  kafka:
+    network: "tcp"
+    addr: "kafka:9094"
+
+etcd:
+  addrs:
+    - "etcd:2379"
+  connectTimeout: "1s"
+  secure: false
+
+cache:
+  local:
+    capacity: 1000000
+  requestTimeout: 3000000000
+  valueExpiration: 600000000000
+
+prometheus:
+  url: "http://prometheus:9090"
+
+server:
+  scheduler:
+    grpc:
+      host: "0.0.0.0"
+      port: 9002
+  governor:
+    host: "0.0.0.0"
+    port: 9003
+  executor:
+    grpc:
+      host: "0.0.0.0"
+      port: 9004
+
+scheduler:
+  batchTimeout: 3000000000
+  batchSize: 100
+  preemptedTimeout: 600000000000
+  scheduleInterval: 10000000000
+  renewInterval: 5000000000
+  maxConcurrentTasks: 1000
+  tokenAcquireTimeout: 3000000000
+  pollInterval: 1000000000
+  reportTimeout: 10000000000
+
+intelligentScheduling:
+  jobName: "executors"
+  topNCandidates: 3
+  timeWindow: 30000000000
+  queryTimeout: 5000000000
+
+loadChecker:
+  limiter:
+    rateLimit: 10.0
+    burstSize: 20
+    waitDuration: 5000000000
+  database:
+    threshold: 100000000
+    timeWindow: 300000000000
+    backoffDuration: 10000000000
+  cluster:
+    thresholdRatio: 1.2
+    timeWindow: 300000000000
+    slowdownMultiplier: 2.0
+    minBackoffDuration: 5000000000
+
+compensator:
+  retry:
+    maxRetryCount: 3
+    prepareTimeoutWindowMs: 10000000000
+    batchSize: 100
+    minDuration: 1000000000
+  reschedule:
+    batchSize: 100
+    minDuration: 1000000000
+  sharding:
+    batchSize: 100
+    minDuration: 1000000000
+  interrupt:
+    batchSize: 100
+    minDuration: 1000000000
+
+executionReportEvent:
+  topic: "execution_report"
+  partitions: 1
+
+executionBatchReportEvent:
+  topic: "execution_batch_report"
+  partitions: 1

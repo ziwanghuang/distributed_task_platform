@@ -24,7 +24,14 @@ type RetryCompensatorV2 struct {
 	executionStr sharding.ShardingStrategy
 }
 
-// NewRetryCompensator 创建重试补偿器
+// NewRetryCompensatorV2 创建 V2 版重试补偿器实例。
+// 参数说明：
+//   - runner: 任务运行器，调用其 Retry 方法重新执行失败任务
+//   - execSvc: 执行记录服务
+//   - config: 重试补偿配置
+//   - dlockClient: 分布式锁客户端
+//   - sem: 资源信号量
+//   - executionStr: 分库分表路由策略
 func NewRetryCompensatorV2(
 	runner runner.Runner,
 	execSvc task.ExecutionService,

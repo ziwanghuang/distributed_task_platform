@@ -95,6 +95,13 @@ func (s *executionService) Create(ctx context.Context, execution domain.TaskExec
 	return s.repo.Create(ctx, execution)
 }
 
+// CreateShardingChildren 创建分片任务的执行记录（1个父 + N个子）。
+// 这是分片任务执行的关键步骤：
+//  1. 对于加权动态范围分片：先调用执行节点的 Prepare 接口获取分片参数，
+//     然后从 Registry 获取所有可用执行节点信息（含权重），按权重分配数据范围
+//  2. 调用 ShardingRule.ToScheduleParams() 计算每个分片的调度参数
+//  3. 先创建父执行记录（状态 = Running），再批量创建子执行记录
+//  4. 要求 executorNodeIDs[i] 与 scheduleParams[i] 一一对应
 func (s *executionService) CreateShardingChildren(ctx context.Context, parent domain.TaskExecution) ([]domain.TaskExecution, error) {
 	if parent.Task.ID == 0 {
 		return nil, errors.New("Task.ID不能为空")
@@ -192,6 +199,9 @@ func (s *executionService) UpdateScheduleResult(ctx context.Context, id int64, s
 	return s.repo.UpdateScheduleResult(ctx, id, status, progress, endTime, scheduleParams, executorNodeID)
 }
 
+// HandleReports 批量处理执行节点上报的执行状态。
+// 由 MQ 消费者调用，逐条委托给 UpdateState 处理状态机迁移。
+// 采用"尽力而为"策略：单条失败不影响其他记录的处理，最终返回聚合错误。
 func (s *executionService) HandleReports(ctx context.Context, reports []*domain.Report) error {
 	if len(reports) == 0 {
 		return nil
@@ -226,6 +236,21 @@ func (s *executionService) HandleReports(ctx context.Context, reports []*domain.
 	return err
 }
 
+// UpdateState 执行记录状态机核心方法 —— 处理执行节点上报的状态变更。
+// 这是整个系统中最核心的状态流转逻辑，所有任务状态变更都经过此方法。
+//
+// 状态迁移规则：
+//
+//	┌─────────┐  Running   ┌─────────┐  Success/Failed  ┌──────────┐
+//	│ Prepare ├───────────>│ Running ├──────────────────>│ Terminal │
+//	└─────────┘            └────┬────┘                   └──────────┘
+//	                            │ FailedRetryable
+//	                            v
+//	                    ┌───────────────┐  MaxRetry  ┌──────────┐
+//	                    │ WaitingRetry  ├───────────>│  Failed  │
+//	                    └───────────────┘            └──────────┘
+//
+// 约束：已处于终止状态（Success/Failed/Cancelled）的记录不允许再次状态迁移。
 func (s *executionService) UpdateState(ctx context.Context, state domain.ExecutionState) error {
 	execution, err := s.FindByID(ctx, state.ID)
 	if err != nil {
@@ -331,6 +356,15 @@ func (s *executionService) setRunningState(ctx context.Context, state domain.Exe
 	return nil
 }
 
+// updateRetryState 处理"可重试的失败"状态（FailedRetryable）。
+// 这是重试机制的核心逻辑：
+//  1. 根据任务配置的重试策略（指数退避/固定间隔等）计算下次重试时间
+//  2. 判断是否已达到最大重试次数
+//  3. 未达到：递增重试计数，设置下次重试时间，状态保持 FailedRetryable
+//  4. 已达到：将状态强制设置为 Failed（终止），返回 ErrExecutionMaxRetriesExceeded
+//
+// 无论是否达到最大重试次数，都会更新数据库记录（主要是重试计数），
+// 这样重试补偿器在下一轮扫描时能正确判断重试次数。
 func (s *executionService) updateRetryState(ctx context.Context, execution domain.TaskExecution, state domain.ExecutionState) error {
 	// 计算出下次重试时间
 	retryStrategy, _ := retry.NewRetry(execution.Task.RetryConfig.ToRetryComponentConfig())
@@ -407,6 +441,11 @@ func (s *executionService) releaseTask(ctx context.Context, task domain.Task) {
 	}
 }
 
+// sendCompletedEvent 发送任务完成事件到 MQ。
+// 完成事件驱动两个下游消费者：
+//  1. 对于 DAG 工作流中的任务：触发 PlanTaskRunner.NextStep，驱动后继任务
+//  2. 对于独立任务：目前无额外处理（预留扩展点）
+// 只有终止状态（Success/Failed/Cancelled）才会发送事件。
 func (s *executionService) sendCompletedEvent(ctx context.Context, state domain.ExecutionState, execution domain.TaskExecution) {
 	if !state.Status.IsTerminalStatus() {
 		// 非终止状态不用做处理

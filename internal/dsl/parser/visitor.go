@@ -224,6 +224,9 @@ func (v *TaskOrchestrationVisitor) VisitProgram(ctx *parser.ProgramContext) inte
 	return v.mergePlan(plans)
 }
 
+// VisitJoinGroup 处理汇聚组语法 "{A, B, C}"。
+// 汇聚组表示多个前驱任务的依赖关系：{A, B, C} -> D 表示 A、B、C 都完成后才执行 D。
+// 内部将汇聚组转换为 OrNode（所有任务都需要成功）。
 func (v *TaskOrchestrationVisitor) VisitJoinGroup(ctx *parser.JoinGroupContext) interface{} {
 	// 汇聚组 {A,B,C} 表示 {A,B,C}->D，即 A、B、C 都成功后执行 D
 	tasks := ctx.AllTask()

@@ -16,7 +16,15 @@ type RescheduleConfig struct {
 	MinDuration time.Duration // 最小等待时间，防止空转
 }
 
-// RescheduleCompensatorV2 重调度补偿器
+// RescheduleCompensator 重调度补偿器。
+// 定期扫描处于 FailedRescheduled 状态的执行记录，
+// 通过 Runner.Reschedule 将任务重新调度到指定的执行节点。
+//
+// 与 RetryCompensator 的区别：
+//   - Retry：排除失败节点，随机选择其他节点重试
+//   - Reschedule：指定到原执行节点重新执行（如节点恢复后继续执行）
+//
+// 使用场景：执行节点临时不可用后恢复，需要在同一节点继续执行（保持本地状态）。
 type RescheduleCompensator struct {
 	runner  runner.Runner
 	execSvc task.ExecutionService

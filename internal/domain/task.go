@@ -179,6 +179,9 @@ type HTTPConfig struct {
 	Params   map[string]string `json:"params"`
 }
 
+// ShardingRule 分片规则。
+// 定义了如何将一个大任务拆分成多个子任务并行执行。
+// Type 决定分片策略，Params 是策略参数，ExecutorNodeInstances 是可用执行节点列表。
 type ShardingRule struct {
 	Type                  ShardingRuleType           `json:"type"`
 	Params                map[string]string          `json:"params"`

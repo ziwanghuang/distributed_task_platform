@@ -357,6 +357,9 @@ func (g *GORMTaskExecutionDAO) FindReschedulableExecutions(ctx context.Context, 
 	return executions, err
 }
 
+// FindTimeoutExecutions 查找已超时的执行记录。
+// SQL 条件：deadline <= now AND status = 'RUNNING'
+// 即：deadline 已过但状态仍为 RUNNING 的记录，需要由中断补偿器发送中断信号。
 func (g *GORMTaskExecutionDAO) FindTimeoutExecutions(ctx context.Context, limit int) ([]TaskExecution, error) {
 	var executions []TaskExecution
 	now := time.Now().UnixMilli()

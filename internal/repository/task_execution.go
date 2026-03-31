@@ -232,7 +232,12 @@ func (r *taskExecutionRepository) FindTimeoutExecutions(ctx context.Context, lim
 	}), nil
 }
 
-// toEntity 将领域模型转换为DAO模型
+// toEntity 将 domain.TaskExecution 领域模型转换为 dao.TaskExecution 数据库模型。
+// 转换重点：
+//   - 执行记录中冗余了 Task 的核心字段（TaskName/TaskCronExpr/TaskGrpcConfig 等），
+//     避免运行时再去 join tasks 表查询
+//   - ShardingParentID: nil → SQL NULL; 非nil → 实际值
+//   - ExecutorNodeID: 空字符串 → SQL NULL; 非空 → 实际值
 func (r *taskExecutionRepository) toEntity(execution domain.TaskExecution) dao.TaskExecution {
 	var grpcConfig sqlx.JSONColumn[domain.GrpcConfig]
 	if execution.Task.GrpcConfig != nil {

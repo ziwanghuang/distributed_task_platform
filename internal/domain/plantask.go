@@ -84,6 +84,8 @@ func (p *PlanTask) preOneSuccess() bool {
 	return false
 }
 
+// newAstExecution 将领域层的 TaskExecution 转换为 DSL parser 层的 Execution 对象。
+// 用于在计算后继节点时将当前执行状态传递给 AST 节点的 NextNodes 方法。
 func newAstExecution(execution TaskExecution) parser.Execution {
 	return parser.Execution{
 		Status: parser.TaskExecutionStatus(execution.Status.String()),

@@ -20,12 +20,22 @@ type InterruptConfig struct {
 	MinDuration time.Duration // 最小等待时间，防止空转
 }
 
-// InterruptCompensator 中断补偿器
+// InterruptCompensator 中断补偿器。
+// 定期扫描超时的执行记录（Running 状态且超过配置的超时时间），
+// 向执行节点发送 gRPC Interrupt 请求，要求中止任务执行。
+//
+// 中断流程：
+//  1. 查询超时的执行记录
+//  2. 对每条记录，通过 gRPC 客户端向执行节点发送 InterruptRequest
+//  3. 执行节点返回 InterruptResponse（含中断后的执行状态）
+//  4. 将中断后的状态更新到数据库
+//
+// 防空转机制：同 RetryCompensator，通过 MinDuration 防止空转。
 type InterruptCompensator struct {
 	execSvc     task.ExecutionService
 	config      InterruptConfig
 	logger      *elog.Component
-	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池
+	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池，直接发送中断请求
 }
 
 // NewInterruptCompensator 创建中断补偿器

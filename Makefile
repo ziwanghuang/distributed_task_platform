@@ -73,3 +73,31 @@ run_scheduler:
 	@sleep 15
 	@cd cmd/scheduler && export EGO_DEBUG=true && go run main.go --config=../../config/config.yaml
 
+# ---- Docker 相关目标 ----
+
+# 构建 Docker 镜像
+.PHONY: docker-build
+docker-build:
+	@docker build -t task-scheduler:latest .
+
+# 启动所有服务（含中间件 + scheduler）
+.PHONY: docker-up
+docker-up:
+	@docker compose up -d
+
+# 停止并清理所有服务和数据卷
+.PHONY: docker-down
+docker-down:
+	@docker compose down -v
+
+# 重新构建并启动（代码变更后使用）
+.PHONY: docker-rebuild
+docker-rebuild:
+	@docker compose up -d --build
+
+# 查看所有服务日志
+.PHONY: docker-logs
+docker-logs:
+	@docker compose logs -f
+
+

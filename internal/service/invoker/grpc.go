@@ -12,7 +12,15 @@ import (
 
 var _ Invoker = &GRPCInvoker{}
 
-// GRPCInvoker 远程执行器
+// GRPCInvoker 基于 gRPC 协议的远程任务执行器。
+// 通过 ClientsV2 连接执行节点的 ExecutorService，发送执行/预处理请求。
+//
+// 调用链路：
+//
+//	GRPCInvoker.Run → ClientsV2.Get(serviceName) → RoutingPicker.Pick → gRPC Execute
+//
+// context 中携带的路由信息（SpecificNodeID/ExcludedNodeID）
+// 会被 RoutingPicker 消费，实现指定节点/排除节点的智能路由。
 type GRPCInvoker struct {
 	grpcClients *grpc.ClientsV2[executorv1.ExecutorServiceClient] // gRPC客户端池
 	logger      *elog.Component
@@ -32,6 +40,9 @@ func (r *GRPCInvoker) Name() string {
 	return "GRPC"
 }
 
+// Run 通过 gRPC 远程调用执行节点执行任务。
+// 参数通过 exec.GRPCParams() 从执行记录的调度参数中提取，
+// 执行节点返回的 ExecutionState 经过 proto → domain 转换后返回。
 func (r *GRPCInvoker) Run(ctx context.Context, exec domain.TaskExecution) (domain.ExecutionState, error) {
 	client := r.grpcClients.Get(exec.Task.GrpcConfig.ServiceName)
 	// 发送执行请求
@@ -47,6 +58,9 @@ func (r *GRPCInvoker) Run(ctx context.Context, exec domain.TaskExecution) (domai
 	return domain.ExecutionStateFromProto(resp.GetExecutionState()), nil
 }
 
+// Prepare 通过 gRPC 调用执行节点的 Prepare 接口，获取分片任务的预处理参数。
+// 执行节点在 Prepare 阶段计算分片所需的参数（如数据范围、总行数等），
+// 返回的参数会被合并到 ShardingRule.Params 中用于后续分片计算。
 func (r *GRPCInvoker) Prepare(ctx context.Context, exec domain.TaskExecution) (map[string]string, error) {
 	client := r.grpcClients.Get(exec.Task.GrpcConfig.ServiceName)
 	// 发送执行请求

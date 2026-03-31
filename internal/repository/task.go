@@ -1,3 +1,13 @@
+// Package repository 是数据仓库层，封装了领域模型（domain）与数据访问对象（DAO）之间的转换逻辑。
+//
+// 本包遵循 DDD（领域驱动设计）的仓库模式：
+//   - 上层（Service）只接触 domain 领域模型
+//   - 下层（DAO）只接触数据库表模型
+//   - Repository 负责两者之间的双向转换（toEntity / toDomain）
+//
+// 主要仓库接口：
+//   - TaskRepository: 任务定义的持久化操作（CRUD、CAS 抢占、续约、释放等）
+//   - TaskExecutionRepository: 执行记录的持久化操作（创建、状态更新、各类查询等）
 package repository
 
 import (
@@ -10,31 +20,41 @@ import (
 	"github.com/ecodeclub/ekit/slice"
 )
 
+// TaskRepository 定义了任务定义层面的数据仓库接口。
+//
+// 所有方法的返回值都是 domain.Task 领域模型，调用方无需感知底层数据库表结构。
+// 关键操作说明：
+//   - Acquire/Release/Renew: 实现了基于 CAS（Compare-And-Swap）的分布式任务抢占机制
+//   - UpdateNextTime/UpdateScheduleParams: 通过乐观锁（Version）保证并发安全
 type TaskRepository interface {
-	// Create 创建任务
 	Create(ctx context.Context, task domain.Task) (domain.Task, error)
-	// GetByID 根据ID获取任务
 	GetByID(ctx context.Context, id int64) (domain.Task, error)
-	// SchedulableTasks 获取可调度的任务列表，preemptedTimeoutMs 表示处于 PREEMPTED 状态任务的超时时间（毫秒）
+	// SchedulableTasks 查询可调度任务。条件：NextTime 已到 + 状态为 ACTIVE，
+	// 或状态为 PREEMPTED 但超时未续约（疑似僵尸任务）。
 	SchedulableTasks(ctx context.Context, preemptedTimeoutMs int64, limit int) ([]domain.Task, error)
-	// Acquire 抢占任务
+	// Acquire CAS 抢占任务。通过 version 乐观锁将状态从 ACTIVE 改为 PREEMPTED，
+	// 同时记录 scheduleNodeID。失败返回 ErrTaskPreemptFailed。
 	Acquire(ctx context.Context, id, version int64, scheduleNodeID string) (domain.Task, error)
-	// Release 释放任务
+	// Release 释放任务抢占。将状态从 PREEMPTED 改回 ACTIVE，清除 scheduleNodeID。
 	Release(ctx context.Context, id int64, scheduleNodeID string) (domain.Task, error)
-	// Renew 续约所有抢占到的任务
+	// Renew 批量续约。更新当前节点抢占的所有任务的 utime 和 version，
+	// 防止被其他节点判定为僵尸任务。
 	Renew(ctx context.Context, scheduleNodeID string) error
-	// UpdateNextTime 更新任务的下次执行时间
+	// UpdateNextTime 更新下次执行时间（乐观锁 CAS）。
 	UpdateNextTime(ctx context.Context, id, version, nextTime int64) (domain.Task, error)
-	// UpdateScheduleParams 更新调度参数
+	// UpdateScheduleParams 更新调度参数（乐观锁 CAS）。
 	UpdateScheduleParams(ctx context.Context, id, version int64, scheduleParams map[string]string) (domain.Task, error)
-	// FindByPlanID 根据计划ID获取所有子任务
+	// FindByPlanID 查询指定 Plan 下的所有子任务。
 	FindByPlanID(ctx context.Context, planID int64) ([]domain.Task, error)
 }
 
+// taskRepository 是 TaskRepository 接口的默认实现。
+// 内部持有 TaskDAO，负责 domain.Task ↔ dao.Task 的双向转换。
 type taskRepository struct {
 	dao dao.TaskDAO
 }
 
+// NewTaskRepository 创建任务仓库实例。
 func NewTaskRepository(taskDAO dao.TaskDAO) TaskRepository {
 	return &taskRepository{dao: taskDAO}
 }
@@ -111,7 +131,11 @@ func (r *taskRepository) UpdateScheduleParams(ctx context.Context, id, version i
 	return r.toDomain(task), nil
 }
 
-// toEntity 将领域模型转换为DAO模型
+// toEntity 将 domain.Task 领域模型转换为 dao.Task 数据库模型。
+// 转换重点：
+//   - 可选字段（GrpcConfig/HTTPConfig/RetryConfig 等指针类型）转为 sqlx.JSONColumn（带 Valid 标记）
+//   - ScheduleNodeID 从 string 转为 sql.NullString
+//   - 枚举类型（ExecutionMethod/SchedulingStrategy/Status）转为字符串
 func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 	var scheduleNodeID sql.NullString
 	if task.ScheduleNodeID != "" {
@@ -165,7 +189,11 @@ func (r *taskRepository) toEntity(task domain.Task) dao.Task {
 	}
 }
 
-// toDomain 将DAO模型转换为领域模型
+// toDomain 将 dao.Task 数据库模型转换为 domain.Task 领域模型。
+// 转换重点：
+//   - sqlx.JSONColumn（带 Valid 标记）转为 Go 指针类型（nil 表示未配置）
+//   - sql.NullString 转为普通 string
+//   - 字符串枚举转为 domain 包中的强类型枚举
 func (r *taskRepository) toDomain(daoTask *dao.Task) domain.Task {
 	var scheduleNodeID string
 	if daoTask.ScheduleNodeID.Valid {

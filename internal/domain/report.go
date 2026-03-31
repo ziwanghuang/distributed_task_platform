@@ -22,6 +22,8 @@ type ExecutionState struct {
 	ExecutorNodeID string `json:"executorNodeId"`
 }
 
+// ExecutionStateFromProto 将 protobuf 定义的 ExecutionState 消息转换为领域对象。
+// 用于 gRPC ReporterServer 接收到上报请求时的协议转换。
 func ExecutionStateFromProto(protoState *executorv1.ExecutionState) ExecutionState {
 	if protoState == nil {
 		return ExecutionState{}

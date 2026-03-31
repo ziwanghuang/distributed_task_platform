@@ -55,8 +55,11 @@ func (a AndNode) ChildNodes() []string {
 	})
 }
 
+// OrNode 表示 OR 并行分支节点（语法：A || B）。
+// 前驱成功后，所有子任务同时启动执行。
+// 只要有任意一个子任务成功，OR 节点即算成功。
 type OrNode struct {
-	tasks []SimpleNode
+	tasks []SimpleNode // 并行执行的子任务列表
 }
 
 func NewOrTask(tasks ...SimpleNode) OrNode {

@@ -18,10 +18,15 @@ type RetryConfig struct {
 	MinDuration            time.Duration `yaml:"minDuration"`            // 最小等待时间，防止空转
 }
 
-// RetryCompensatorV2 重试补偿器
+// RetryCompensator 重试补偿器。
+// 定期扫描数据库中处于 FailedRetryable 状态且已到达下次重试时间的执行记录，
+// 通过 Runner.Retry 发起重试执行（会排除上次失败的执行节点）。
+//
+// 防空转机制：每轮处理完后检查耗时，如果小于 MinDuration 则 sleep 补齐，
+// 避免在无待重试任务时 CPU 空转。
 type RetryCompensator struct {
-	runner  runner.Runner
-	execSvc task.ExecutionService
+	runner  runner.Runner           // 重试执行器，内部会重新抢占任务并发起远程调用
+	execSvc task.ExecutionService   // 执行服务，查询可重试的执行记录
 	config  RetryConfig
 	logger  *elog.Component
 }

@@ -35,6 +35,9 @@ func InitLimiterLoadChecker() *loadchecker.LimiterChecker {
 	return loadchecker.NewLimiterChecker(cfg)
 }
 
+// InitDatabaseLoadChecker 初始化数据库负载检查器。
+// 通过 Prometheus 查询 MySQL 响应时间指标，
+// 当平均响应时间超过阈值（默认 100ms）时触发退避，降低调度频率。
 func InitDatabaseLoadChecker(client prometheusapi.Client) *loadchecker.DatabaseLoadChecker {
 	var cfg loadchecker.DatabaseLoadConfig
 	err := econf.UnmarshalKey("loadChecker.database", &cfg)

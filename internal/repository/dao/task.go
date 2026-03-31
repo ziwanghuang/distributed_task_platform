@@ -128,6 +128,12 @@ func (g *GORMTaskDAO) FindSchedulableTasks(ctx context.Context, preemptedTimeout
 	return tasks, nil
 }
 
+// Acquire 通过 CAS（Compare-And-Swap）机制抢占任务。
+// 在数据库事务中执行两步操作：
+//  1. UPDATE tasks SET status='PREEMPTED', schedule_node_id=?, version=version+1
+//     WHERE id=? AND version=?（乐观锁检查）
+//  2. 如果更新影响行数为 0，说明被其他节点抢先或 version 已变，返回 ErrTaskPreemptFailed
+//  3. 更新成功后重新 SELECT 获取包含新 version 和 utime 的完整数据
 func (g *GORMTaskDAO) Acquire(ctx context.Context, id, version int64, scheduleNodeID string) (*Task, error) {
 	var acquiredTask *Task
 	err := g.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

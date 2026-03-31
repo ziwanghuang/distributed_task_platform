@@ -1,0 +1,175 @@
+# ============================================================
+# 分布式任务调度平台 - Docker Compose 完整编排
+# ============================================================
+# 服务清单:
+#   - scheduler:   调度器主服务（gRPC:9002, Governor:9003）
+#   - mysql:       MySQL 8.0（端口 13316 -> 3306）
+#   - redis:       Redis（端口 6379）
+#   - kafka:       Kafka 3.9.0 KRaft 模式（端口 9092/9094）
+#   - etcd:        etcd 服务发现（端口 2379/2380）
+#   - prometheus:  监控采集（端口 9090）
+#   - grafana:     监控面板（端口 3000）
+#
+# 使用方式:
+#   启动: make docker-up    或 docker compose up -d
+#   停止: make docker-down  或 docker compose down -v
+#   查看: docker compose ps
+#   日志: docker compose logs -f scheduler
+# ============================================================
+
+services:
+  # ---- 调度器主服务 ----
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: task-scheduler
+    volumes:
+      # 挂载 Docker 专用配置文件
+      - ./config/docker-config.yaml:/app/config/config.yaml:ro
+    ports:
+      # gRPC 服务端口：执行节点通过此端口上报状态
+      - "9002:9002"
+      # Governor 端口：健康检查 + pprof 性能诊断
+      - "9003:9003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - task-network
+
+  # ---- MySQL 8.0 ----
+  mysql:
+    image: mysql:8.0.29
+    container_name: task-mysql
+    command: --default_authentication_plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      # 数据库初始化脚本：创建 task/task_0/task_1 数据库和分库分表表结构
+      - ./scripts/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # 数据持久化
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "13316:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=root"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    networks:
+      - task-network
+
+  # ---- Redis ----
+  redis:
+    image: "redislabs/rebloom:latest"
+    container_name: task-redis
+    command: redis-server --notify-keyspace-events AKE --loadmodule /usr/lib/redis/modules/redisbloom.so
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - task-network
+
+  # ---- Kafka 3.9.0 (KRaft 模式，无需 Zookeeper) ----
+  kafka:
+    image: "bitnami/kafka:3.9.0"
+    container_name: task-kafka
+    ports:
+      # EXTERNAL: 宿主机访问
+      - "9092:9092"
+      # INTERNAL: Docker 内部服务通信
+      - "9094:9094"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=EXTERNAL://:9092,INTERNAL://:9094,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=EXTERNAL://localhost:9092,INTERNAL://kafka:9094
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    volumes:
+      - kafka-data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - task-network
+
+  # ---- etcd (服务发现 + 分布式锁) ----
+  etcd:
+    image: "bitnami/etcd:latest"
+    container_name: task-etcd
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+    ports:
+      # 客户端通信端口
+      - "2379:2379"
+      # 集群节点通信端口
+      - "2380:2380"
+    volumes:
+      - etcd-data:/bitnami/etcd
+    networks:
+      - task-network
+
+  # ---- Prometheus (监控指标采集) ----
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: task-prometheus
+    user: root
+    volumes:
+      - ./scripts/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - "--web.enable-remote-write-receiver"
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - task-network
+
+  # ---- Grafana (监控可视化面板) ----
+  grafana:
+    image: grafana/grafana-enterprise:latest
+    container_name: task-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=123
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - task-network
+
+# 命名卷：数据持久化，避免容器重启丢失数据
+volumes:
+  mysql-data:
+  redis-data:
+  kafka-data:
+  etcd-data:
+  prometheus-data:
+  grafana-data:
+
+# 自定义网络：所有服务在同一网络内通过服务名互相访问
+networks:
+  task-network:
+    driver: bridge
