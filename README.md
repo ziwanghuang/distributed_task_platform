@@ -371,6 +371,15 @@ go test -run TestStart ./example/sharding/
 | [优化方案汇总](docs/08-优化方案汇总.md) | 18 个优化点及代码示例 |
 | [面试 100 问](docs/09-面试问题100问.md) | 11 维度 100 道深度面试题 |
 | [压测方案](docs/压测方案.md) | 3000+ 行全链路压测文档 |
+| [压测数据报告](docs/压测数据报告.md) | 16 章节 + 5 附录，1100+ 行预估性能数据 |
+| [领域模型参考](docs/10-领域模型参考.md) | Task/Execution/Plan/Report 完整字段、状态机、错误码 |
+| [调度引擎功能文档](docs/11-调度引擎功能文档.md) | Scheduler V1/V2、Runner 链、Acquirer、Picker、Invoker |
+| [补偿器功能文档](docs/12-补偿器功能文档.md) | 四重补偿器（Retry/Reschedule/Interrupt/Sharding）V1/V2 |
+| [DAG 工作流引擎](docs/13-DAG工作流引擎文档.md) | DSL 语法、ANTLR4 解析、Node 类型、事件驱动执行 |
+| [服务治理文档](docs/14-服务治理文档.md) | gRPC 协议、etcd 服务发现、自定义 Resolver/Balancer、LoadChecker |
+| [基础设施组件](docs/15-基础设施组件文档.md) | 分库分表、Snowflake ID、ShardingLoopJob、重试框架、MQ |
+| [开发方法论](docs/16-开发方法论与迭代策略.md) | 框架先行、分步迭代、6 Phase 演进路线与踩坑经验 |
+| [分步实现指南](docs/17-分步实现指南.md) | Step 0-9 完整实操手册，每步可部署验证，含命令行操作 |
 
 ---
 
