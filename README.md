@@ -380,6 +380,25 @@ go test -run TestStart ./example/sharding/
 | [基础设施组件](docs/15-基础设施组件文档.md) | 分库分表、Snowflake ID、ShardingLoopJob、重试框架、MQ |
 | [开发方法论](docs/16-开发方法论与迭代策略.md) | 框架先行、分步迭代、6 Phase 演进路线与踩坑经验 |
 | [分步实现指南](docs/17-分步实现指南.md) | Step 0-9 完整实操手册，每步可部署验证，含命令行操作 |
+| **分步实现详细设计** | |
+| [Step 1: 最小可调度闭环](docs/step-by-step/step1-最小可调度闭环.md) | CAS 抢占 + 本地执行 + Cron 调度，含完整代码和部署验证 |
+| [Step 2: gRPC 远程执行与 etcd 服务发现](docs/step-by-step/step2-gRPC远程执行与etcd服务发现.md) | 自定义 Resolver/Balancer、泛型客户端池、三级路由 Picker |
+| [Step 3: Kafka 异步状态上报](docs/step-by-step/step3-Kafka异步状态上报.md) | 双链路上报、完成事件驱动、MQ 抽象层、状态机设计 |
+| [Step 4: 补偿机制 V1](docs/step-by-step/step4-补偿机制V1.md) | 四重补偿器（重试/重调度/中断/分片聚合）、指数退避、节点路由、状态机集成 |
+| [Step 5: DAG 工作流引擎](docs/step-by-step/step5-DAG工作流引擎.md) | ANTLR4 DSL 解析、Visitor DAG 构建、PlanTaskRunner 编排、事件驱动 NextStep、6 种节点类型 |
+| [Step 6: 分片任务](docs/step-by-step/step6-分片任务.md) | Range/WeightedDynamicRange 分片策略、父子执行记录三态模型、节点亲和并行执行、ShardingCompensator 异步聚合 |
+| [Step 7: 分库分表与分布式调度](docs/step-by-step/step7-分库分表与分布式调度.md) | 两级哈希分库分表、Snowflake ID 内嵌路由、ShardingLoopJob 分布式调度框架、V2 调度器/补偿器、多节点自动瓜分 |
+| [Step 8: 智能调度与负载检查](docs/step-by-step/step8-智能调度与负载检查.md) | Prometheus PromQL 驱动 TopN+随机节点选择、三级负载检查器（令牌桶+DB 响应时间+集群均衡）、AND/OR 组合策略、降级兜底 |
+| [Step 9: 可观测性与 Docker 部署](docs/step-by-step/step9-可观测性与Docker部署.md) | Docker Compose 7 服务编排、多阶段 Dockerfile（~30MB）、3 大 Prometheus 指标 + PromQL 查询、Grafana 面板设计、MySQL init.sql 自动建库建表、Wire 依赖注入全图 |
+| **优化设计（Step 10-16）** | |
+| [优化点深度分析](docs/optimization-analysis.md) | 26 个优化点 × 6 维度（架构/并发/可靠性/性能/可观测/工程化），每点含现状→问题→方案→面试话术 |
+| [Step 10: 并发安全—优雅停机与连接管理](docs/step-by-step/step10-并发安全-优雅停机与连接管理.md) | SchedulerV2 WaitGroup+超时停机、ClientsV2 singleflight 合并连接创建、connMap 连接泄漏修复 |
+| [Step 11: 并发安全—状态机与资源控制](docs/step-by-step/step11-并发安全-状态机与资源控制.md) | UpdateState TOCTOU→CAS 乐观锁、NormalTaskRunner ants 协程池、ResourceSemaphore 下溢防护 |
+| [Step 12: 可靠性—事件投递与数据一致性](docs/step-by-step/step12-可靠性-事件投递与数据一致性.md) | Outbox Pattern 保证 Kafka 事件不丢、Cursor 分页替代 Offset、Plan 变量名 Bug、V1/V2 策略模式去重 |
+| [Step 13: 性能优化—缓存索引与增量更新](docs/step-by-step/step13-性能优化-缓存索引与增量更新.md) | 任务优先级队列、DAG 两层缓存（LRU+Redis）、PlanTask O(1) 索引、Resolver 增量更新 |
+| [Step 14: 高可用—熔断降级与 Bug 修复](docs/step-by-step/step14-高可用-熔断降级与Bug修复.md) | sony/gobreaker 熔断器封装、三级 fallback 降级策略、CompositeChecker OR 逻辑 Bug 修复 |
+| [Step 15: 可观测性增强—RED 指标与链路追踪](docs/step-by-step/step15-可观测性增强-RED指标与链路追踪.md) | 7 个 RED 业务指标、Prometheus 三级告警规则、OpenTelemetry gRPC/GORM/Kafka 全链路追踪 |
+| [Step 16: 工程化—配置重构与 CI/CD](docs/step-by-step/step16-工程化-配置重构与CI-CD.md) | Duration 可读性重构、策略模式消除 400 行重复、Docker 健康检查、GitHub Actions CI/CD、测试覆盖 |
 
 ---
 
